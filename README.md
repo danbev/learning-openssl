@@ -42,3 +42,8 @@ You can see how this is used the [Makefile](./makefile).
 
     $ ctags -R . /path/to/openssl/
 
+
+### Find version of Openssl library (static of dynamic)
+
+    $ strings libopenssl.a | grep "^OpenSSL"
+    OpenSSL 1.0.2k  26 Jan 2017
