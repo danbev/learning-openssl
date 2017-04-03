@@ -5,7 +5,7 @@ The sole purpose of this project is to learn OpenSSL's libcryto library
 ### Building OpenSSL
 I've been building OpenSSL using the following configuration:
 
-    $ ./config --debug --prefix=/Users/danielbevenius/work/security  --libdir="openssl"
+    $ ./Configure --debug --prefix=/Users/danielbevenius/work/security  --libdir="openssl" darwin64-x86_64-cc
 
 This might look a little odd but allows me to avoid the install step which is pretty slow
 and also takes up space on my system. With the followig I can simply make:
