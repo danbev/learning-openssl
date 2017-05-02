@@ -7,7 +7,10 @@ basic: basic.c
 socket: socket.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_DIR) -lcrypto
 
+ssl: ssl.c
+	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_DIR) -lcrypto -lssl
+
 .PHONY: clean 
 
 clean: 
-	@rm -f basic socket
+	@rm -f basic socket ssl

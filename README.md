@@ -47,3 +47,30 @@ You can see how this is used the [Makefile](./makefile).
 
     $ strings libopenssl.a | grep "^OpenSSL"
     OpenSSL 1.0.2k  26 Jan 2017
+
+
+### Troubleshooting SSL errors:
+
+    $ ./ssl
+    failed to create SSL_CTX
+    140735145844816:error:140A90A1:SSL routines:func(169):reason(161):ssl_lib.c:1966:
+    $ openssl errstr 0x140A90A1
+    error:140A90A1:SSL routines:SSL_CTX_new:library has no ciphers
+
+In this case I'd missed out [initializing](https://wiki.openssl.org/index.php/Library_Initialization) the library.
+
+
+
+### ssllib
+To make a tls connection you need a SSL_CTX and an SSL pointer. You also have to initialize the
+SSL library:
+
+    SSL_CTX* ctx:
+    SSL* ssl
+    SSL_library_init();
+
+    ctx = SSL_CTX_new(SSLv23_client_method);
+
+    SSL_CTX_load_verify_locations(ctx, "/path/to/ca.pem", NULL);
+
+
