@@ -5,6 +5,25 @@
 #include <stdio.h>
 #include <string.h>
 
+int pass_cb(char *buf, int size, int rwflag, void *u) {
+  int len;
+  char *tmp;
+  /* We'd probably do something else if 'rwflag' is 1 */
+  if (u) {
+    printf("Get the password for \"%s\"\n", u);
+    tmp = "test";
+    len = strlen(tmp);
+
+    if (len <= 0) return 0;
+    /* if too long, truncate */
+    if (len > size) len = size;
+    memcpy(buf, tmp, len);
+    return len;
+  } else {
+    return 0;
+  }
+}
+
 /**
  * This example is pretty much the same as socket.c, the only thing that
  * changes is setting up and making the connection.
@@ -28,13 +47,36 @@ int main(int arc, char *argv[]) {
     return 1;
   }
 
+  //X509_STORE* store = X509_STORE_new();
+
   // context, filename, path
-  if (!SSL_CTX_load_verify_locations(ctx, "TrustStore.pem", NULL)) {
+  //if (!SSL_CTX_load_verify_locations(ctx, "TrustStore.pem", NULL)) {
+  if (!X509_STORE_load_locations(ctx->cert_store, "TrustStore.pem", NULL)) {
     fprintf(stderr, "failed to load trust store");
     ERR_print_errors_fp(stderr);
     SSL_CTX_free(ctx);
     exit(0);
   }
+
+  BIO *bp;
+  if ((bp = BIO_new_file("test.crt", "r")) == NULL) {
+    ERR_print_errors_fp(stderr);
+    SSL_CTX_free(ctx);
+    exit(0);
+  }
+  X509 *x509 = PEM_read_bio_X509(bp, NULL, pass_cb, NULL);
+  //fprintf(stdout, "%p\n", x509);
+
+  BIO *keybio;
+  if ((keybio = BIO_new_file("test.key", "r")) == NULL) {
+    ERR_print_errors_fp(stderr);
+    SSL_CTX_free(ctx);
+    exit(0);
+  }
+  EVP_PKEY *pkey;
+  //pkey  = PEM_read_bio_PrivateKey(keybio, NULL, pass_cb, "test key");
+  pkey  = PEM_read_bio_PrivateKey(keybio, NULL, pass_cb, NULL);
+  //fprintf(stdout, "%p\n", pkey);
 
   bio = BIO_new_ssl_connect(ctx);
   if (bio == NULL) {
