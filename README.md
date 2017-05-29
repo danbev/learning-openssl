@@ -10,7 +10,17 @@ I've been building OpenSSL using the following configuration:
 This might look a little odd but allows me to avoid the install step which is pretty slow
 and also takes up space on my system. With the followig I can simply make:
 
+To configure and install to a build directory:
+
+    $ ./Configure --debug --prefix=/Users/danielbevenius/work/security/build_1_1_0f darwin64-x86_64-cc
+
     $ make 
+
+Optionally install:
+
+    $ make install
+
+This is nice so when building a tag and not having to rebuild it again.
 
 The the library location can be specified using `-L` like this:
 
@@ -172,6 +182,10 @@ in code:
     obj = (X509_OBJECT *)OPENSSL_malloc(sizeof(X509_OBJECT));
  
 Every X509_OBJECT has a reference count. 
+
+
+### X509_up_ref
+What does this do?
     
 
 ### Environment variables
