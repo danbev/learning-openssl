@@ -2,3 +2,5 @@ basic
 socket
 ssl
 *.dSYM
+engine.o
+engine.so

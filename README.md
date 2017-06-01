@@ -195,3 +195,11 @@ There are two environment variables that can be used (openssl/crypto/cryptlib.h)
     # define X509_CERT_FILE_EVP       "SSL_CERT_FILE"
 
 When you do a X509_STORE_load_file and the method used is ctrl (by_file_ctrl)
+
+
+### Engine
+
+    $ make engine
+    $ ../openssl/apps/openssl engine -t -c `pwd`/engine.so
+    (/Users/danielbevenius/work/security/learning-libcrypto/engine.so) OpenSSL Engine example
+     [ available ]

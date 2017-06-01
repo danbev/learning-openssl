@@ -10,7 +10,11 @@ socket: socket.c
 ssl: ssl.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_DIR) -lcrypto -lssl
 
+engine: engine.c
+	clang -O0 -g -fPIC -I$(OPENSSL_INCLUDE_DIR) -c $< -o $@.o
+	clang -shared -o $@.so -L$(OPENSSL_DIR) -lcrypto $@.o
+
 .PHONY: clean 
 
 clean: 
-	@rm -f basic socket ssl
+	@rm -f basic socket ssl engine
