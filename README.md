@@ -203,3 +203,167 @@ When you do a X509_STORE_load_file and the method used is ctrl (by_file_ctrl)
     $ ../openssl/apps/openssl engine -t -c `pwd`/engine.so
     (/Users/danielbevenius/work/security/learning-libcrypto/engine.so) OpenSSL Engine example
      [ available ]
+
+
+### Message Digest 
+Is a cryptographic hash function which takes a string of any length as input and produces a fixed length hash value.
+An example of this can be found in digest.c
+
+    md = EVP_get_digestbyname("SHA256");
+
+The implementation of this can be found in openssl/crypto/evp/names.c:
+
+    const EVP_MD *cp;
+    ... 
+    cp = (const EVP_MD *)OBJ_NAME_get(name, OBJ_NAME_TYPE_MD_METH);
+    return (cp);
+
+The extra parentheses are just a convention and could be skipped.
+So how would one get back the name, or what would one do with the type?
+`crypto/evp/evp_lib.c` contains functions that can be used to get the type
+of a Message Digest:
+
+    int EVP_MD_type(const EVP_MD* md) {
+      return md->type;
+    }
+
+The structs are not public but you can find them in `crypto/include/internal/evp_int.h`:
+
+    struct evp_md_st {
+      int type;
+      int pkey_type;
+      int md_size;
+      unsigned long flags;
+      int (*init) (EVP_MD_CTX *ctx);
+      int (*update) (EVP_MD_CTX *ctx, const void *data, size_t count);
+      int (*final) (EVP_MD_CTX *ctx, unsigned char *md);
+      int (*copy) (EVP_MD_CTX *to, const EVP_MD_CTX *from);
+      int (*cleanup) (EVP_MD_CTX *ctx);
+      int block_size;
+      int ctx_size;               /* how big does the ctx->md_data need to be */
+      /* control function */
+      int (*md_ctrl) (EVP_MD_CTX *ctx, int cmd, int p1, void *p2);
+    } /* EVP_MD */ ;
+
+
+Next lets look at this statement:
+
+    mdctx = EVP_MD_CTX_new();
+
+The impl can be found in `crypto/evp/digest.c':
+
+    return OPENSSL_zalloc(sizeof(EVP_MD_CTX));
+
+This calls memset() to zero the memory before returning:
+
+    void *ret = CRYPTO_malloc(num, file, line);
+    ...
+    if (ret != NULL)
+      memset(ret, 0, num);
+    return ret;
+
+So we are allocating memory for the context only at this stage.
+
+The underlying private struct can be found in `crypto/evp/evp_locl.h`:
+
+    struct evp_md_ctx_st {
+      const EVP_MD *digest;
+      ENGINE *engine;             /* functional reference if 'digest' is * ENGINE-provided */
+      unsigned long flags;
+      void *md_data;
+      /* Public key context for sign/verify */
+      EVP_PKEY_CTX *pctx;
+      /* Update function: usually copied from EVP_MD */
+      int (*update) (EVP_MD_CTX *ctx, const void *data, size_t count);
+    } /* EVP_MD_CTX */ ;
+
+But, remember we have only allocated memory and zeroed out the structs fields nothing more.
+Next, lets take a look at:
+
+    EVP_DigestInit_ex(mdctx, md, engine);
+
+We are passing in our pointer to the newly allocated EVP_MD_CTX struct, and a pointer to a 
+Message Digest EVP_MD.
+The impl can be found in `crypto/evp/digest.c':
+
+     int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl) {
+
+     }
+
+There is also a function named `EVP_DigestInit(EVP_MD_CTX* ctx, const EVP_MD* type)` which does:
+
+    int EVP_DigestInit(EVP_MD_CTX *ctx, const EVP_MD *type)
+    {
+      EVP_MD_CTX_reset(ctx);
+      return EVP_DigestInit_ex(ctx, type, NULL);
+    }
+So it calls reset on the EVP_MD_CTX_reset which in our case is not required as we are not reusing the context. But that is the only thing that differs.
+
+    ctx->digest = type;
+    if (!(ctx->flags & EVP_MD_CTX_FLAG_NO_INIT) && type->ctx_size) {
+      ctx->update = type->update;
+      ctx->md_data = OPENSSL_zalloc(type->ctx_size);
+      if (ctx->md_data == NULL) {
+        EVPerr(EVP_F_EVP_DIGESTINIT_EX, ERR_R_MALLOC_FAILURE);
+        return 0;
+      }
+    }
+Just to clarify this, `ctx` is a pointer to EVP_MD_CTX and `type` is a const pointer to EVP_MD.
+`update` of the EVP_MD_CTX is set to the EVP_MD's update so I guess either one can be used after this.
+`ctx->md_data` is allocated for the EVP_MD_CTX member `md_data` and the size used is the size for the type of EVP_MD being used. 
+
+     return ctx->digest->init(ctx);
+
+This will end up in m_sha1.c:
+
+    static int init256(EVP_MD_CTX *ctx) {
+      return SHA256_Init(EVP_MD_CTX_md_data(ctx));
+    }
+
+Next we have:
+
+    EVP_DigestUpdate(mdctx, msg1, strlen(msg1));
+
+This wil call:
+
+    return ctx->update(ctx, data, count);
+
+Which we recall from before in our case is the same as the EVP_MD update function which means
+that we will end up again in `m_sha1.c`:
+
+    static int update256(EVP_MD_CTX *ctx, const void *data, size_t count) {
+      return SHA256_Update(EVP_MD_CTX_md_data(ctx), data, count);
+   }
+
+Notice the getting of md_data and passing that along which will be the HASH_CTX* in:
+
+    int HASH_UPDATE(HASH_CTX *c, const void *data_, size_t len) {
+    }
+
+This will hash the passes in data and store that in the `md_data` field. This can be done any
+number of times.
+
+    EVP_DigestFinal_ex(mdctx, md_value, &md_len);
+
+    (lldb) p md_value
+    (unsigned char [64]) $0 = "\x01"
+
+Recall that this local variable is initialized here:
+
+    unsigned char md_value[EVP_MAX_MD_SIZE];
+
+Which can be found in include/openssl/evp.h:
+
+    # define EVP_MAX_MD_SIZE                 64/* longest known is SHA512 */
+
+`EVP_DigestFinal_ex` will check this size:
+
+    OPENSSL_assert(ctx->digest->md_size <= EVP_MAX_MD_SIZE);
+    ret = ctx->digest->final(ctx, md);
+
+    if (size != NULL)
+      *size = ctx->digest->md_size;
+
+So one does not have to pass in the size and is should be possible to get the size after
+calling this operation using EVP_MD_size(md) or EVP_MD_CTX_size(mdctx).
+

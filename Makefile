@@ -4,6 +4,12 @@ OPENSSL_INCLUDE_DIR=$(OPENSSL_DIR)/include
 basic: basic.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_DIR) -lcrypto
 
+hmac: hmac.c
+	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_DIR) -lcrypto
+
+digest: digest.c
+	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_DIR) -lcrypto
+
 socket: socket.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_DIR) -lcrypto
 
@@ -17,4 +23,4 @@ engine: engine.c
 .PHONY: clean 
 
 clean: 
-	@rm -f basic socket ssl engine
+	@rm -f basic socket ssl engine hmac digest
