@@ -206,7 +206,7 @@ When you do a X509_STORE_load_file and the method used is ctrl (by_file_ctrl)
 
 
 ### Message Digest 
-Is a cryptographic hash function which takes a string of any length as input and produces a fixed length hash value.
+Is a cryptographic hash function which takes a string of any length as input and produces a fixed length hash value. A message digest is a fixed size numeric representation of the contents of a message
 An example of this can be found in digest.c
 
     md = EVP_get_digestbyname("SHA256");
@@ -297,6 +297,7 @@ There is also a function named `EVP_DigestInit(EVP_MD_CTX* ctx, const EVP_MD* ty
       EVP_MD_CTX_reset(ctx);
       return EVP_DigestInit_ex(ctx, type, NULL);
     }
+
 So it calls reset on the EVP_MD_CTX_reset which in our case is not required as we are not reusing the context. But that is the only thing that differs.
 
     ctx->digest = type;
@@ -308,6 +309,7 @@ So it calls reset on the EVP_MD_CTX_reset which in our case is not required as w
         return 0;
       }
     }
+
 Just to clarify this, `ctx` is a pointer to EVP_MD_CTX and `type` is a const pointer to EVP_MD.
 `update` of the EVP_MD_CTX is set to the EVP_MD's update so I guess either one can be used after this.
 `ctx->md_data` is allocated for the EVP_MD_CTX member `md_data` and the size used is the size for the type of EVP_MD being used. 
@@ -324,7 +326,7 @@ Next we have:
 
     EVP_DigestUpdate(mdctx, msg1, strlen(msg1));
 
-This wil call:
+This will call:
 
     return ctx->update(ctx, data, count);
 
@@ -340,7 +342,7 @@ Notice the getting of md_data and passing that along which will be the HASH_CTX*
     int HASH_UPDATE(HASH_CTX *c, const void *data_, size_t len) {
     }
 
-This will hash the passes in data and store that in the `md_data` field. This can be done any
+This will hash the passed in data and store that in the `md_data` field. This can be done any
 number of times.
 
     EVP_DigestFinal_ex(mdctx, md_value, &md_len);
@@ -366,4 +368,30 @@ Which can be found in include/openssl/evp.h:
 
 So one does not have to pass in the size and is should be possible to get the size after
 calling this operation using EVP_MD_size(md) or EVP_MD_CTX_size(mdctx).
+
+### Message Authentication Code (MAC)
+Is a message digest that is encrypted. If a symmetric key is used it is know as a Message Authentication Code (MAC) as it can prove that the message has not been tampered with.
+
+### Digital signature
+Is a message digest that is encrypted.
+A message can be signed with the private key and sent with the message itself. The receiver then decrypts the signature before comparing it a locally generated digest.
+
+    EVP_SignInit_ex(mdctx, md, engine);
+
+Interesting is that this will call `EVP_DigestInit_ex` just like in our message digest walkthrough. This is because this is actually a macro defined in `include/openssl/evp.h`:
+
+    # define EVP_SignInit_ex(a,b,c)          EVP_DigestInit_ex(a,b,c)
+    # define EVP_SignInit(a,b)               EVP_DigestInit(a,b)
+    # define EVP_SignUpdate(a,b,c)           EVP_DigestUpdate(a,b,c)
+
+So we already know what `EVP_SignInit_ex` and `EVP_SignUpdate` do. 
+But `EVP_SignFinal` is implemented in `crypto/evp/p_sign.c`:
+
+    EVP_SignFinal(mdctx, sig, &sig_len, pkey);
+
+    int EVP_SignFinal(EVP_MD_CTX *ctx, unsigned char *sigret,
+                  unsigned int *siglen, EVP_PKEY *pkey) {
+
+
+    }
 

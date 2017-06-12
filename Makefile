@@ -10,6 +10,9 @@ hmac: hmac.c
 digest: digest.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_DIR) -lcrypto
 
+sign: sign.c
+	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_DIR) -lcrypto
+
 socket: socket.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_DIR) -lcrypto
 
@@ -23,4 +26,4 @@ engine: engine.c
 .PHONY: clean 
 
 clean: 
-	@rm -f basic socket ssl engine hmac digest
+	@rm -f basic socket ssl engine hmac digest sign
