@@ -471,3 +471,54 @@ OpenSSL provides a number of software based random number generators based on a 
 The library can use custom hardware if the hardware has an ENIGNE interface.
 
 Entropy is the measure of randomness in a sequence of bits.
+
+
+### PEM_read_bio_X509
+
+    X509 *x509 = PEM_read_bio_X509(bp, NULL, pass_cb, NULL);
+
+This will end up in pem_x509.c and it is simply:
+
+    #include <stdio.h>
+    #include "internal/cryptlib.h"
+    #include <openssl/bio.h>
+    #include <openssl/evp.h>
+    #include <openssl/x509.h>
+    #include <openssl/pkcs7.h>
+    #include <openssl/pem.h>
+
+    IMPLEMENT_PEM_rw(X509, X509, PEM_STRING_X509, X509)
+
+So this is a macro which can be found in `openssl/pem.h`:
+
+    # define IMPLEMENT_PEM_rw(name, type, str, asn1) \
+            IMPLEMENT_PEM_read(name, type, str, asn1) \
+            IMPLEMENT_PEM_write(name, type, str, asn1)
+
+So, we can see that this is made up of two macros (will the macro in pem_x509 will be substituted by this by the preprocessor that is.
+
+
+`pem_oth.c'
+    void *PEM_ASN1_read_bio(d2i_of_void *d2i, const char *name, BIO *bp, void **x, pem_password_cb *cb, void *u)
+
+#### Generating a selfsigned cert
+
+    $ ../openssl/apps/openssl req  -nodes -new -x509  -keyout server.key -out server.cert
+
+
+### FIPS
+Download openssl-fips-2.0.16 and unzip:
+
+   $ ./Configure darwin64-x86_64-cc --prefix=/Users/danielbevenius/work/security/build_1_0_2k
+   $ make
+   $ make install
+
+This example will install to the `build_1_0_2k` directory so changes this as required.
+
+Next, you'll have to build the OpenSSL library with fips support and specify the installation directory which was used above:
+
+   $ ./Configure fips shared no-ssl2 --debug --prefix=/Users/danielbevenius/work/security/build_1_0_2k darwin64-x86_64-cc --with-fipsdir=/Users/danielbevenius/work/security/build_1_0_2k
+   $ make depend
+   $ make
+   $ make install
+
