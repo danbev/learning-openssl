@@ -520,5 +520,5 @@ Next, you'll have to build the OpenSSL library with fips support and specify the
    $ ./Configure fips shared no-ssl2 --debug --prefix=/Users/danielbevenius/work/security/build_1_0_2k darwin64-x86_64-cc --with-fipsdir=/Users/danielbevenius/work/security/build_1_0_2k
    $ make depend
    $ make
-   $ make install
+   $ make install_sw
 
