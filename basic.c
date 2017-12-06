@@ -5,15 +5,17 @@
 #include <string.h>
 
 int encrypt(unsigned char *plaintext, 
-            int plaintext_len, 
-            unsigned char *key, 
-            unsigned char *iv, 
+            int plaintext_len,
+            unsigned char *key,
+            unsigned char *iv,
             unsigned char *ciphertext);
+
 int decrypt(unsigned char *ciphertext, 
-            int ciphertext_len, 
-            unsigned char *key, 
-            unsigned char *iv, 
+            int ciphertext_len,
+            unsigned char *key,
+            unsigned char *iv,
             unsigned char *plaintext);
+
 void handleErrors(void);
 
 int main(int arc, char *argv[]) { 
@@ -55,12 +57,12 @@ int main(int arc, char *argv[]) {
   return 0;
 }
 
-int encrypt(unsigned char *plaintext, 
-            int plaintext_len, 
-            unsigned char *key, 
-            unsigned char *iv, 
-            unsigned char *ciphertext) {
-  EVP_CIPHER_CTX *ctx;
+int encrypt(unsigned char* plaintext,
+            int plaintext_len,
+            unsigned char* key,
+            unsigned char* iv,
+            unsigned char* ciphertext) {
+  EVP_CIPHER_CTX* ctx;
   int len;
   int ciphertext_len;
 
@@ -99,12 +101,12 @@ int encrypt(unsigned char *plaintext,
   return ciphertext_len;
 }
 
-int decrypt(unsigned char *ciphertext, 
-            int ciphertext_len, 
-            unsigned char *key, 
-            unsigned char *iv, 
-            unsigned char *plaintext) {
-  EVP_CIPHER_CTX *ctx;
+int decrypt(unsigned char* ciphertext,
+            int ciphertext_len,
+            unsigned char* key,
+            unsigned char* iv,
+            unsigned char* plaintext) {
+  EVP_CIPHER_CTX* ctx;
   int len;
   int plaintext_len;
 
