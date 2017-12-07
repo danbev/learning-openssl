@@ -10,3 +10,4 @@ random_bytes
 sign
 digest
 hmac
+bio

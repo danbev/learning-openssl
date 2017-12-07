@@ -29,6 +29,9 @@ engine: engine.c
 random_bytes: random_bytes.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_DIR) -lcrypto -lssl
 
+bio: bio.c
+	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_DIR) -lcrypto -lssl
+
 .PHONY: clean 
 
 clean: 

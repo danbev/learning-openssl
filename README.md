@@ -53,7 +53,7 @@ You can see how this is used the [Makefile](./makefile).
     $ ctags -R . /path/to/openssl/
 
 
-### Find version of Openssl library (static of dynamic)
+### Find version of Openssl library (static or dynamic)
 
     $ strings libopenssl.a | grep "^OpenSSL"
     OpenSSL 1.0.2k  26 Jan 2017
@@ -182,6 +182,135 @@ in code:
     obj = (X509_OBJECT *)OPENSSL_malloc(sizeof(X509_OBJECT));
  
 Every X509_OBJECT has a reference count. 
+
+### BIO
+A BIO is an I/O stream abstraction; essentially OpenSSL's answer to the C library's FILE *.
+
+BIO is a typedef declared in `include/openssl/ossl_typ.h`:
+
+    typedef struct bio_st BIO;
+
+`bio_st` can be found in `crypto/bio/bio_lcl.h`:
+
+   struct bio_st {
+    const BIO_METHOD *method;
+
+
+`BIO_METHOD` can be found in `include/openssl/bio.h` and is declared as:
+
+    typedef struct bio_method_st BIO_METHOD;
+
+`bio_method_st' is defined in include/internal/bio.h: 
+
+    struct bio_method_st {
+      int type;
+      const char *name;
+      int (*bwrite) (BIO *, const char *, size_t, size_t *);
+      int (*bwrite_old) (BIO *, const char *, int);
+      int (*bread) (BIO *, char *, size_t, size_t *);
+      int (*bread_old) (BIO *, char *, int);
+      int (*bputs) (BIO *, const char *);
+      int (*bgets) (BIO *, char *, int);
+      long (*ctrl) (BIO *, int, long, void *);
+      int (*create) (BIO *);
+      int (*destroy) (BIO *);
+      long (*callback_ctrl) (BIO *, int, bio_info_cb *);
+    };  
+
+Lets take a look at a concrete method struct, for example ssl/bio_ssl.c:
+
+    static const BIO_METHOD methods_sslp = {
+      BIO_TYPE_SSL, "ssl",
+      ssl_write,
+      NULL,                       /* ssl_write */
+      ssl_read,
+      NULL,                       /* ssl_bread_old  */
+      ssl_puts,
+      NULL,                       /* ssl_gets   */
+      ssl_ctrl,
+      ssl_new,
+      ssl_free,
+      ssl_callback_ctrl,
+    };
+
+# define BIO_TYPE_SSL            ( 7|BIO_TYPE_FILTER)
+
+Now the docs for [BIO](https://wiki.openssl.org/index.php/BIO) say "BIOs come in two flavors: source/sink, or filter." The types can 
+be found in include/openssl/bio.h
+The rest are the name and functions that of this method type.
+
+
+    struct bio_st {
+      const BIO_METHOD* method;
+      BIO_callback_fn callback;
+
+Lets take a look at using a BIO:
+
+    BIO* bout = BIO_new_fp(stdout, BIO_NOCLOSE);
+    BIO_write(bout, "bajja", 5);
+
+`BIO_new_fp` can be found in 'crypto/bio/bss_file.c' and `BIO_write` can be found in `crypto/bio/bio_lib.c`.
+Lets take look at what BIO_new_fp looks like:
+
+    BIO* BIO_new_fp(FILE* stream, int close_flag) {
+      BIO* ret;
+      if ((ret = BIO_new(BIO_s_file())) == NULL)
+        return NULL;
+      ...
+
+BIO_s_file() returns a pointer to methods_filep which is a BIO_METHOD struct. This is then passed to:
+
+    BIO* BIO_new(const BIO_METHOD* method)
+
+BIO_new will call OPENSSL_zalloc which calls memset() to zero the memory before returning.
+There is some error handling and then:
+
+    bio->method = method;
+    bio->shutdown = 1;
+    bio->references = 1;
+
+    (lldb) expr *bout
+    (BIO) $1 = {
+      method = 0x000000010023dee8
+      callback = 0x0000000000000000
+      cb_arg = 0x0000000000000000 <no value available>
+      init = 1
+      shutdown = 0
+      flags = 0
+      retry_reason = 0
+      num = 0
+      ptr = 0x00007fff794bb348
+      next_bio = 0x0000000000000000
+      prev_bio = 0x0000000000000000
+      references = 1
+      num_read = 0
+      num_write = 0
+      ex_data = (sk = 0x0000000000000000)
+      lock = 0x0000000100615570
+    }
+
+Lets say we want to set the callback, my first though was:
+
+    bout->callback = bio_callback;
+
+    $ make bio
+    clang -O0 -g -I/Users/danielbevenius/work/security/openssl/include bio.c -o bio -L/Users/danielbevenius/work/security/openssl -lcrypto -lssl
+    bio.c:26:7: error: incomplete definition of type 'struct bio_st'
+      bout->callback = bio_callback;
+      ~~~~^
+    /Users/danielbevenius/work/security/openssl/include/openssl/ossl_typ.h:79:16: note: forward
+      declaration of 'struct bio_st'
+    typedef struct bio_st BIO;
+                   ^
+    1 error generated.
+    make: *** [bio] Error 1
+
+Now, this is because OpenSSL uses opaque pointer the BIO struct. So the details are
+hidden from the client (us). But instead there are functions that perform operations
+on the BIO instance and those functions do know the details of the structure. The point
+here is that clients are not affected by changes to the internals of the struct.
+
+Now, lets take a closer look at `BIO_write`.
 
 
 ### X509_up_ref
@@ -522,3 +651,181 @@ Next, you'll have to build the OpenSSL library with fips support and specify the
    $ make
    $ make install_sw
 
+### Certificates
+Abstract Syntax Notation One (ASN.1) is a set of rules for defining, transporting and exchanging complex data structures and objects.
+X.509 uses the Distiguished Encoding Rules (DER, which is a subset of Basic Encoding Rules (BER)). Privacy-Enhanced Main (PEM) is an ASCII endocing of DER
+using base64 encoding.
+
+#### Fields
+Version:  
+0 = Version 1, 1 = Version 2, and 2 = Version 3
+Version 3 supports extensions
+
+Serial Number: 
+Originally used to uniquely identify a certificate issued by a given CA.
+
+Signature Algorithm:
+Is inside the certificate so it is protected by the signature.
+
+Issuer:
+Contains the distinguieshed name (DN) of the cerificate issuer. This is a complex field and not a single value.
+Verisigns root certificate DN:
+/C=US/O=VerifSign, Inc./OU=Class 3 Public Primary Certificate Authority
+C = Coutry
+O = Organisation
+OU = Organisation Unit
+
+Validity:
+How long the cert if valid.
+
+Subject:
+The DN of the entity associated with the public key for which this certificate was issued.
+
+For a self-signed cert the Subject and Issuer will match.
+
+
+#### Chains
+Just an end cerificate is not enough, instead each server must provide a chain of certificates that lead to a 
+trusted root certificate.
+
+
+### SSL_get_peer_cert_chain
+SSL_get_peer_cert_chain() returns a pointer to STACK_OF(X509) certificates forming the certificate chain sent by the peer.
+If called on the client side, the stack also contains the peer's certificate; if called on the server side, the peer's 
+certificate must be obtained separately using SSL_get_peer_certificate.
+
+    X509* cert = w->is_server() ? SSL_get_peer_certificate(w->ssl_) : nullptr;
+    STACK_OF(X509)* ssl_certs = SSL_get_peer_cert_chain(w->ssl_);
+
+    peer_certs = sk_X509_new(nullptr);
+
+sk_X509_new will create a new stack with 4 empty slots in it.
+
+
+    X509_dup(sk_X509_value(ssl_certs, i)
+
+so we are retrieving the value from slot i and then duplicating the ANS.1 value there.
+
+
+    cert = sk_X509_value(peer_certs, 0);
+    2022  result = X509ToObject(env, cert);
+    2023  info = result;
+
+So we get set cert to the first cert, then make that into a Local<Object> to store the result. 
+This is done by adding a 'subject', 'issuer', 'issuerCertificate' etc.
+Then we set info (which at this stage is not pointing to anything) to this:
+
+    (lldb) p result
+    (v8::Local<v8::Object>) $84 = (val_ = 0x0000000106000f90)
+    (lldb) p info
+    (v8::Local<v8::Object>) $85 = (val_ = 0x0000000106000f90)
+
+The copy constructor for Local<> will copy the value, which includes the pointer so these are separate
+objects:
+
+    (lldb) p &result
+    (v8::Local<v8::Object> *) $86 = 0x00007fff5fbf04b0
+    (lldb) p &info
+    (v8::Local<v8::Object> *) $87 = 0x00007fff5fbf04a8
+
+But what is info supposed to represent?
+Well they both initially point to the same thing as we can see but as mentioned they are separate objects. So the following will
+update what they both point to:
+
+    Local<Object> ca_info = X509ToObject(env, ca);
+    info->Set(env->issuercert_string(), ca_info);
+
+But the following will cause info to copy assigned I think to ca_info so the connection with result is lost here. That is incorrect
+what is happening is that the first time info == result so the issuer is set on it, and it contains the ca_info instance. So result
+can get to it. Next when info is set to ca_info: 
+
+    info = ca_info;
+
+This is for the next iteration and if there are more they will be chained to ca_info, which remember can be accessed from result. So,
+info is 
+
+
+
+Next, we have:
+
+    cert = sk_X509_delete(peer_certs, 0);
+
+peer_certs was a duplicate of ssl_certs, and we are removing the first entry because this is the current 
+value of cert which we can skip:
+
+    (lldb) expr cert
+    (X509 *) $88 = 0x00000001046c64e0
+    ...
+    (lldb) expr st->data[0]
+    (char *) $89 = 0x00000001046c64e0 "@wl\x04\x01"
+
+Next, we loop through the remaining certs in peer_certs (our copy of ssl_certs except the first one):
+
+    while (sk_X509_num(peer_certs) > 0) {
+    int i;
+    for (i = 0; i < sk_X509_num(peer_certs); i++) {
+      X509* ca = sk_X509_value(peer_certs, i);
+      // if ca is not self-signed (issuer and subject are the same) then continue with the next cert
+      if (X509_check_issued(ca, cert) != X509_V_OK)
+        continue;
+
+      // We've seen this creation of the Local<Object> (Escapable) before
+      Local<Object> ca_info = X509ToObject(env, ca);
+      // Set issercert_string() what the Local<Object> is pointing to
+      // #issuerCertificate: 0x114c2c8f7439 <Object map = 0x114c89660ef9> (data field 9) properties[5]
+      info->Set(env->issuercert_string(), ca_info);
+      // Now, this line I don't understand why it is being done.
+      (lldb) p info
+      (v8::Local<v8::Object>) $105 = (val_ = 0x000000010584fb00)
+      (lldb) p ca_info
+      (v8::Local<v8::Object>) $106 = (val_ = 0x000000010584fb08)
+
+      info = ca_info;
+
+     (lldb) p info
+     (v8::Local<v8::Object>) $107 = (val_ = 0x000000010584fb08)
+
+From the above we can see that we have info and ca_info now point to the same object:
+
+    (lldb) p &info
+    (v8::Local<v8::Object> *) $114 = 0x00007fff5fbf04a8
+    (lldb) p &ca_info
+    (v8::Local<v8::Object> *) $115 = 0x00007fff5fbf0458
+
+The while loop will continue but now with info replaced by ca_info
+
+
+info is a stack allocated object which contains a pointer to v8::Object
+info {
+   v8::Object* val_;
+}
+
+ca_info {
+   v8::Object* val_;
+}
+
+
+      // NOTE: Intentionally freeing cert that is not used anymore
+      X509_free(cert);
+
+      // Delete cert and continue aggregating issuers
+      cert = sk_X509_delete(peer_certs, i);
+      break;
+    }
+
+    // Issuer not found, break out of the loop
+    if (i == sk_X509_num(peer_certs))
+      break;
+  }
+
+  (lldb) expr peer_certs->stack.num
+    
+Working with the stack:
+
+    STACK_OF(X509)* ssl_certs = SSL_get_peer_cert_chain(w->ssl_);
+
+### Poodle
+SSLv3 Vulnerability (CVE-2014-3566)
+
+
+### BIO
