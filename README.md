@@ -289,6 +289,37 @@ There is some error handling and then:
       lock = 0x0000000100615570
     }
 
+`next_bio` and `prev_bio` are used by filter BIOs.  
+`callback` is a function pointer that will be called for the following calls:
+
+    # define BIO_CB_FREE     0x01
+    # define BIO_CB_READ     0x02
+    # define BIO_CB_WRITE    0x03
+    # define BIO_CB_PUTS     0x04
+    # define BIO_CB_GETS     0x05
+    # define BIO_CB_CTRL     0x06
+
+More details of callback can be found [here](https://www.openssl.org/docs/man1.1.0/crypto/BIO_set_callback_arg.html).
+
+
+When is `shutdown` used?   
+This is set to 1 by default in `crypto/bio/bio_lib.c`:
+  
+    bio->shutdown = 1;
+
+One example is ssl/bio_ssl.c and it's `ssl_free` function:
+
+    if (BIO_get_shutdown(a)) {
+      if (BIO_get_init(a))
+        SSL_free(bs->ssl);
+      /* Clear all flags */
+      BIO_clear_flags(a, ~0);
+      BIO_set_init(a, 0);
+    }
+
+So we can see that is shutdown is non-zero SSL_Free will be called on the BIO_SSL.
+
+
 Lets say we want to set the callback, my first though was:
 
     bout->callback = bio_callback;
@@ -309,6 +340,9 @@ Now, this is because OpenSSL uses opaque pointer the BIO struct. So the details 
 hidden from the client (us). But instead there are functions that perform operations
 on the BIO instance and those functions do know the details of the structure. The point
 here is that clients are not affected by changes to the internals of the struct.
+Instead to set the callback we use (`crypto/bio/bio_lib.c):
+
+    BIO_set_callback(bout, bio_callback);
 
 Now, lets take a closer look at `BIO_write`.
 
@@ -707,125 +741,6 @@ sk_X509_new will create a new stack with 4 empty slots in it.
 so we are retrieving the value from slot i and then duplicating the ANS.1 value there.
 
 
-    cert = sk_X509_value(peer_certs, 0);
-    2022  result = X509ToObject(env, cert);
-    2023  info = result;
-
-So we get set cert to the first cert, then make that into a Local<Object> to store the result. 
-This is done by adding a 'subject', 'issuer', 'issuerCertificate' etc.
-Then we set info (which at this stage is not pointing to anything) to this:
-
-    (lldb) p result
-    (v8::Local<v8::Object>) $84 = (val_ = 0x0000000106000f90)
-    (lldb) p info
-    (v8::Local<v8::Object>) $85 = (val_ = 0x0000000106000f90)
-
-The copy constructor for Local<> will copy the value, which includes the pointer so these are separate
-objects:
-
-    (lldb) p &result
-    (v8::Local<v8::Object> *) $86 = 0x00007fff5fbf04b0
-    (lldb) p &info
-    (v8::Local<v8::Object> *) $87 = 0x00007fff5fbf04a8
-
-But what is info supposed to represent?
-Well they both initially point to the same thing as we can see but as mentioned they are separate objects. So the following will
-update what they both point to:
-
-    Local<Object> ca_info = X509ToObject(env, ca);
-    info->Set(env->issuercert_string(), ca_info);
-
-But the following will cause info to copy assigned I think to ca_info so the connection with result is lost here. That is incorrect
-what is happening is that the first time info == result so the issuer is set on it, and it contains the ca_info instance. So result
-can get to it. Next when info is set to ca_info: 
-
-    info = ca_info;
-
-This is for the next iteration and if there are more they will be chained to ca_info, which remember can be accessed from result. So,
-info is 
-
-
-
-Next, we have:
-
-    cert = sk_X509_delete(peer_certs, 0);
-
-peer_certs was a duplicate of ssl_certs, and we are removing the first entry because this is the current 
-value of cert which we can skip:
-
-    (lldb) expr cert
-    (X509 *) $88 = 0x00000001046c64e0
-    ...
-    (lldb) expr st->data[0]
-    (char *) $89 = 0x00000001046c64e0 "@wl\x04\x01"
-
-Next, we loop through the remaining certs in peer_certs (our copy of ssl_certs except the first one):
-
-    while (sk_X509_num(peer_certs) > 0) {
-    int i;
-    for (i = 0; i < sk_X509_num(peer_certs); i++) {
-      X509* ca = sk_X509_value(peer_certs, i);
-      // if ca is not self-signed (issuer and subject are the same) then continue with the next cert
-      if (X509_check_issued(ca, cert) != X509_V_OK)
-        continue;
-
-      // We've seen this creation of the Local<Object> (Escapable) before
-      Local<Object> ca_info = X509ToObject(env, ca);
-      // Set issercert_string() what the Local<Object> is pointing to
-      // #issuerCertificate: 0x114c2c8f7439 <Object map = 0x114c89660ef9> (data field 9) properties[5]
-      info->Set(env->issuercert_string(), ca_info);
-      // Now, this line I don't understand why it is being done.
-      (lldb) p info
-      (v8::Local<v8::Object>) $105 = (val_ = 0x000000010584fb00)
-      (lldb) p ca_info
-      (v8::Local<v8::Object>) $106 = (val_ = 0x000000010584fb08)
-
-      info = ca_info;
-
-     (lldb) p info
-     (v8::Local<v8::Object>) $107 = (val_ = 0x000000010584fb08)
-
-From the above we can see that we have info and ca_info now point to the same object:
-
-    (lldb) p &info
-    (v8::Local<v8::Object> *) $114 = 0x00007fff5fbf04a8
-    (lldb) p &ca_info
-    (v8::Local<v8::Object> *) $115 = 0x00007fff5fbf0458
-
-The while loop will continue but now with info replaced by ca_info
-
-
-info is a stack allocated object which contains a pointer to v8::Object
-info {
-   v8::Object* val_;
-}
-
-ca_info {
-   v8::Object* val_;
-}
-
-
-      // NOTE: Intentionally freeing cert that is not used anymore
-      X509_free(cert);
-
-      // Delete cert and continue aggregating issuers
-      cert = sk_X509_delete(peer_certs, i);
-      break;
-    }
-
-    // Issuer not found, break out of the loop
-    if (i == sk_X509_num(peer_certs))
-      break;
-  }
-
-  (lldb) expr peer_certs->stack.num
-    
 Working with the stack:
 
     STACK_OF(X509)* ssl_certs = SSL_get_peer_cert_chain(w->ssl_);
-
-### Poodle
-SSLv3 Vulnerability (CVE-2014-3566)
-
-
-### BIO
