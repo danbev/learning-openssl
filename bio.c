@@ -7,9 +7,11 @@
 long bio_callback(BIO *b,
                   int oper,
                   const char *argp,
+                  size_t len,
                   int argi,
                   long argl,
-                  long ret) {
+                  int ret,
+                  size_t *processed) {
   printf("bio_callback..\n");
   return ret;
 }
@@ -23,7 +25,8 @@ int main(int arc, char *argv[]) {
   printf("Creating BIO to stdout...\n");
 
   BIO* bout = BIO_new_fp(stdout, BIO_NOCLOSE);
-  BIO_set_callback(bout, bio_callback);
+  BIO_set_callback_ex(bout, bio_callback);
+  BIO_set_init(bout, 1);
   int r = BIO_write(bout, "bajja\n", 6);
   printf("wrote %d\n", r);
 
