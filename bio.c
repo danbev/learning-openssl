@@ -12,7 +12,7 @@ long bio_callback(BIO *b,
                   long argl,
                   int ret,
                   size_t *processed) {
-  printf("bio_callback..\n");
+  printf("bio_callback[bio_method_name=%s, operation=%d]\n", BIO_method_name(b), oper);
   return ret;
 }
 
@@ -29,6 +29,8 @@ int main(int arc, char *argv[]) {
   BIO_set_init(bout, 1);
   int r = BIO_write(bout, "bajja\n", 6);
   printf("wrote %d\n", r);
+
+  BIO_ctrl(bout, BIO_CTRL_RESET, 0, NULL);
 
   EVP_cleanup();
   CRYPTO_cleanup_all_ex_data();
