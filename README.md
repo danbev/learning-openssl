@@ -32,6 +32,14 @@ You can see how this is used the [Makefile](./makefile).
 
     $ make
 
+### Runnning tests
+
+    $ make test
+
+Listing tests:
+
+    $ make list-tests
+
 ### Show shared libraries used
 
     $ export DYLD_PRINT_LIBRARIES=y
@@ -301,6 +309,7 @@ There is some error handling and then:
 
 More details of callback can be found [here](https://www.openssl.org/docs/man1.1.0/crypto/BIO_set_callback_arg.html).
 
+`ptr` might be a FILE* for example.
 
 When is `shutdown` used?   
 This is set to 1 by default in `crypto/bio/bio_lib.c`:
@@ -345,6 +354,35 @@ Instead to set the callback we use (`crypto/bio/bio_lib.c):
     BIO_set_callback(bout, bio_callback);
 
 Now, lets take a closer look at `BIO_write`.
+
+
+### BIO_METHOD ctrl
+What is this used for?  
+As you might have guessed this if for performing control operations.
+
+    long (*ctrl) (BIO *, int, long, void *);
+
+This is the type of the function pointer for a specifiec BIO (its METHOD), and the call
+used would be BIO_ctrl:
+
+    long BIO_ctrl(BIO *b, int cmd, long larg, void *parg)
+
+The `cmd` operations available are specified in `include/openssl/bio.h`
+
+    # define BIO_CTRL_RESET          1/* opt - rewind/zero etc */
+    ...
+
+
+
+### BIO_clear_retry_flags
+This is used to handle signals that might interrupt a system call. For example, if 
+OpenSSL is doing a read a signal might interrupt it.
+
+### puts/write vs gets/read
+puts/gets read/write strings whereas write/read operate on bytes.
+All these functions return either the amount of data successfully read or written (if the return value is positive) or that no data was successfully read or written if the result is 0 or -1. If the return value is -2 then the operation is not implemented in the specific BIO type. The trailing NUL is not included in the length returned by BIO_gets().
+
+A 0 or -1 return is not necessarily an indication of an error. In particular when the source/sink is non-blocking or of a certain type it may merely be an indication that no data is currently available and that the application should retry the operation later.
 
 
 ### X509_up_ref
@@ -744,3 +782,34 @@ so we are retrieving the value from slot i and then duplicating the ANS.1 value 
 Working with the stack:
 
     STACK_OF(X509)* ssl_certs = SSL_get_peer_cert_chain(w->ssl_);
+
+### SSL_CTX
+
+    SSL_CTX* SSL_CTX_new(const SSL_METHOD* meth)
+
+Lets first take a look at `SSL_METHOD`:
+
+This is defined in `ssl/ssl_locl.h` and contains functions like:
+    ssl_new
+    ssl_clear
+    ssl_free
+    ssl_accept
+    ssl_connect
+    ssl_read
+    ssl_peak
+    ssl_write
+    ssl_shutdown
+    ssl_renegotiate*
+    ....
+
+So what is a SSL_CTX?  
+This struct has a SSL_METHOD* as its first member. A stack of SSL_CIPHERs, a pointer
+to a x509_store_st cert_store.
+A cache (LHASH_OF(SSL_SESSION)* sesssion)) sessions? Callbacks for when a new session is
+added to the cache. 
+
+
+### ssl_session_st
+Represents an ssl session with information about the ssl_version the keys.
+
+
