@@ -802,6 +802,12 @@ This is defined in `ssl/ssl_locl.h` and contains functions like:
     ssl_renegotiate*
     ....
 
+Example (taken from [bio_ssl.c](./bio_ssl.c):
+
+    ctx = SSL_CTX_new(SSLv23_client_method());
+
+Now, `SSLv23_client_method` is a macro which will expand to TLS_client_method()
+
 So what is a SSL_CTX?  
 This struct has a SSL_METHOD* as its first member. A stack of SSL_CIPHERs, a pointer
 to a x509_store_st cert_store.
@@ -812,4 +818,35 @@ added to the cache.
 ### ssl_session_st
 Represents an ssl session with information about the ssl_version the keys.
 
+
+### BIO retry
+BIO_read will try to read a certain nr of bytes. This function will return the nr of 
+bytes read, or 0, or -1.
+If the read operation is done on a blocking resource then 0 indicates that the resouces
+was closed (for example a socket), and -1 would indicate an error.
+On a non-blocking resource, 0 means no data was available, and -1 indicates an error.
+You can determine if there was an error by calling BIO_should_retry(bio).
+
+
+### Signed Certificate Timestamp (SCT)
+
+
+### SSL_CTX_set_tlsext_status_cb
+
+    SSL_CTX_set_tlsext_status_cb(sc->ctx_, TLSExtStatusCallback);
+
+This is done to handle Online Certificate Status Protocol responses.
+
+
+
+
+### OpenSSL Docs
+There are manpages that are created using [perldoc](https://perldoc.perl.org/perlpod.html)
+
+    $ make install_docs
+
+To inspect them you can then cd to the directory you used as the `prefix` when building and
+run the following command::
+
+    $ man ../build_master/share/man/man7/ssl.7
 
