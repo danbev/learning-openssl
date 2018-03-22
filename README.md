@@ -709,19 +709,21 @@ So, we can see that this is made up of two macros (will the macro in pem_x509 wi
 
 ### FIPS
 Download openssl-fips-2.0.16 and unzip:
-
+```console
    $ ./Configure darwin64-x86_64-cc --prefix=/Users/danielbevenius/work/security/build_1_0_2k
    $ make
    $ make install
+```
 
 This example will install to the `build_1_0_2k` directory so changes this as required.
 
 Next, you'll have to build the OpenSSL library with fips support and specify the installation directory which was used above:
-
+```console
    $ ./Configure fips shared no-ssl2 --debug --prefix=/Users/danielbevenius/work/security/build_1_0_2k darwin64-x86_64-cc --with-fipsdir=/Users/danielbevenius/work/security/build_1_0_2k
    $ make depend
    $ make
    $ make install_sw
+```
 
 ### Certificates
 Abstract Syntax Notation One (ASN.1) is a set of rules for defining, transporting and exchanging complex data structures and objects.
