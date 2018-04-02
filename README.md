@@ -51,6 +51,7 @@ Listing tests:
       /Users/danielbevenius/work/security/openssl/libcrypto.1.1.dylib (compatibility version 1.1.0, current version 1.1.0)
       /usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1226.10.1)
 
+
 ### Debugging
 
     $ lldb basic 
@@ -66,6 +67,7 @@ Listing tests:
     $ strings libopenssl.a | grep "^OpenSSL"
     OpenSSL 1.0.2k  26 Jan 2017
 
+To find the version in the source tree take a look at `include/include/openssl/opensslv.h`.
 
 ### Troubleshooting SSL errors:
 
@@ -851,4 +853,67 @@ To inspect them you can then cd to the directory you used as the `prefix` when b
 run the following command::
 
     $ man ../build_master/share/man/man7/ssl.7
+
+### Authenticated encryption (AE)
+
+### Authenticated encryption with associated data (AEAD)
+Provides confidentiality (protect the data from unauthorized viewers), integrity (that the data has not
+been tampered with), authenticity (verify that the data has not been modified in transit and also that
+the receiver can verify the source of the message) and provides an API for this.
+
+
+### Additional Authentication Data (AAD)
+GCM, CCM allow for the input of additional data (header data in CCM) which will accompany the cipher text
+but does not have to be encrypted but must be authenticated.
+
+### GCM (Galois Counter Mode)
+
+### Configure
+This is a perl script that.
+
+The script use:
+```perl
+use Config;
+```
+I think this is the CPAN [Config](http://perldoc.perl.org/Config.html) module. It gives access to information that was available to the Configure program at Perl build time.
+
+Version information will be colleded into the Config object by parsing 
+`include/openssl/opensslv.h`.
+After this the following can be found:
+```perl
+my $pattern = catfile(dirname($0), "Configurations", "*.conf");
+```
+The following targets are available:
+```console
+Configurations/00-base-templates.conf
+Configurations/50-haiku.conf
+Configurations/10-main.conf
+Configurations/50-masm.conf
+Configurations/15-android.conf
+Configurations/50-win-onecore.conf
+Configurations/50-djgpp.conf
+Configurations/90-team.conf
+```
+
+
+### Build system
+The build system is based on the Configure perl script. Running Configure will
+generate a `Makefile` and also an `opensslconf.h` file. 
+
+### build.info
+
+Lets take a look at the buildinfo.h file in `openssl/crypto`. The first line looks like this:
+```perl
+{- use File::Spec::Functions qw/catdir catfile/; -}
+```
+So the build.info is not itself a perl script but a template which can have
+perl "embedded" in it. For example, the above will use the 
+qw is a function that to specify multiple single quoted words. For I guess
+this is importing 'catdir' and 'catfile' from the File::Spec::Functions module. But I cannot find any usage 
+of `catdir` or `catfile` in crypto/build.info. This was fixed in [commit](https://github.com/openssl/openssl/pull/5832).
+
+### perlasm
+Assemblers usually have macros and other high-level features that make 
+assembly-language programming convenient. However, some assemblers do not have such features, and the ones that do all have different syntaxes. 
+OpenSSL has its own assembly language macro framework called `perlasm` to deal with this. Every OpenSSL assembly language source file is actually a Perl program that generates the assembly language file. The result is several large files of interleaved Perl and assembly language code.
 
