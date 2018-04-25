@@ -1,5 +1,4 @@
 #include <openssl/bio.h>
-#include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/conf.h>
 #include <stdio.h>
@@ -11,7 +10,6 @@ int main(int arc, char *argv[]) {
   BIO* bio;
 
   ERR_load_crypto_strings();
-  OpenSSL_add_all_algorithms();
   OPENSSL_no_config();
 
   bio = BIO_new_connect("www.google.com:80");
