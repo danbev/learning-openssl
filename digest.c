@@ -40,6 +40,13 @@ int main(int arc, char *argv[]) {
 
   EVP_DigestFinal_ex(mdctx, md_value, &md_len);
 
+  const EVP_MD* md_ptr = EVP_MD_CTX_md(mdctx);
+  printf("md_ptr = %lu\n", EVP_MD_meth_get_flags(md_ptr));
+
+  int r = EVP_MD_CTX_test_flags(mdctx, EVP_MD_FLAG_DIGALGID_MASK);
+  printf("r =%d\n", r);
+
+
   printf("md_len: %d\n", md_len);
   printf("EVP_MD_CTX_size: %d\n", EVP_MD_CTX_size(mdctx));
   printf("EVP_MD_size: %d\n", EVP_MD_size(md));

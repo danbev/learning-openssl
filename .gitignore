@@ -11,3 +11,4 @@ sign
 digest
 hmac
 bio
+bio_ssl

@@ -87,7 +87,7 @@ SSL library:
 
     SSL_CTX* ctx;
 
-This is a struct declared in openssl/include/openssl/ssh.h and contains the SSL_METHOD to be used
+This is a struct declared in `openssl/include/openssl/ssh.h` and contains the SSL_METHOD to be used
 , the list of ciphers, a pointer ot a x509_store_st (the cert store)
 
     SSL* ssl
@@ -857,19 +857,58 @@ run the following command::
 ### Authenticated encryption (AE)
 
 ### Authenticated encryption with associated data (AEAD)
-Provides confidentiality (protect the data from unauthorized viewers), integrity (that the data has not
-been tampered with), authenticity (verify that the data has not been modified in transit and also that
-the receiver can verify the source of the message) and provides an API for this.
+You want to authenticate and transmit data in addition to an encrypted message.
+If a cipher processes a network packet composed of a header followed by a payload, you might choose to encrypt the 
+payload to hide the actual data transmitted, but not encrypt the header since it contains information required to 
+deliver the packet to its final recipient. At the same time, you might still like to authenticate the header’s 
+data to make sure that it is received from the expected sender.
+
+
+### GCM (Galois Counter Mode)
+This algorithm produces both a cipher text and an authentication tag (think MAC). 
+Once the ciphertext and authentication tag have been generated, the sender transmits both to the 
+intended recipient.
 
 
 ### Additional Authentication Data (AAD)
 GCM, CCM allow for the input of additional data (header data in CCM) which will accompany the cipher text
 but does not have to be encrypted but must be authenticated.
+AE(K, P) = (C, T). The term AE stands for authenticated encryption, K is the key, P the plaintext and 
+C the cipher text, and finally T is the authentication tag.
 
-### GCM (Galois Counter Mode)
+Authenticated cipher decryption is represented by AD(K, C, T) = P
+
+
+
 
 ### Configure
-This is a perl script that.
+This is a perl script that will generate a `Makefile` and `configdata.pm` (which is a perl module).
+This perl module exports `%config, %target % disabled %withargs %unified_info @disables and it is defined
+in Configure in something looking like a HERE document:
+```perl
+print OUT <<"EOF";
+#! $config{HASHBANGPERL}
+
+package configdata;
+
+use strict;
+use warnings;
+
+use Exporter;
+#use vars qw(\@ISA \@EXPORT);
+our \@ISA = qw(Exporter);
+our \@EXPORT = qw(\%config \%target \%disabled \%withargs \%unified_info \@disablables);
+
+EOF
+...
+```
+
+`configdata.pm` can be used as a perl script too:
+```console
+$ perl configdata.pm --help
+```
+
+
 
 The script use:
 ```perl
@@ -895,12 +934,18 @@ Configurations/50-djgpp.conf
 Configurations/90-team.conf
 ```
 
+### Config
+There is a config script in the root directory.
 
 ### Build system
 The build system is based on the Configure perl script. Running Configure will
 generate a `Makefile` and also an `opensslconf.h` file. 
 
 ### build.info
+Information about these files can be found in `Configuration/README`.
+The README says that each line of a build.info files is processed with the Text::Template
+perl module. So where is this done?
+I think this is done in Configure with the help or `util/dofile.pl`.
 
 Lets take a look at the buildinfo.h file in `openssl/crypto`. The first line looks like this:
 ```perl
@@ -912,8 +957,60 @@ qw is a function that to specify multiple single quoted words. For I guess
 this is importing 'catdir' and 'catfile' from the File::Spec::Functions module. But I cannot find any usage 
 of `catdir` or `catfile` in crypto/build.info. This was fixed in [commit](https://github.com/openssl/openssl/pull/5832).
 
+So, lets look at the next part of crypto/build.info:
+```perl
+LIBS=../libcrypto
+```
+
+
 ### perlasm
 Assemblers usually have macros and other high-level features that make 
 assembly-language programming convenient. However, some assemblers do not have such features, and the ones that do all have different syntaxes. 
 OpenSSL has its own assembly language macro framework called `perlasm` to deal with this. Every OpenSSL assembly language source file is actually a Perl program that generates the assembly language file. The result is several large files of interleaved Perl and assembly language code.
+
+
+### OpenSSL commands
+
+#### Check a cerificate
+```console
+$ openssl x509 -in certificate.crt -text -noout
+```
+
+### Initialization Vector
+Is a vector/array of random bytes. This is all it is. Someone seeing those bytes cannot 
+deduce anything about the key or the encrypted message. But they need it for decryption so
+it must be sent along with the cypher text.
+
+### Block ciphers
+
+### Advanced Entryption Standard (AES)
+A replacedment for Data Encryption Standard (DES).
+Is a block cypher that handles 128-bit blocks of plaintext at a time.
+
+
+
+### ca
+This is an application:
+```console
+$ openssl ca --help
+```
+It can be used to sign certificate requests and generate CRLs and also maintains a text database of issued 
+certificates and their status.
+
+Every certificate as a serial number which is a unique positive integer assigned by the CA.
+
+```console
+$ openssl x509 -in agent8-cert.pem -text -noout
+Certificate:
+    Data:
+        Version: 1 (0x0)
+        Serial Number: 1 (0x1)
+        Signature Algorithm: sha256WithRSAEncryption
+    ...
+```
+
+Each issued certificate must contain a unique serial number assigned by the CA. It must be unique for each 
+certificate given by a given CA. 
+OpenSSL keeps the used serial numbers on a file, by default it has the same name as the CA certificate file 
+with the extension replace by srl
 
