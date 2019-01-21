@@ -1126,3 +1126,147 @@ The api functions can be found in 'crypto/evp/p_lib.c`.
 Where are the functions for the DSA type? 
 These can be found in `/crypto/dsa/dsa_lib.c`
 
+### Diffie Hellman Key Exchange
+```
+Alice                 Public                        Bob
+a (number < n)        g (generator, small prime)    b (number < n)
+                      n (big prime number)
+
+g^a mod n ------------> a₁             b₁ <--------- g^b mod n 
+
+(b₁)^a mod n                                         (a₁)^b mod n
+is same as:                                          is the same as:
+(g^b)^a mod n                                        (g^a)^b mod n
+(g)^ba mod n                                         (a₁)^ba mod n
+```
+a = 3                  g = 5                         b = 2
+                       n = 7
+
+                    a₁ = 5³ mod 7 = 125 mod 7 = 6
+                    b₁ = 5² mod 7 = 25  mod 7 = 4
+
+(b₁)³ = 4³ = 64 mod 7 = 1                           (a₁)² = 6² = 36 mod n = 1
+```
+Notice that `g` for generator is like the starting point on the circle and n is
+the max size of the circle after which is will wrap over.
+Visualize this as a circle (like a clock and 12 is the number n). So we take
+our private key (a) and g to that and mod it to the circle, so this will be 
+a point some where on the circle. Bob does the same and his value will also be
+somewhere on the circle. The can now share this publicly as just knowing the point
+on the cicle is not enough, only alice knows how many times around the circle (a times)
+to get to the point.
+
+Now Eliptic Curve Cryptography with Diffie Hellman ECDH is done in a similar way
+as described above, but ECHD, or rather EC, does not use module maths. Instead
+it uses eliptic curves. So instead of points on the circle the values generated
+would be points on a agreed upon eliptic curve.
+The point `g` the generator is our starting point just like with the module based
+version. But we don't raise to any powers, instead we dot the point with itself
+a or b number of times depending if it is alice or bob generating a point.
+Also where in the modulus variant we used the value at the point, in EC we use
+the point x,y coordinates.
+```
+Alice                 Public                         Bob
+a (number < n)        g (point on the curve)         b (number < n)
+
+a*g    ------------>  a₁             b₁ <---------   b*g
+b¹*g =                                               a²*g= 
+
+```
+
+### Eliptic Curve Cryptography (ECC)
+Has the following forumla for the graph:
+```
+y² = x³ + ab + b
+```
+For example:
+```
+y² = x³ -2x + 2
+```
+And a prime number p which is the number of times we do point addition beginning
+with an initial point. The graph is symetric in the horizontal axis so we can
+take take two points on the graph and draw a line between them. This line will 
+intersect that another point on the graph, from which we now draw a vertical
+line up/down depending on the side of the graph we are on. This point is called
+P+Q. There is a max value for the x-axis where the line will wrap around and 
+start from zero, this is number of bit of the EC.
+
+For ECDH alice and bob must first agree to use the same eliptic curve, and also
+a base point `P` on the curve.
+Alice choses a secret large random number `a`.
+Bob choses a secret large ranaom number `b`.
+
+Alice computes a*P (a times the point P) and shares the answer with Bob.
+Bob computes b*P (b times the point P) and shares the answer with Alice.
+So they both keep a and b secret but can share the result.
+
+Alice computes a * (the point Bob gave her (b*P))
+Bob computes   b * (the point Alice gave him (a*P))
+Secret key = a * (b*P) = b (a*P)
+So both will point to the same point on the curve.
+
+The domain parameters:
+```
+y² = x³ + ab + b
+p = the field that the curve is defined over
+a = one of the fields that defines the curve (see forumla above)
+b = one of the fields that defines the curve (see forumla above)
+G = the generator point (called base point above I think)
+n = prime order of G
+h = cofactor
+
+
+Take prime numbers 13 and 7 and multiply them to get 91 (max).
+Now, lets make our public encryption key 5
+```
+
+Extended Euclidian Algorithm
+The normal Euclidiean algorithm is:
+```
+gcd(13, 7)
+```
+Bezout's theorm:
+```
+13s + 7t = gcd(13, 7)
+```
+Extends the Ecludian alg to also tell us what `s` and `t` are.
+
+13 = 7(?) + (?)
+13 = 7(1) + (6)
+
+7 = 6(?) + (?)
+7 = 6(1) + (1)
+6 = 1(6) + (0) <--- we are done
+
+gcd(13, 7) = 1
+
+
+The example elliptic curve domain parameters over 𝔽2m have been given nicknames 
+to enable them to be easily identified. The nicknames were chosen as follows. 
+Each name begins with sec to denote ‘Standards for Efficient Cryptography’, 
+followed by a t to denote parameters over 𝔽2m , followed by a number denoting 
+the field size m, followed by a k to denote parameters associated with a Koblitz 
+curve or an r to denote verifiably random parameters, followed by a sequence number.
+
+So `secp192k1` would mean:
+```
+sec = Standards for Efficient Cryptography
+t   = parameters over
+192 = key size m
+k|r = k is for a Kobiltz curve and r to denote verifiably random parameters.
+#   = a sequence number
+```
+
+Dual Elliptic Curve Deterministic Random Bit Generator (Dual_EC_DRBG). This is a 
+random number generator standardized by the National Institute of Standards and 
+Technology (NIST) and promoted by the NSA. Dual_EC_DRBG generates random-looking 
+numbers using the mathematics of elliptic curves. The algorithm itself involves 
+taking points on a curve and repeatedly performing an elliptic curve "dot" operation. 
+
+
+
+There has been progress in developing curves with efficient arithmetic outside 
+of NIST, including curve 25519 created by Daniel Bernstein (djb) and more 
+recently computed curves by Paulo Baretto and collaborators. But widespread adoption 
+of these curves is several years away.
+
