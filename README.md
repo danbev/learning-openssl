@@ -861,7 +861,22 @@ If a cipher processes a network packet composed of a header followed by a payloa
 payload to hide the actual data transmitted, but not encrypt the header since it contains information required to 
 deliver the packet to its final recipient. At the same time, you might still like to authenticate the header’s 
 data to make sure that it is received from the expected sender.
+       Encryption        Authentication   
+      +--------------++---------------------------+
+mgs ->| Encrypted msg||Message Authentication Code|
+      +--------------++---------------------------+
+       Confidality       Integrity (no tampering)
 
+Network packet:
+        Associated Data
+      +----------------------------++-------------------+
+      | Headers (no encryption)    || Encrypted Body    |
+      +----------------------------++-------------------+
+                Authentication (headers and body)
+
+Example modes for EAS:
+GCM
+EAX
 
 ### GCM (Galois Counter Mode)
 This algorithm produces both a cipher text and an authentication tag (think MAC). 
