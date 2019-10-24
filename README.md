@@ -1290,3 +1290,49 @@ of NIST, including curve 25519 created by Daniel Bernstein (djb) and more
 recently computed curves by Paulo Baretto and collaborators. But widespread adoption 
 of these curves is several years away.
 
+
+### Hashed Message Authentication Code (HMAC)-based key derivation function (HKDF)
+A key derivation function (KDF) is a basic and essential component of
+cryptographic systems.  Its goal is to take some source of initial
+keying material and derive from it one or more cryptographically
+strong secret keys.
+
+HKDF follows the "extract-then-expand" paradigm, where the KDF
+logically consists of two modules.
+1) takes the input keying material and "extracts" from it a fixed-length pseudorandom key K.
+2) expand the key K into several additional pseudorandom keys (the output of the KDF).
+
+So we first want to extract from a source key (sk), which could be created by a hardware
+random number generator or a key exchange protocol, and then create additional
+keys derived from that. 
+
+For example in TLS 1.3 there are multiple keys need to for different things.
+```
+  +-----+       +---+
+  | SK  | ----> |KDF| ----> [k₁, k₂, k₃, ...]
+  +-----+       +---+
+```
+Key Derivation Function (KDF)
+
+
+In TLS the browser has a key for sending to the server and a key for receiving
+from the server. 
++--------+
+|Client  |
++--------+
+|b->s key|
++--------+
+|s->b key|
++--------+
+|b->s cnt|
++--------+
+|s->b cnt|
++--------+
+
+Both sides use stateful encryption which maintain two 64-bit counters to defend
+against replay attacs.
+
+
+
+The current [derive](derive.c) example only performs the second stage.
+
