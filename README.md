@@ -1159,6 +1159,7 @@ is same as:                                          is the same as:
 (g^b)^a mod n                                        (g^a)^b mod n
 (g)^ba mod n                                         (a₁)^ba mod n
 ```
+```
 a = 3                  g = 5                         b = 2
                        n = 7
 
