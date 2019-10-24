@@ -346,7 +346,7 @@ Lets say we want to set the callback, my first though was:
     1 error generated.
     make: *** [bio] Error 1
 
-Now, this is because OpenSSL uses opaque pointer the BIO struct. So the details are
+Now, this is because OpenSSL uses opaque pointer for the BIO struct. So the details are
 hidden from the client (us). But instead there are functions that perform operations
 on the BIO instance and those functions do know the details of the structure. The point
 here is that clients are not affected by changes to the internals of the struct.
@@ -413,6 +413,9 @@ An example of this can be found in digest.c
 
     md = EVP_get_digestbyname("SHA256");
 
+An EVP_MD abstracts the details of a specific hash function allowing code to 
+deal with the concept of a "hash function" without needing to know exactly 
+which hash function it is.
 The implementation of this can be found in openssl/crypto/evp/names.c:
 
     const EVP_MD *cp;
@@ -861,6 +864,7 @@ If a cipher processes a network packet composed of a header followed by a payloa
 payload to hide the actual data transmitted, but not encrypt the header since it contains information required to 
 deliver the packet to its final recipient. At the same time, you might still like to authenticate the header’s 
 data to make sure that it is received from the expected sender.
+```
        Encryption        Authentication   
       +--------------++---------------------------+
 mgs ->| Encrypted msg||Message Authentication Code|
@@ -873,6 +877,7 @@ Network packet:
       | Headers (no encryption)    || Encrypted Body    |
       +----------------------------++-------------------+
                 Authentication (headers and body)
+```
 
 Example modes for EAS:
 GCM
