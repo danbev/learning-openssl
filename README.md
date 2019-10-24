@@ -1318,6 +1318,7 @@ Key Derivation Function (KDF)
 
 In TLS the browser has a key for sending to the server and a key for receiving
 from the server. 
+```
 +--------+
 |Client  |
 +--------+
@@ -1329,11 +1330,10 @@ from the server.
 +--------+
 |s->b cnt|
 +--------+
+```
 
 Both sides use stateful encryption which maintain two 64-bit counters to defend
 against replay attacs.
-
-
 
 The current [derive](derive.c) example only performs the second stage.
 
