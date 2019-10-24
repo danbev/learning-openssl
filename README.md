@@ -1142,7 +1142,7 @@ So if you need to find the type
 int type = EVP_PKEY_base_id(pkey.get())
 DSA* dsa = EVP_PKEY_get0_DSA(pkey.get());
 ```
-The api functions can be found in 'crypto/evp/p_lib.c`. 
+The api functions can be found in `crypto/evp/p_lib.c`. 
 Where are the functions for the DSA type? 
 These can be found in `/crypto/dsa/dsa_lib.c`
 
