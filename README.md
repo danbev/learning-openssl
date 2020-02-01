@@ -25,7 +25,7 @@ The the library location can be specified using `-L` like this:
 
     -L$(/Users/danielbevenius/work/security/openssl)
 
-You can see how this is used the [Makefile](./makefile).
+You can see how this is used the [Makefile](./Makefile).
 
 ### Building
 
