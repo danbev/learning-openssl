@@ -37,6 +37,12 @@ The the library location can be specified using `-L` like this:
 
     -L$(/Users/danielbevenius/work/security/openssl)
 
+or you can use `LD_LIBRARY_PATH`:
+```console
+$ env LD_LIBRARY_PATH=/path_to/openssl_build_master/lib/ ../openssl_build_master/bin/openssl version
+OpenSSL 3.0.0-alpha3-dev  (Library: OpenSSL 3.0.0-alpha3-dev )
+```
+
 You can see how this is used the [Makefile](./Makefile).
 
 ### Building
