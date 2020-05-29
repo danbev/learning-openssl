@@ -15,6 +15,18 @@ To configure and install to a build directory:
     $ ./Configure --debug --prefix=/Users/danielbevenius/work/security/build_master darwin64-x86_64-cc
     $ make 
 
+On linux:
+```console
+$ ./config --debug --prefix=/home/danielbevenius/work/security/openssl_build_master
+Operating system: x86_64-whatever-linux2
+Configuring OpenSSL version 3.0.0-alpha3-dev for target linux-x86_64
+Using os-specific seed configuration
+Creating configdata.pm
+Running configdata.pm
+Creating Makefile
+$ make -j8
+```
+
 Optionally install:
 
     $ make install_sw
