@@ -3,18 +3,15 @@ The sole purpose of this project is to learn OpenSSL's libcryto library
 
 
 ### Building OpenSSL
-I've been building OpenSSL using the following configuration:
 
-    $ ./Configure --debug --prefix=/Users/danielbevenius/work/security  --libdir="openssl" darwin64-x86_64-cc
-
-This might look a little odd but allows me to avoid the install step which is pretty slow
-and also takes up space on my system. With the followig I can simply make:
-
+#### Building on macox
 To configure and install to a build directory:
-
+```console
     $ ./Configure --debug --prefix=/Users/danielbevenius/work/security/build_master darwin64-x86_64-cc
     $ make 
+```
 
+#### Building on linux
 On linux:
 ```console
 $ ./config --debug --prefix=/home/danielbevenius/work/security/openssl_build_master
@@ -28,8 +25,9 @@ $ make -j8
 ```
 
 Optionally install:
-
+```console
     $ make install_sw
+```
 
 This is nice so when building a tag and not having to rebuild it again.
 
