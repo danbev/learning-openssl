@@ -95,6 +95,8 @@ To find the version in the source tree take a look at `include/include/openssl/o
 In this case I'd missed out [initializing](https://wiki.openssl.org/index.php/Library_Initialization) the library.
 
 
+### EVP
+This stands for Envelope Encryption.
 
 ### ssllib
 To make a tls connection you need a SSL_CTX and an SSL pointer. You also have to initialize the
@@ -1353,3 +1355,101 @@ against replay attacs.
 
 The current [derive](derive.c) example only performs the second stage.
 
+### OpenSSL 3.x
+
+#### Providers
+There are different providers for different algorithm implementations. These
+can be configured programatically or via a configuration file.
+There are currently 4 provider implementations:
+* Default
+
+* Legacy
+Algorithms in the legacy provider include MD2, MD4, MDC2, RMD160, CAST5,
+BF (Blowfish), IDEA, SEED, RC2, RC4, RC5 and DES (but not 3DES).
+
+* FIPS
+
+* null
+Contains nothing and can be used to the default provider is not automatically
+loaded.
+
+Example of loading a provider:
+```c
+OSSL_PROVIDER_load(NULL, "default");
+```
+
+#### Fetch
+To use an algoritm an implementation must be retreived from the provider, and
+this is called fetching
+
+```c
+EVP_MD *sha256 = EVP_MD_fetch(NULL, "SHA2-256", "fips=yes");
+```
+
+#### Function code of Errors
+`The function code part of an OpenSSL error code is no longer relevant and is
+always set to zero. Related functions are deprecated.`
+
+#### FIPS
+The functions `FIPS_mode()` and `FIPS_mode_set()` are no longer available! We
+use these in Node.js. 
+
+To enable FIPS by default modify the openssl configuration file::
+```console
+.include /usr/local/ssl/fipsmodule.cnf
+
+[openssl_init]
+providers = provider_sect
+
+[provider_sect]
+fips = fips_sect
+
+```
+
+Loading the fips module programatically:
+```c
+OSSL_PROVIDER *fips;
+fips = OSSL_PROVIDER_load(NULL, "fips");
+if (fips == NULL) {
+  ...
+}
+```
+For this to work you also have to update the `fipsmodule.cnf ` and comment out
+/remove `active = 1`.
+
+#### OpenSSL installation info
+Show the directory where the configuration file is:
+```console
+$ ~/work/security/openssl_build_master/bin/openssl version -d
+OPENSSLDIR: "/home/danielbevenius/work/security/openssl_build_master/ssl"
+```
+```console
+$ ~/work/security/openssl_build_master/bin/openssl version -v
+OpenSSL 3.0.0-alpha4-dev  (Library: OpenSSL 3.0.0-alpha4-dev )
+```
+
+### Library Context
+This is an opaque structure (so you don't and can't call any functions of this
+structure, instead you pass it to functions that can.
+The declaration of OPENSSL_CTX can be found in `include/openssl/types.h`:
+```c
+typedef struct openssl_ctx_st OPENSSL_CTX;
+```
+
+### Version
+crypto.h has the following function:
+```c
+const char *OpenSSL_version(int type);
+const char *OPENSSL_info(int type);
+```
+Which looks like it can be called with a VERSION type:
+```c
+const char* version = OPENSSL_version(VERSION)
+```
+TODO: I'm not exactly sure which one should be called but try this out.
+
+#### errstr
+```console
+$ ~/work/security/openssl_build_master/bin/openssl errstr 1400000
+error:01400000:unknown library::unknown library
+```
