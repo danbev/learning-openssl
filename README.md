@@ -1164,6 +1164,85 @@ The api functions can be found in `crypto/evp/p_lib.c`.
 Where are the functions for the DSA type? 
 These can be found in `/crypto/dsa/dsa_lib.c`
 
+### Rivest Shamir and Aldeman (RSA)
+Is a public key encryption technique developed in 1978 by the people mentioned
+in the above. It uses a private and a public key.
+
+It starts by selecting two prime numbers `p` and `q` and taking the product of
+them:
+```
+N = pq
+
+p = 2, q = 7
+N = 2*7 = 14
+```
+N will become our modulus.
+
+What are the values that don't have common factors with 14?
+```
+1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
+1, x, 3, x, 5, x, x, x, 9,  x, 11,  x, 13,  x
+1, 3, 5, 9, 11, 13
+```
+So we have 6 values that don't have comman factors with 14.
+This can also be calculated using:
+```
+(q - 1) * (p - 1) = 
+(2 - 1) * (7 - 1) = 
+(1) * (6) = 6
+```
+So `L` will be `6`. This is 
+
+For encryption we will have a key that consists of a tuple, where one value
+will be the modulus we calculated above:
+```
+(?, 14)
+```
+The encryption key must be a value between 1 and the value of 'L', which is our
+case gives us 4 values to choose from, `2, 3, 4, 5`.
+The value we choose must be share no other factors besides 1 with L(6) and our
+modulus(14). `5` is the only option in our case:
+```
+(5, 14)
+```
+This is the public key exponent which we will se later is used as the exponent
+that we raise the value to be encrypted (m) to:
+```
+m⁵mod(14) = encrypted value
+```
+
+Decryption also uses a tuple with one being the modules as well:
+```
+(?, 14)
+```
+To calculate the private key value we use the following formula:
+```
+D * E % L = 1
+D * 5 % 6 = 1
+```
+Options for D:
+```
+5, 11, 17, 23, 29, 35, ...
+
+11 * 5 % 6 = 1
+55 % 6 = 1
+```
+This values is called the private exponent because in much the same way as
+the public exponent the encrypted value(e) will be raised to this value:
+```
+e¹¹mod(14) = decrypted value
+```
+
+Entryption and decryption:
+```
+message = 2
+m⁵mod(14) = encrypted value
+2⁵mod(14) = 4
+
+encrypted value = 4
+4¹¹mod(14) = 2
+```
+
 ### Diffie Hellman Key Exchange
 ```
 Alice                 Public                        Bob
