@@ -1293,16 +1293,18 @@ b¹*g =                                               a²*g=
 ```
 
 ### Eliptic Curve Cryptography (ECC)
+The algoritms use significantly smaller key sizes.
 Has the following forumla for the graph:
 ```
 y² = x³ + ab + b
 ```
+And a prime number p which is the number of times we do point addition beginning
+with an initial point.
 For example:
 ```
 y² = x³ -2x + 2
 ```
-And a prime number p which is the number of times we do point addition beginning
-with an initial point. The graph is symetric in the horizontal axis so we can
+The graph is symetric in the horizontal axis so we can
 take take two points on the graph and draw a line between them. This line will 
 intersect that another point on the graph, from which we now draw a vertical
 line up/down depending on the side of the graph we are on. This point is called
@@ -1314,8 +1316,8 @@ a base point `P` on the curve.
 Alice choses a secret large random number `a`.
 Bob choses a secret large ranaom number `b`.
 
-Alice computes a*P (a times the point P) and shares the answer with Bob.
-Bob computes b*P (b times the point P) and shares the answer with Alice.
+Alice computes a*P (a times the point P) and shares the `answer` with Bob.
+Bob computes b*P (b times the point P) and shares the `answer` with Alice.
 So they both keep a and b secret but can share the result.
 
 Alice computes a * (the point Bob gave her (b*P))
@@ -1532,3 +1534,63 @@ TODO: I'm not exactly sure which one should be called but try this out.
 $ ~/work/security/openssl_build_master/bin/openssl errstr 1400000
 error:01400000:unknown library::unknown library
 ```
+### PKIX
+Public Key Infrastructure of the X509.v3 certificate standard (PKIX).
+
+#### Certificate encoding
+These are certificates used in X.509 
+
+### DER encoded certificate
+A `.der` extension indicates a binary encoding.
+
+To inspect a binary encoded file:
+```console
+$ openssl x509 -in cert.der -inform der -text -noout
+```
+
+### PEM encoded certificate
+A `.pem` extension is used for different types of X.509v3 files and indicates
+that the ASCII Base64 encoding. These start with data prefixed with
+`--- BEGIN...`.
+So, while these are ascii and you still need to run them through a base64
+decoder which is provided by OpenSSL.
+```console
+$ openssl x509 -in cert.pem -text -noout
+```
+
+### OID
+ANS1 Object Identifier.
+
+### NID
+Numeric identifier which are used to identify ANS1 Object Identifiers (OIDs)
+
+
+```console
+$ ~/work/security/openssl_build_master/bin/openssl ecparam -name secp256k1 -out secp256k1.pem
+```
+```console
+$ ~/work/security/openssl_build_master/bin/openssl ecparam -in secp256k1.pem -text -noout
+ASN1 OID: secp256k1
+```
+```console
+$ ~/work/security/openssl_build_master/bin/openssl ecparam -in secp256k1.pem -text -param_enc explicit -noout
+Field Type: prime-field
+Prime:
+    00:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:
+    ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:fe:ff:
+    ff:fc:2f
+A:    0
+B:    7 (0x7)
+Generator (uncompressed):
+    04:79:be:66:7e:f9:dc:bb:ac:55:a0:62:95:ce:87:
+    0b:07:02:9b:fc:db:2d:ce:28:d9:59:f2:81:5b:16:
+    f8:17:98:48:3a:da:77:26:a3:c4:65:5d:a4:fb:fc:
+    0e:11:08:a8:fd:17:b4:48:a6:85:54:19:9c:47:d0:
+    8f:fb:10:d4:b8
+Order: 
+    00:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:
+    ff:fe:ba:ae:dc:e6:af:48:a0:3b:bf:d2:5e:8c:d0:
+    36:41:41
+Cofactor:  1 (0x1)
+```
+
