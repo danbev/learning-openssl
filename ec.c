@@ -39,9 +39,25 @@ int main(int arc, char *argv[]) {
   // or OPENSSL_EC_NAMED_CURVE.
   int ret = EVP_PKEY_CTX_set_ec_param_enc(ctx, OPENSSL_EC_NAMED_CURVE);
   if (ret  <= 0) {
-    printf("Could not set the param encoding.\n");
     printf("EVP_PKEY_CTX_set_ec_param_enc is returning %d! Why?\n", ret);
   } 
+
+  EVP_PKEY* params = NULL;
+  // Generate the parameters.
+  if (EVP_PKEY_paramgen(ctx, &params) <= 0) {
+    printf("Could not generatee the paremeters.\n");
+  }
+
+  EVP_PKEY_CTX* key_ctx = EVP_PKEY_CTX_new(params, NULL);
+
+  if (EVP_PKEY_keygen_init(key_ctx) <= 0) {
+    printf("Could not initialize the keygen context the paremeters.\n");
+  }
+
+  EVP_PKEY* pkey = NULL;
+  if (EVP_PKEY_keygen(key_ctx, &pkey) != 1) {
+    printf("Could not generate the private key.\n");
+  }
 
   int err = ERR_get_error();
   char buf[256];
