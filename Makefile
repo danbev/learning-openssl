@@ -1,6 +1,9 @@
-OPENSSL_DIR=/Users/danielbevenius/work/security/build_master
+OPENSSL_DIR=/home/danielbevenius/work/security/openssl_build_master
 OPENSSL_INCLUDE_DIR=$(OPENSSL_DIR)/include
 OPENSSL_LIB_DIR=$(OPENSSL_DIR)/lib
+
+CFLAGS=-g -O0 -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto \
+     -lpthread -lssl -Wl,-rpath,$(OPENSSL_LIB_DIR) 
 
 basic: basic.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto 
@@ -47,6 +50,10 @@ distribution: distribution.cc
 
 generator: generator.cc
 	clang++ -std=c++14 -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto -lssl
+
+ec: ec.c
+	$(CC) $(CFLAGS)
+
 
 .PHONY: clean 
 
