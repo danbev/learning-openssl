@@ -45,7 +45,7 @@ int main(int arc, char *argv[]) {
   EVP_PKEY* params = NULL;
   // Generate the parameters.
   if (EVP_PKEY_paramgen(ctx, &params) <= 0) {
-    printf("Could not generatee the paremeters.\n");
+    printf("Could not generate the paremeters.\n");
   }
 
   EVP_PKEY_CTX* key_ctx = EVP_PKEY_CTX_new(params, NULL);
