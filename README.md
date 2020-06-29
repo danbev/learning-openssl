@@ -1594,3 +1594,108 @@ Order:
 Cofactor:  1 (0x1)
 ```
 
+### EVP_PKEY_CTX_set_ec_param_enc in OpenSSL 3.x
+I'm investigating an issue found in Node.js when linking with OpenSSL 3.x (
+alpha3) which has to do with elliptic curve key generation.
+In node the key generation is handled by node_crypto.cc.
+
+In `crypto` Initialize:
+```c++
+  env->SetMethod(target, "generateKeyPairEC", GenerateKeyPairEC);
+```
+And `GenerateKeyPairEC` we have:
+```c++
+  GenerateKeyPair(args, 2, std::move(config));
+```
+And in `GenerateKeyPair` we have:
+```c++
+  std::unique_ptr<GenerateKeyPairJob> job(
+      new GenerateKeyPairJob(env, std::move(config), public_key_encoding,
+                             private_key_encoding.Release()));
+  job->DoThreadPoolWork();
+  Local<Value> err, pubkey, privkey;
+  job->ToResult(&err, &pubkey, &privkey);
+```
+In `DoThreadPoolWork` we then have the following:
+```c++
+  if (!GenerateKey())
+    errors_.Capture();
+```
+And `GenerateKey` looks like this:
+```c++
+  EVPKeyCtxPointer ctx = config_->Setup();
+  if (!ctx)
+      return false;
+```
+EVPKeyCtxPointer::Setup has is the following call:
+```c++
+    if (EVP_PKEY_CTX_set_ec_param_enc(param_ctx.get(), param_encoding_) <= 0)
+      return nullptr;
+```
+Now, `EVP_PKEY_CTX_set_ec_param_enc` is a macro which looks like this:
+```c
+#  define EVP_PKEY_CTX_set_ec_param_enc(ctx, flag) \                                
+        EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_EC, \                                       
+                          EVP_PKEY_OP_PARAMGEN|EVP_PKEY_OP_KEYGEN, \                
+                          EVP_PKEY_CTRL_EC_PARAM_ENC, flag, NULL)
+```
+And `EVP_PKEY_CTX_ctrl` is defined as:
+```c
+int EVP_PKEY_CTX_ctrl(EVP_PKEY_CTX *ctx, int keytype, int optype,               
+                      int cmd, int p1, void *p2)                                
+  ...
+  if ((EVP_PKEY_CTX_IS_DERIVE_OP(ctx) && ctx->op.kex.exchprovctx != NULL)         
+            || (EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx)                               
+                && ctx->op.sig.sigprovctx != NULL)                              
+            || (EVP_PKEY_CTX_IS_ASYM_CIPHER_OP(ctx)                             
+                && ctx->op.ciph.ciphprovctx != NULL)                            
+            || (EVP_PKEY_CTX_IS_GEN_OP(ctx)                                     
+                && ctx->op.keymgmt.genctx != NULL))                             
+        return legacy_ctrl_to_param(ctx, keytype, optype, cmd, p1, p2);         
+```
+In this case `legacy_ctrl_to_param` will be called.
+```c
+static int legacy_ctrl_to_param(EVP_PKEY_CTX *ctx, int keytype, int optype,         
+                                int cmd, int p1, void *p2)                      
+{ 
+# ifndef OPENSSL_NO_EC
+    if (keytype == EVP_PKEY_EC) {
+        switch (cmd) {
+        case EVP_PKEY_CTRL_EC_PARAMGEN_CURVE_NID:
+            return EVP_PKEY_CTX_set_ec_paramgen_curve_nid(ctx, p1);
+        case EVP_PKEY_CTRL_EC_ECDH_COFACTOR:
+            if (p1 == -2) {
+                return EVP_PKEY_CTX_get_ecdh_cofactor_mode(ctx);
+            } else if (p1 < -1 || p1 > 1) {
+                /* Uses the same return values as EVP_PKEY_CTX_ctrl */
+                return -2;
+            } else {
+                return EVP_PKEY_CTX_set_ecdh_cofactor_mode(ctx, p1);
+            }
+        case EVP_PKEY_CTRL_EC_KDF_TYPE:
+            if (p1 == -2) {
+                return EVP_PKEY_CTX_get_ecdh_kdf_type(ctx);
+            } else {
+                return EVP_PKEY_CTX_set_ecdh_kdf_type(ctx, p1);
+            }
+        case EVP_PKEY_CTRL_GET_EC_KDF_MD:
+            return EVP_PKEY_CTX_get_ecdh_kdf_md(ctx, p2);
+        case EVP_PKEY_CTRL_EC_KDF_MD:
+            return EVP_PKEY_CTX_set_ecdh_kdf_md(ctx, p2);
+        case EVP_PKEY_CTRL_GET_EC_KDF_OUTLEN:
+            return EVP_PKEY_CTX_get_ecdh_kdf_outlen(ctx, p2);
+        case EVP_PKEY_CTRL_EC_KDF_OUTLEN:
+            return EVP_PKEY_CTX_set_ecdh_kdf_outlen(ctx, p1);
+        case EVP_PKEY_CTRL_GET_EC_KDF_UKM:
+            return EVP_PKEY_CTX_get0_ecdh_kdf_ukm(ctx, p2);
+        case EVP_PKEY_CTRL_EC_KDF_UKM:
+            return EVP_PKEY_CTX_set0_ecdh_kdf_ukm(ctx, p2, p1);
+        }
+    }
+```
+Now the `cmd` passed in is 4098 which does not match any cases in this switch
+clause so it just skip there. Should there be a clause for 4098?  
+This is causing a failure in Node.js as this will cause false to be returned
+
+I've tried to extract the OpenSSL related code into [ec](./ec.c).
+
