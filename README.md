@@ -1639,7 +1639,7 @@ Now, `EVP_PKEY_CTX_set_ec_param_enc` is a macro which looks like this:
                           EVP_PKEY_OP_PARAMGEN|EVP_PKEY_OP_KEYGEN, \                
                           EVP_PKEY_CTRL_EC_PARAM_ENC, flag, NULL)
 ```
-And `EVP_PKEY_CTX_ctrl` is defined as:
+And `EVP_PKEY_CTX_ctrl` is defined as (crypto/evp/pmeth_lib.c):
 ```c
 int EVP_PKEY_CTX_ctrl(EVP_PKEY_CTX *ctx, int keytype, int optype,               
                       int cmd, int p1, void *p2)                                
@@ -1693,8 +1693,14 @@ static int legacy_ctrl_to_param(EVP_PKEY_CTX *ctx, int keytype, int optype,
         }
     }
 ```
-Now the `cmd` passed in is 4098 which does not match any cases in this switch
-clause so it just skip there. Should there be a clause for 4098?  
+Now, the `cmd` passed in is 4098 which does not match any cases in this switch
+clause so it just skip there. We can check the output of this switch using
+the preprocessor:
+```console
+$ gcc -I./include -E crypto/evp/pmeth_lib.c | grep -C 100 'int legacy_ctrl_to_param'
+```
+
+Should there be a clause for 4098?  
 This is causing a failure in Node.js as this will cause false to be returned
 
 I've tried to extract the OpenSSL related code into [ec](./ec.c).
