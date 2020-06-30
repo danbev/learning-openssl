@@ -1643,10 +1643,34 @@ And `GenerateKey` looks like this:
 ```
 EVPKeyCtxPointer::Setup has is the following call:
 ```c++
+  EVPKeyCtxPointer Setup() override {
+    EVPKeyCtxPointer param_ctx(EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr));
+    if (!param_ctx)
+      return nullptr;
+
+    if (EVP_PKEY_paramgen_init(param_ctx.get()) <= 0)
+      return nullptr;
+
+    if (EVP_PKEY_CTX_set_ec_paramgen_curve_nid(param_ctx.get(),
+                                               curve_nid_) <= 0)
+      return nullptr;
+
     if (EVP_PKEY_CTX_set_ec_param_enc(param_ctx.get(), param_encoding_) <= 0)
       return nullptr;
+
+    EVP_PKEY* raw_params = nullptr;
+    if (EVP_PKEY_paramgen(param_ctx.get(), &raw_params) <= 0)
+      return nullptr;
+    EVPKeyPointer params(raw_params);
+    param_ctx.reset();
+
+    EVPKeyCtxPointer key_ctx(EVP_PKEY_CTX_new(params.get(), nullptr));
+    return key_ctx;
+  }
 ```
-Now, `EVP_PKEY_CTX_set_ec_param_enc` is a macro which looks like this:
+First we are creating a new publickey context for the
+
+, `EVP_PKEY_CTX_set_ec_param_enc` is a macro which looks like this:
 ```c
 #  define EVP_PKEY_CTX_set_ec_param_enc(ctx, flag) \                                
         EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_EC, \                                       
@@ -1714,8 +1738,265 @@ the preprocessor:
 $ gcc -I./include -E crypto/evp/pmeth_lib.c | grep -C 100 'int legacy_ctrl_to_param'
 ```
 
-Should there be a clause for 4098?  
-This is causing a failure in Node.js as this will cause false to be returned
+This is causing a failure in Node.js as this will cause false to be returned. 
+What does this do function do in Node upstream?  
+```c
+int EVP_PKEY_CTX_ctrl(EVP_PKEY_CTX *ctx, int keytype, int optype,
+                      int cmd, int p1, void *p2) {
+  ...
+ doit:
+   ret = ctx->pmeth->ctrl(ctx, cmd, p1, p2);
+   if (ret == -2)
+     EVPerr(EVP_F_EVP_PKEY_CTX_CTRL, EVP_R_COMMAND_NOT_SUPPORTED);
+
+    return ret;
+}
+```
+The main difference is that in OpenSSL 3.x this if statement has been added 
+which is the path that will be taken:
+```c
+    if ((EVP_PKEY_CTX_IS_DERIVE_OP(ctx) && ctx->op.kex.exchprovctx != NULL) ||
+	(EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx) && ctx->op.sig.sigprovctx != NULL) ||
+        (EVP_PKEY_CTX_IS_ASYM_CIPHER_OP(ctx) && ctx->op.ciph.ciphprovctx != NULL) ||
+        (EVP_PKEY_CTX_IS_GEN_OP(ctx) && ctx->op.keymgmt.genctx != NULL))
+        return legacy_ctrl_to_param(ctx, keytype, optype, cmd, p1, p2);
+```
+`EVP_PKEY_CTX_IS_DERIVE_OP` is a macro in `include/crypto/evp.h`:
+```c
+# define EVP_PKEY_OP_UNDEFINED           0
+# define EVP_PKEY_OP_PARAMGEN            (1<<1)
+# define EVP_PKEY_OP_KEYGEN              (1<<2)
+# define EVP_PKEY_OP_PARAMFROMDATA       (1<<3)
+# define EVP_PKEY_OP_KEYFROMDATA         (1<<4)
+# define EVP_PKEY_OP_SIGN                (1<<5)
+# define EVP_PKEY_OP_VERIFY              (1<<6)
+# define EVP_PKEY_OP_VERIFYRECOVER       (1<<7)
+# define EVP_PKEY_OP_SIGNCTX             (1<<8)
+# define EVP_PKEY_OP_VERIFYCTX           (1<<9)
+# define EVP_PKEY_OP_ENCRYPT             (1<<10)
+# define EVP_PKEY_OP_DECRYPT             (1<<11)
+# define EVP_PKEY_OP_DERIVE              (1<<12)
+...
+
+#define EVP_PKEY_CTX_IS_DERIVE_OP(ctx) \
+    ((ctx)->operation == EVP_PKEY_OP_DERIVE)
+```
+In our case this will be false, as our operation type is `EVP_PKEY_OP_PARAMGEN`
+```console
+(lldb) expr ctx->operation
+(int) $33 = 2
+lldb) expr 1<<1
+(int) $34 = 2
+```
+Since this is false the right hand side of the `&&` will not be executed, So 
+this is not causing us to enter the if statement block.
+Next, we have 
+```c
+  (EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx) && ctx->op.sig.sigprovctx != NULL) ||
+```
+This macro can be found in `include/crypto/evp.h`:
+```c
+#define EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx) \
+    ((ctx)->operation == EVP_PKEY_OP_SIGN \
+     || (ctx)->operation == EVP_PKEY_OP_SIGNCTX \
+     || (ctx)->operation == EVP_PKEY_OP_VERIFY \
+     || (ctx)->operation == EVP_PKEY_OP_VERIFYCTX \
+     || (ctx)->operation == EVP_PKEY_OP_VERIFYRECOVER)
+```
+And remember that our operation type is `EVP_PKEY_OP_PARAMGEN` so this macro
+will be false, so the right handside will not be executed either but we can
+check it just the same:.
+```console
+lldb) expr ctx->op.sig.sigprovctx
+(void *) $43 = 0x0000000000000000
+```
+Next, we have
+```c
+  (EVP_PKEY_CTX_IS_ASYM_CIPHER_OP(ctx) && ctx->op.ciph.ciphprovctx != NULL) ||
+```
+And this macro can also be found in `include/crypto/evp.h`:
+```c
+#define EVP_PKEY_CTX_IS_ASYM_CIPHER_OP(ctx) \
+    ((ctx)->operation == EVP_PKEY_OP_ENCRYPT \
+     || (ctx)->operation == EVP_PKEY_OP_DECRYPT)
+```
+Which again will be false.
+
+Next, is:
+```c
+  (EVP_PKEY_CTX_IS_GEN_OP(ctx) && ctx->op.keymgmt.genctx != NULL))
+```
+And this macro looks like this:
+```c
+#define EVP_PKEY_CTX_IS_GEN_OP(ctx) \
+    ((ctx)->operation == EVP_PKEY_OP_PARAMGEN \
+     || (ctx)->operation == EVP_PKEY_OP_KEYGEN)
+```
+```console
+(lldb) expr ctx->operation == 1<<1
+(bool) $47 = true
+(lldb) expr ctx->op.keymgmt.genctx != NULL
+(bool) $50 = true
+```
+
 
 I've tried to extract the OpenSSL related code into [ec](./ec.c).
+
+
+### ec walkthrough
+```c
+EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
+```
+In our case the passed in 'id' is '408'.
+
+This call will land in `crypto/evp/pmeth_lib.c`:
+```c
+EVP_PKEY_CTX *EVP_PKEY_CTX_new_id(int id, ENGINE *e)
+{
+    return int_ctx_new(NULL, NULL, e, NULL, NULL, id);
+}
+```
+And `int_ctx_new` looks like this:
+```c
+static EVP_PKEY_CTX *int_ctx_new(OPENSSL_CTX *libctx,
+                                EVP_PKEY *pkey, ENGINE *e,
+                                const char *keytype, const char *propquery,
+                                int id)
+```
+In our case everything passed in except the `id` is `NULL`.
+
+
+```c
+  if (e == NULL)
+    keytype = OBJ_nid2sn(id);
+```
+This will try to convert from the numerid id (nid) to a shortname (sn).
+```console
+(lldb) expr keytype
+const char *) $1 = 0x00007ffff7eec4d2 "id-ecPublicKey"
+```
+```c
+  if (e) {
+    ...
+  } else {
+    e = ENGINE_get_pkey_meth_engine(id);
+  }
+```
+This call will land in `tb_pkmeth.c` (crypto/engine/tb_pkmeth.c):
+```c
+ENGINE *ENGINE_get_pkey_meth_engine(int nid) {
+  return engine_table_select(&pkey_meth_table, nid);
+}
+```
+`engine_table` can be found in `eng_table.c`, which just return NULL as there
+are no engines registered. And this will make us that this path:
+```c
+    if (e)
+        pmeth = ENGINE_get_pkey_meth(e, id);
+    else
+        pmeth = EVP_PKEY_meth_find(id);
+```
+`pmeth` is of type:
+```c
+const EVP_PKEY_METHOD *pmeth = NULL;
+```
+This struct is declared in `include/openssl/types.h`:
+```c
+typedef struct evp_pkey_method_st EVP_PKEY_METHOD;
+```
+And the definition is in `include/crypto/evp.h`
+Now this struct contains information and function related to the a public key
+type, like `init`, `paramgen_init`, `paramgen`, `keygen_init`, `keygen`, 
+`sign_init`, `sign`, `verify_init`, `verify`, `encrypt_init`, `encrypt`,
+`decrypt_init`, `decrypt`, etc.
+The ec specific method can be found in crypto/ec/ec_pmeth.c:
+```c
+static const EVP_PKEY_METHOD ec_pkey_meth = {
+    EVP_PKEY_EC,
+    0,
+    pkey_ec_init,
+    pkey_ec_copy,
+    pkey_ec_cleanup,
+    ...
+```
+And it can be retrieved using:
+```c
+const EVP_PKEY_METHOD *ec_pkey_method(void)
+{
+    return &ec_pkey_meth;
+}
+```
+```console
+(lldb) expr *pmeth
+(EVP_PKEY_METHOD) $11 = {
+  pkey_id = 408
+  flags = 0
+  init = 0x00007ffff7cfe575 (libcrypto.so.3`pkey_ec_init at ec_pmeth.c:48:1)
+  copy = 0x00007ffff7cfe602 (libcrypto.so.3`pkey_ec_copy at ec_pmeth.c:63:1)
+  cleanup = 0x00007ffff7cfe767 (libcrypto.so.3`pkey_ec_cleanup at ec_pmeth.c:95:1)
+  paramgen_init = 0x0000000000000000
+  paramgen = 0x00007ffff7cff446 (libcrypto.so.3`pkey_ec_paramgen at ec_pmeth.c:402:1)
+  keygen_init = 0x0000000000000000
+  keygen = 0x00007ffff7cff53d (libcrypto.so.3`pkey_ec_keygen at ec_pmeth.c:421:1)
+  sign_init = 0x0000000000000000
+  sign = 0x00007ffff7cfe7e8 (libcrypto.so.3`pkey_ec_sign at ec_pmeth.c:108:1)
+  verify_init = 0x0000000000000000
+  verify = 0x00007ffff7cfe942 (libcrypto.so.3`pkey_ec_verify at ec_pmeth.c:142:1)
+  verify_recover_init = 0x0000000000000000
+  verify_recover = 0x0000000000000000
+  signctx_init = 0x0000000000000000
+  signctx = 0x0000000000000000
+  verifyctx_init = 0x0000000000000000
+  verifyctx = 0x0000000000000000
+  encrypt_init = 0x0000000000000000
+  encrypt = 0x0000000000000000
+  decrypt_init = 0x0000000000000000
+  decrypt = 0x0000000000000000
+  derive_init = 0x0000000000000000
+  derive = 0x00007ffff7cfeb26 (libcrypto.so.3`pkey_ec_kdf_derive at ec_pmeth.c:196:1)
+  ctrl = 0x00007ffff7cfecca (libcrypto.so.3`pkey_ec_ctrl at ec_pmeth.c:230:1)
+  ctrl_str = 0x00007ffff7cff235 (libcrypto.so.3`pkey_ec_ctrl_str at ec_pmeth.c:363:1)
+  digestsign = 0x0000000000000000
+  digestverify = 0x0000000000000000
+  check = 0x0000000000000000
+  public_check = 0x0000000000000000
+  param_check = 0x0000000000000000
+  digest_custom = 0x0000000000000000
+}
+```
+So, we are currently in `crypto/evp/pmeth_lib.c` and  the `int_ctx_new` function:
+```c
+if (e == NULL && keytype != NULL) {
+        int legacy = is_legacy_alg(id, keytype);
+```
+There are some EVP_PKEY types that are only available in legacy form (provider?)
+Our keytype, which is:
+```console
+(lldb) expr keytype
+(const char *) $13 = 0x00007ffff7eec4d2 "id-ecPublicKey"
+```
+is not a legacy one and is one of the default providers so we will take the
+following path:
+```c
+  EVP_KEYMGMT *keymgmt = NULL;
+  ...
+  keymgmt = EVP_KEYMGMT_fetch(libctx, keytype, propquery);
+```
+`EVP_KEYMGMT` is declared in `include/openssl/types.h` and it definition can
+be found in `crypto/evp/evp_local.h`.
+This call will land in `keymgmt_meth.c` which looks like this:
+```c
+return evp_generic_fetch(ctx, OSSL_OP_KEYMGMT, algorithm, properties,
+                             keymgmt_from_dispatch,
+                             (int (*)(void *))EVP_KEYMGMT_up_ref,
+                             (void (*)(void *))EVP_KEYMGMT_free);
+```
+And we find `evp_generic_fetch` in `crypto/evp/evp_fetch.c` which as the name
+indicates is a generic fetch function. In our case OpenSSL is passing in
+`OSSL_OP_KEYMGMT`.
+In `keymgmt_meth.c` we have:
+```c
+OSSL_METHOD_STORE *store = get_evp_method_store(libctx);
+```
+`get_evp_method_store` is also a function in `evp_fetch.c` 
 
