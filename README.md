@@ -1904,10 +1904,13 @@ named curve form is the default.
 So when using OpenSSL 3.x (or 1.1.0 and later the default is to use named curves
 and so we could just check the version of OpenSSL being used and not make this
 call. But I see the same issue if I try to set the value to explicit, that will
-not get set either.
+not get set either and it is possible to set the in Node.js so that would still
+be an issue there.
 
 I've tried to extract the OpenSSL related code into [ec](./ec.c).
 
+After some investigation and not being able to figure out what is wrong here
+I found [#12102](https://github.com/openssl/openssl/issues/12102).
 
 ### ec walkthrough
 ```c

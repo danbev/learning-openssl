@@ -8,6 +8,8 @@
 int main(int arc, char *argv[]) {
   printf("Elliptic Curve example\n");
   OSSL_PROVIDER* def;
+  int err;
+  char buf[256];
 
   def = OSSL_PROVIDER_load(NULL, "default");
   if (def == NULL) {
@@ -17,7 +19,6 @@ int main(int arc, char *argv[]) {
 
   const char* curve_name = "secp256k1";
   int curve_nid = EC_curve_nist2nid(curve_name);
-  printf("curve_nid of %s: %d\n", curve_name, curve_nid);
   if (curve_nid == NID_undef) {
     // try converting the shortname (sn) to nid (numberic id)
     curve_nid = OBJ_sn2nid(curve_name);
@@ -25,6 +26,7 @@ int main(int arc, char *argv[]) {
   printf("curve_nid of %s: %d\n", curve_name, curve_nid);
 
   // The last argument is the ENGINE*.
+  // 
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
   // The following function is for generating parameters
   if (EVP_PKEY_paramgen_init(ctx) <= 0) {
@@ -40,7 +42,13 @@ int main(int arc, char *argv[]) {
   int ret = EVP_PKEY_CTX_set_ec_param_enc(ctx, OPENSSL_EC_NAMED_CURVE);
   if (ret  <= 0) {
     printf("EVP_PKEY_CTX_set_ec_param_enc is returning %d! Why?\n", ret);
+
+    err = ERR_get_error();
+    ERR_error_string_n(err, buf, sizeof(buf));
+    printf("err: %d, str: %s\n", err, buf);
+    goto end;
   } 
+
 
   EVP_PKEY* params = NULL;
   // Generate the parameters.
@@ -59,11 +67,7 @@ int main(int arc, char *argv[]) {
     printf("Could not generate the private key.\n");
   }
 
-  int err = ERR_get_error();
-  char buf[256];
-  ERR_error_string_n(err, buf, sizeof(buf));
-  printf("err: %d, str: %s\n", err, buf);
-
+end:
 
   EVP_PKEY_CTX_free(ctx);
   OSSL_PROVIDER_unload(def);
