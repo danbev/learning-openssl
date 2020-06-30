@@ -1294,30 +1294,31 @@ b¹*g =                                               a²*g=
 
 ### Eliptic Curve Cryptography (ECC)
 The algoritms use significantly smaller key sizes.
-Has the following forumla for the graph:
+Has the following forumla for the `graph`:
 ```
 y² = x³ + ab + b
 ```
-And a prime number p which is the number of times we do point addition beginning
-with an initial point.
+And a prime number `p` which is the number of times we do point addition
+beginning with an initial point.
 For example:
 ```
 y² = x³ -2x + 2
 ```
-The graph is symetric in the horizontal axis so we can
-take take two points on the graph and draw a line between them. This line will 
-intersect that another point on the graph, from which we now draw a vertical
-line up/down depending on the side of the graph we are on. This point is called
-P+Q. There is a max value for the x-axis where the line will wrap around and 
-start from zero, this is number of bit of the EC.
+The graph is symetric in the horizontal axis so we can take take two points on
+the graph and draw a line between them. This line will intersect that another
+point on the graph, from which we now draw a vertical line up/down depending
+on the side of the graph we are on. This point is called `P+Q`. There is a max
+value for the x-axis where the line will wrap around and start from zero, this
+is number of bit of the EC.
 
-For ECDH alice and bob must first agree to use the same eliptic curve, and also
+For ECDH Alice and Bob must first agree to use the same eliptic curve, and also
 a base point `P` on the curve.
+
 Alice choses a secret large random number `a`.
 Bob choses a secret large ranaom number `b`.
 
-Alice computes a*P (a times the point P) and shares the `answer` with Bob.
-Bob computes b*P (b times the point P) and shares the `answer` with Alice.
+Alice computes `a*P (a times the point P)` and shares the `answer` with Bob.
+Bob computes `b*P (b times the point P)` and shares the `answer` with Alice.
 So they both keep a and b secret but can share the result.
 
 Alice computes a * (the point Bob gave her (b*P))
@@ -1565,13 +1566,26 @@ ANS1 Object Identifier.
 Numeric identifier which are used to identify ANS1 Object Identifiers (OIDs)
 
 
+### ecparam
+Before being able to communitcate using Elliptic Curve cryptography we need to
+generate the values domain parameters (see #eliptic-curve-cryptography-(ecc)).
+
+This can be done programatically or by using the `ecparam` tool provided with
+OpenSSL. The following shows an example of how to generate params and the
+output.
+
+Generate params
 ```console
 $ ~/work/security/openssl_build_master/bin/openssl ecparam -name secp256k1 -out secp256k1.pem
 ```
+
+Show the name of the curve generated:
 ```console
 $ ~/work/security/openssl_build_master/bin/openssl ecparam -in secp256k1.pem -text -noout
 ASN1 OID: secp256k1
 ```
+
+Show full details of the domain parameters:
 ```console
 $ ~/work/security/openssl_build_master/bin/openssl ecparam -in secp256k1.pem -text -param_enc explicit -noout
 Field Type: prime-field
