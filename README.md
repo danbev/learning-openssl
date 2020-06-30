@@ -1611,8 +1611,28 @@ Cofactor:  1 (0x1)
 ### EVP_PKEY_CTX_set_ec_param_enc in OpenSSL 3.x
 I'm investigating an issue found in Node.js when linking with OpenSSL 3.x (
 alpha3) which has to do with elliptic curve key generation.
-In node the key generation is handled by node_crypto.cc.
 
+The failing test is `test/parallel/test-crypto-dh-stateless.js`:
+```js
+crypto.generateKeyPairSync('ec', { namedCurve: 'secp256k1' }
+```
+We can find the implementation for this in `lib/internal/crypto/keygen.js`
+```js
+function generateKeyPairSync(type, options) {
+  const impl = check(type, options);
+  return handleError(impl());
+}
+```
+`impl()` will check the type passed in which is `ec` in our case and the
+paramEncoding is not set so it will default to `OPENSSL_EC_NAMED_CURVE`:
+```js
+  if (paramEncoding == null || paramEncoding === 'named')
+    paramEncoding = OPENSSL_EC_NAMED_CURVE;
+  else if (paramEncoding === 'explicit')
+    paramEncoding = OPENSSL_EC_EXPLICIT_CURVE;
+```
+
+In node the key generation is handled by node_crypto.cc.
 In `crypto` Initialize:
 ```c++
   env->SetMethod(target, "generateKeyPairEC", GenerateKeyPairEC);
@@ -1839,6 +1859,52 @@ And this macro looks like this:
 (bool) $50 = true
 ```
 
+Remember that our call looks like this:
+```c
+int ret = EVP_PKEY_CTX_set_ec_param_enc(ctx, OPENSSL_EC_NAMED_CURVE);
+```
+And the this macro is defined as:
+```c
+#  define EVP_PKEY_CTX_set_ec_param_enc(ctx, flag) \
+        EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_EC, \
+                          EVP_PKEY_OP_PARAMGEN|EVP_PKEY_OP_KEYGEN, \
+                          EVP_PKEY_CTRL_EC_PARAM_ENC, flag, NULL)
+```
+So the actual function call with parameters will look like:
+```c
+  EVP_PKEY_CTX_ctrl(ctx,
+                    EVP_PKEY_EC,
+		    EVP_PKEY_OP_PARAMGEN|EVP_PKEY_OP_KEYGEN,
+                    EVP_PKEY_CTRL_EC_PARAM_ENC,
+		    OPENSSL_EC_NAMED_CURVE,
+		    NULL)
+```
+And the signature of EVP_PKEY_CTX_ctrl looks like this:
+```c
+  int EVP_PKEY_CTX_ctrl(EVP_PKEY_CTX *ctx, int keytype, int optype,
+                      int cmd, int p1, void *p2)
+```
+The `optype` is `EVP_PKEY_CTRL_EC_PARAM_ENC`.
+
+If default parameter encoding in versions prior to 1.1.0 was
+`OPENSSL_EC_EXPLICIT_CURVE`
+```
+If asn1_flag is OPENSSL_EC_NAMED_CURVE then the named curve form is used and
+the parameters must have a corresponding named curve NID set.
+
+If asn1_flags is OPENSSL_EC_EXPLICIT_CURVE the parameters are explicitly
+encoded.
+
+Note: OPENSSL_EC_EXPLICIT_CURVE was first added to OpenSSL 1.1.0, for previous
+versions of OpenSSL the value 0 must be used instead. Before OpenSSL 1.1.0 the
+default form was to use explicit parameters (meaning that applications would
+    have to explicitly set the named curve form) in OpenSSL 1.1.0 and later the
+named curve form is the default.
+```
+So when using OpenSSL 3.x (or 1.1.0 and later the default is to use named curves
+and so we could just check the version of OpenSSL being used and not make this
+call. But I see the same issue if I try to set the value to explicit, that will
+not get set either.
 
 I've tried to extract the OpenSSL related code into [ec](./ec.c).
 
