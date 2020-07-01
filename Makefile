@@ -54,6 +54,12 @@ generator: generator.cc
 ec: ec.c
 	$(CC) $(CFLAGS)
 
+rsa: rsa.c
+	$(CC) $(CFLAGS)
+
+rsa_pss: rsa_pss.c
+	$(CC) $(CFLAGS)
+
 
 .PHONY: clean 
 

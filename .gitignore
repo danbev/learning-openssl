@@ -13,3 +13,5 @@ hmac
 bio
 bio_ssl
 ec
+rsa
+rsa_pss
