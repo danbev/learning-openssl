@@ -20,7 +20,6 @@ int main(int arc, char *argv[]) {
 
   int modulus_bits = 512;
   const uint32_t exponent = 0x10001;
-  int salt_len = 16;
 
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
   if (ctx == NULL) {
