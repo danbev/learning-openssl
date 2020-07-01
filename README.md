@@ -1166,7 +1166,9 @@ These can be found in `/crypto/dsa/dsa_lib.c`
 
 ### Rivest Shamir and Aldeman (RSA)
 Is a public key encryption technique developed in 1978 by the people mentioned
-in the above. It uses a private and a public key.
+in the above. It is an asymmetric system that uses a private and a public key.
+RSA is somewhat slow and it not used to encrypt data in a communication, but
+instead it is used to encrypt a symmetric key which is then used to encrypt data.
 
 It starts by selecting two prime numbers `p` and `q` and taking the product of
 them:
@@ -1911,6 +1913,190 @@ I've tried to extract the OpenSSL related code into [ec](./ec.c).
 
 After some investigation and not being able to figure out what is wrong here
 I found [#12102](https://github.com/openssl/openssl/issues/12102).
+
+### EVP_PKEY_CTX_set_rsa_pss_keygen_md in OpenSSL 3.x
+I'm seeing a simliar issue to the one above where this function call is
+returning 0 but there is no error set, causing Node to report the following
+error:
+```console
+/home/danielbevenius/work/nodejs/openssl/out/Debug/node[472411]: ../src/node_crypto.cc:6350:void node::crypto::GenerateKeyPairJob::ToResult(v8::Local<v8::Value>*, v8::Local<v8::Value>*, v8::Local<v8::Value>*): Assertion `!errors_.empty()' failed.
+ 1: 0xe4f878 node::DumpBacktrace(_IO_FILE*) [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+ 2: 0xf07561 node::Abort() [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+ 3: 0xf07617  [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+ 4: 0x10d631b node::crypto::GenerateKeyPairJob::ToResult(v8::Local<v8::Value>*, v8::Local<v8::Value>*, v8::Local<v8::Value>*) [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+ 5: 0x10d61bc node::crypto::GenerateKeyPairJob::AfterThreadPoolWork() [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+ 6: 0x10d40a5 node::crypto::CryptoJob::AfterThreadPoolWork(int) [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+ 7: 0xec1b1c node::ThreadPoolWork::ScheduleWork()::{lambda(uv_work_s*, int)#2}::operator()(uv_work_s*, int) const [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+ 8: 0xec1b42 node::ThreadPoolWork::ScheduleWork()::{lambda(uv_work_s*, int)#2}::_FUN(uv_work_s*, int) [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+ 9: 0x1d6da6c  [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+10: 0x1d6d9b1  [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+11: 0x1d721f9  [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+12: 0x1d89858  [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+13: 0x1d72b7a uv_run [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+14: 0xf752a1 node::NodeMainInstance::Run() [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+15: 0xeb4e45 node::Start(int, char**) [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+16: 0x2333152 main [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+17: 0x7ffff758a1a3 __libc_start_main [/lib64/libc.so.6]
+18: 0xdfecee _start [/home/danielbevenius/work/nodejs/openssl/out/Debug/node]
+```
+
+The test in Node is the `test/parallel/test-crypto-keygen.js`:
+```js
+const {
+  generateKeyPair,
+  generateKeyPairSync
+} = require('internal/crypto/keygen');
+...
+
+// Test RSA-PSS.
+  generateKeyPair('rsa-pss', {
+    modulusLength: 512,
+    saltLength: 16,
+    hash: 'sha256',
+    mgf1Hash: 'sha256'
+```
+`generateKeyPair` can be found in `internal/crypto/keygen.js` and 
+```js
+const {
+  generateKeyPairRSA,
+  generateKeyPairRSAPSS,
+  ...
+} = internalBinding('crypto');
+
+function generateKeyPair(type, options, callback) {
+  ... 
+  const impl = check(type, options);
+```
+`check` actually does more than checking options and the type, it also returns
+and implementation for the specified `type`, which is our case is `rsa-pss`.
+```js
+  const { hash, mgf1Hash, saltLength } = options;
+  if (hash !== undefined && typeof hash !== 'string')
+    throw new ERR_INVALID_OPT_VALUE('hash', hash);
+  if (mgf1Hash !== undefined && typeof mgf1Hash !== 'string')
+    throw new ERR_INVALID_OPT_VALUE('mgf1Hash', mgf1Hash);
+  if (saltLength !== undefined && !isUint32(saltLength))
+    throw new ERR_INVALID_OPT_VALUE('saltLength', saltLength);
+
+  impl = (wrap) => generateKeyPairRSAPSS(modulusLength, publicExponent,
+                                         hash, mgf1Hash, saltLength,
+                                         publicFormat, publicType,
+                                         privateFormat, privateType,
+                                         cipher, passphrase, wrap);
+```
+And we can see that we required `generateKeyPairRSAPS` from the internal
+`crypto` module which can be found in `src/node_crypto.cc`.
+
+
+RSAKeyPairGenerationConfig::Configure:
+```c++
+ if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx.get(), modulus_bits_) <= 0)
+   return false;
+```
+And in `EVP_PKEY_CTX_set_rsa_keygen_bits` in `crypto/rsa/rsa_lib.c`:
+```c
+  /* If key type not RSA return error */
+  if (ctx->pmeth != NULL && ctx->pmeth->pkey_id != EVP_PKEY_RSA)
+    return -1;
+```
+The above check fails because:
+```console
+(lldb) expr ctx->pmeth->pkey_id
+(const int) $0 = 912
+```
+The value of `EVP_PKEY_RSA` is `6`.
+In earlier versions of OpenSSL `EVP_PKEY_CTX_set_rsa_keygen_bits` was a macro:
+```c
+# define EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, bits) \
+        RSA_pkey_ctx_ctrl(ctx, EVP_PKEY_OP_KEYGEN, \
+                          EVP_PKEY_CTRL_RSA_KEYGEN_BITS, bits, NULL)
+```
+And the implementation had a check for both `EVP_PKEY_RSA` and `EVP_PKEY_RSA_PSS`:
+```c
+int RSA_pkey_ctx_ctrl(EVP_PKEY_CTX *ctx, int optype, int cmd, int p1, void *p2)
+{
+    /* If key type not RSA or RSA-PSS return error */
+    if (ctx != NULL && ctx->pmeth != NULL
+        && ctx->pmeth->pkey_id != EVP_PKEY_RSA
+        && ctx->pmeth->pkey_id != EVP_PKEY_RSA_PSS)
+        return -1;
+     return EVP_PKEY_CTX_ctrl(ctx, -1, optype, cmd, p1, p2);
+}
+```
+Should there be a condition for EVP_PKEY_RSA_PSS?:
+```console
+$ git diff crypto/evp/pmeth_lib.c
+diff --git a/crypto/evp/pmeth_lib.c b/crypto/evp/pmeth_lib.c
+index ea8bdec388..5da0761834 100644
+--- a/crypto/evp/pmeth_lib.c
++++ b/crypto/evp/pmeth_lib.c
+@@ -912,7 +912,7 @@ static int legacy_ctrl_to_param(EVP_PKEY_CTX *ctx, int keytype, int optype,
+         }
+     }
+ # endif
+-    if (keytype == EVP_PKEY_RSA) {
++    if (keytype == EVP_PKEY_RSA || keytype == EVP_PKEY_RSA_PSS) {
+         switch (cmd) {
+         case EVP_PKEY_CTRL_RSA_OAEP_MD:
+             return EVP_PKEY_CTX_set_rsa_oaep_md(ctx, p2);
+```
+With this change the OpenSSL test work and it seems the function returns
+successfully.
+
+Next, I ran into another issue with the following function call:
+```c
+  if (EVP_PKEY_CTX_set_rsa_pss_keygen_md(ctx, md) <= 0) {
+    printf("EVP_PKEY_CTX_set_rsa_pss_keygen_md failed\n");
+  }
+```
+`EVP_PKEY_CTX_set_rsa_pss_keygen_md` is a macro in include/openssl/rsa.h:
+```c
+#  define  EVP_PKEY_CTX_set_rsa_pss_keygen_md(ctx, md) \
+        EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_RSA_PSS,  \
+                          EVP_PKEY_OP_KEYGEN, EVP_PKEY_CTRL_MD,  \
+                          0, (void *)(md))
+```
+And in `crypto/evp/pmeth_lib.c` we have:
+```c
+int EVP_PKEY_CTX_ctrl(EVP_PKEY_CTX *ctx, int keytype, int optype,
+                      int cmd, int p1, void *p2) {
+ ...
+ if ((EVP_PKEY_CTX_IS_DERIVE_OP(ctx) && ctx->op.kex.exchprovctx != NULL)
+       || (EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx) && ctx->op.sig.sigprovctx != NULL)
+       || (EVP_PKEY_CTX_IS_ASYM_CIPHER_OP(ctx) && ctx->op.ciph.ciphprovctx != NULL)
+       || (EVP_PKEY_CTX_IS_GEN_OP(ctx) && ctx->op.keymgmt.genctx != NULL))
+   return legacy_ctrl_to_param(ctx, keytype, optype, cmd, p1, p2);
+```
+So we are passing in `keytype=EVP_PKEY_RSA_PSS`, `optype=EVP_PKEY_OP_KEYGEN`,
+`cmd=EVP_PKEY_CTRL_MD`, `p1=0`, and `p2=md`.
+
+Now, the keytype that we are passing in is `EVP_PKEY_RSA_PSS` but the operation
+is covered by the "special" `-1` keytype:
+```c
+    /*
+     * keytype == -1 is used when several key types share the same structure,
+     * or for generic controls that are the same across multiple key types.
+     */
+    if (keytype == -1) {
+        switch (cmd) {
+        case EVP_PKEY_CTRL_MD:
+            return EVP_PKEY_CTX_set_signature_md(ctx, p2);
+```
+So perhaps the optype should be changed in the header?:
+```console
+$ git diff include/
+diff --git a/include/openssl/rsa.h b/include/openssl/rsa.h
+index bf12b90088..311b070be5 100644
+--- a/include/openssl/rsa.h
++++ b/include/openssl/rsa.h
+@@ -166,7 +166,7 @@ int EVP_PKEY_CTX_get0_rsa_oaep_label(EVP_PKEY_CTX *ctx, unsigned char **label);
+
+ #  define  EVP_PKEY_CTX_set_rsa_pss_keygen_md(ctx, md) \
+         EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_RSA_PSS,  \
+-                          EVP_PKEY_OP_KEYGEN, EVP_PKEY_CTRL_MD,  \
++                          EVP_PKEY_OP_KEYGEN, -1,  \
+                           0, (void *)(md))
+```
 
 ### ec walkthrough
 ```c
