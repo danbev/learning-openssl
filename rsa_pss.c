@@ -10,7 +10,7 @@ void error_and_exit() {
   char buf[256];
   int err = ERR_get_error();
   ERR_error_string_n(err, buf, sizeof(buf));
-  printf("err: %d, str: %s\n", err, buf);
+  printf("errno: %d, %s\n", err, buf);
   exit(EXIT_FAILURE);
 }
 
