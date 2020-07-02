@@ -1690,16 +1690,14 @@ EVPKeyCtxPointer::Setup has is the following call:
     return key_ctx;
   }
 ```
-First we are creating a new publickey context for the
-
-, `EVP_PKEY_CTX_set_ec_param_enc` is a macro which looks like this:
+`EVP_PKEY_CTX_set_ec_param_enc` is a macro which looks like this:
 ```c
 #  define EVP_PKEY_CTX_set_ec_param_enc(ctx, flag) \                                
         EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_EC, \                                       
                           EVP_PKEY_OP_PARAMGEN|EVP_PKEY_OP_KEYGEN, \                
                           EVP_PKEY_CTRL_EC_PARAM_ENC, flag, NULL)
 ```
-And `EVP_PKEY_CTX_ctrl` is defined as (crypto/evp/pmeth_lib.c):
+And `EVP_PKEY_CTX_ctrl` is defined as (`crypto/evp/pmeth_lib.c`):
 ```c
 int EVP_PKEY_CTX_ctrl(EVP_PKEY_CTX *ctx, int keytype, int optype,               
                       int cmd, int p1, void *p2)                                
