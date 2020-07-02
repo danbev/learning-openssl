@@ -21,7 +21,7 @@ int main(int arc, char *argv[]) {
   def = OSSL_PROVIDER_load(NULL, "default");
   if (def == NULL) {
     printf("Failed to load Default provider\n");
-    exit(EXIT_FAILURE);
+    error_and_exit();
   }
 
   int modulus_bits = 512;
@@ -37,14 +37,17 @@ int main(int arc, char *argv[]) {
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA_PSS, NULL);
   if (ctx == NULL) {
     printf("Could not create a context for RSA_PSS\n");
+    error_and_exit();
   }
 
   if (EVP_PKEY_keygen_init(ctx) <= 0) {
     printf("Could not initialize the RSA context\n");
+    error_and_exit();
   }
 
   if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, modulus_bits) <= 0) {
     printf("EVP_PKEY_CTX_set_rsa_keygen_bits failed\n");
+    error_and_exit();
   }
 
   if (EVP_PKEY_CTX_set_rsa_pss_keygen_md(ctx, md) <= 0) {
