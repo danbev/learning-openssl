@@ -2,8 +2,10 @@
 #include <openssl/evp.h>
 #include <openssl/ec.h>
 #include <openssl/err.h>
+#include <openssl/pem.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 void error_and_exit(const char* msg) {
   printf("%s\n", msg);
@@ -38,12 +40,13 @@ int main(int arc, char *argv[]) {
     error_and_exit("Could not set the param curve nid");
   }
   // Set the parameter encoding which can be either OPENSSL_EC_EXPLICIT_CURVE
-  // or OPENSSL_EC_NAMED_CURVE.
+  // or OPENSSL_EC_NAMED_CURVE. The default for OpenSSL 3.x is named
+  /*
   int ret = EVP_PKEY_CTX_set_ec_param_enc(ctx, OPENSSL_EC_NAMED_CURVE);
   if (ret  <= 0) {
     error_and_exit("EVP_PKEY_CTX_set_ec_param_enc is returning %d! Why?");
   } 
-
+  */
 
   EVP_PKEY* params = NULL;
   // Generate the parameters.
@@ -58,11 +61,31 @@ int main(int arc, char *argv[]) {
   }
 
   EVP_PKEY* pkey = NULL;
-  if (EVP_PKEY_keygen(key_ctx, &pkey) != 1) {
+  if (EVP_PKEY_keygen(key_ctx, &pkey) <= 0) {
     error_and_exit("Could not generate the private key");
   }
 
-end:
+  // The '1' indicates that the ref count will be decremented so it must be
+  // freed by us. Use EVP_PKEY_get0_EC_KEY to avoid this.
+  EC_KEY* ec_key = EVP_PKEY_get1_EC_KEY(pkey);
+  const BIGNUM* b = EC_KEY_get0_private_key(ec_key);
+  BIO* out = BIO_new(BIO_s_mem());
+
+  int len = PEM_write_bio_ECPrivateKey(out, ec_key, NULL, NULL, 0, NULL, NULL);
+  if (len <= 0) {
+    error_and_exit("Could not write the private key");
+  }
+  BUF_MEM* bptr;
+  BIO_get_mem_ptr(out, &bptr);
+  printf("%s\n", bptr->data);
+
+  BIO* pub_out = BIO_new(BIO_s_mem());
+  len = PEM_write_bio_EC_PUBKEY(pub_out, ec_key);
+  if (len <= 0) {
+    error_and_exit("Could not write the private key");
+  }
+  BIO_get_mem_ptr(pub_out, &bptr);
+  printf("%s\n", bptr->data);
 
   EVP_PKEY_CTX_free(ctx);
   exit(EXIT_SUCCESS);
