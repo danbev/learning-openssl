@@ -6,7 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-void error_and_exit() {
+void error_and_exit(const char* msg) {
+  printf("%s\n", msg);
   char buf[256];
   int err = ERR_get_error();
   ERR_error_string_n(err, buf, sizeof(buf));
@@ -29,29 +30,24 @@ int main(int arc, char *argv[]) {
 
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA_PSS, NULL);
   if (ctx == NULL) {
-    printf("Could not create a context for RSA_PSS\n");
-    error_and_exit();
+    error_and_exit("Could not create a context for RSA_PSS");
   }
 
   if (EVP_PKEY_keygen_init(ctx) <= 0) {
-    printf("Could not initialize the RSA context\n");
-    error_and_exit();
+    error_and_exit("Could not initialize the RSA context");
   }
 
   if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, modulus_bits) <= 0) {
-    printf("EVP_PKEY_CTX_set_rsa_keygen_bits failed\n");
-    error_and_exit();
+    error_and_exit("EVP_PKEY_CTX_set_rsa_keygen_bits failed");
   }
 
   if (EVP_PKEY_CTX_set_rsa_pss_keygen_md(ctx, md) <= 0) {
-    printf("EVP_PKEY_CTX_set_rsa_pss_keygen_md failed\n");
-    error_and_exit();
+    error_and_exit("EVP_PKEY_CTX_set_rsa_pss_keygen_md failed");
   }
 
   EVP_PKEY* pkey = NULL;
   if (EVP_PKEY_keygen(ctx, &pkey) != 1) {
-    printf("EVP_PKEY_keygen failed\n");
-    error_and_exit();
+    error_and_exit("EVP_PKEY_keygen failed");
   }
 
   // So we have our key generated. We can now use it to encrypt
@@ -59,13 +55,11 @@ int main(int arc, char *argv[]) {
   // Create and initialize a new context for encryption.
   EVP_PKEY_CTX* enc_ctx = EVP_PKEY_CTX_new(pkey, NULL);
   if (EVP_PKEY_encrypt_init(enc_ctx) <= 0) {
-    printf("EVP_PKEY_encrypt_init failed\n");
-    error_and_exit();
+    error_and_exit("EVP_PKEY_encrypt_init failed");
   }
   // Any algorithm specific control operations can be performec now before
   if (EVP_PKEY_CTX_set_rsa_padding(enc_ctx, RSA_PKCS1_OAEP_PADDING) <= 0) {
-    printf("EVP_PKEY_CTX_set_rsa_padding failed\n");
-    error_and_exit();
+    error_and_exit("EVP_PKEY_CTX_set_rsa_padding failed");
   }
 
   unsigned char* in = (unsigned char*) "Bajja";
@@ -75,16 +69,14 @@ int main(int arc, char *argv[]) {
   printf("Going to encrypt: %s\n", in);
   // Determine the size of the output
   if (EVP_PKEY_encrypt(enc_ctx, NULL, &outlen, in, strlen ((char*)in)) <= 0) {
-    printf("EVP_PKEY_encrypt failed\n");
-    error_and_exit();
+    error_and_exit("EVP_PKEY_encrypt failed");
   }
   printf("Determined ciphertext to be of length: %d) is:\n", outlen);
 
   out = OPENSSL_malloc(outlen);
 
   if (EVP_PKEY_encrypt(enc_ctx, out, &outlen, in, strlen ((char*)in)) <= 0) {
-    printf("EVP_PKEY_encrypt failed\n");
-    error_and_exit();
+    error_and_exit("EVP_PKEY_encrypt failed");
   }
 
   printf("Encrypted ciphertext (len:%d) is:\n", outlen);
@@ -92,32 +84,27 @@ int main(int arc, char *argv[]) {
 
   EVP_PKEY_CTX* dec_ctx = EVP_PKEY_CTX_new(pkey, NULL);
   if (EVP_PKEY_decrypt_init(dec_ctx) <= 0) {
-    printf("EVP_PKEY_encrypt_init failed\n");
-    error_and_exit();
+    error_and_exit("EVP_PKEY_encrypt_init failed");
   }
 
   if (EVP_PKEY_CTX_set_rsa_padding(dec_ctx, RSA_PKCS1_OAEP_PADDING) <= 0) {
-    printf("EVP_PKEY_CTX_set_rsa_padding failed\n");
-    error_and_exit();
+    error_and_exit("EVP_PKEY_CTX_set_rsa_padding failed");
   }
 
   unsigned char* dout;
   size_t doutlen;
   if (EVP_PKEY_decrypt(dec_ctx, NULL, &doutlen, out, outlen) <= 0) {
-    printf("EVP_PKEY_decrypt get length failed\n");
-    error_and_exit();
+    error_and_exit("EVP_PKEY_decrypt get length failed");
   }
 
   printf("Determimed plaintext to be of lenght: %d:\n", doutlen);
   dout = OPENSSL_malloc(doutlen);
   if (!dout) {
-    printf("OPENSSL_malloc failed\n");
-    error_and_exit();
+    error_and_exit("OPENSSL_malloc failed");
   }
 
   if (EVP_PKEY_decrypt(dec_ctx, dout, &doutlen, out, outlen) <= 0) {
-    printf("EVP_PKEY_decrypt failed\n");
-    error_and_exit();
+    error_and_exit("EVP_PKEY_decrypt failed");
   }
 
   printf("Decrypted Plaintext is:\n");
