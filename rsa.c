@@ -16,13 +16,6 @@ void error_and_exit() {
 
 int main(int arc, char *argv[]) {
   printf("RSA example\n");
-  OSSL_PROVIDER* def;
-
-  def = OSSL_PROVIDER_load(NULL, "default");
-  if (def == NULL) {
-    printf("Failed to load Default provider\n");
-    error_and_exit();
-  }
 
   int modulus_bits = 512;
   const uint32_t exponent = 0x10001;
@@ -126,6 +119,5 @@ int main(int arc, char *argv[]) {
   BIO_dump_fp(stdout, (const char*) dout, doutlen);
 
   EVP_PKEY_CTX_free(ctx);
-  OSSL_PROVIDER_unload(def);
   exit(EXIT_SUCCESS);
 }
