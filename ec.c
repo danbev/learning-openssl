@@ -41,12 +41,10 @@ int main(int arc, char *argv[]) {
   }
   // Set the parameter encoding which can be either OPENSSL_EC_EXPLICIT_CURVE
   // or OPENSSL_EC_NAMED_CURVE. The default for OpenSSL 3.x is named
-  /*
   int ret = EVP_PKEY_CTX_set_ec_param_enc(ctx, OPENSSL_EC_NAMED_CURVE);
   if (ret  <= 0) {
-    error_and_exit("EVP_PKEY_CTX_set_ec_param_enc is returning %d! Why?");
+    error_and_exit("EVP_PKEY_CTX_set_ec_param_enc is returning 0. Why?");
   } 
-  */
 
   EVP_PKEY* params = NULL;
   // Generate the parameters.
