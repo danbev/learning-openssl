@@ -1863,7 +1863,7 @@ Remember that our call looks like this:
 ```c
 int ret = EVP_PKEY_CTX_set_ec_param_enc(ctx, OPENSSL_EC_NAMED_CURVE);
 ```
-And the this macro is defined as:
+And the this macro is defined as in `include/openssl/ec.h`:
 ```c
 #  define EVP_PKEY_CTX_set_ec_param_enc(ctx, flag) \
         EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_EC, \
@@ -1898,7 +1898,7 @@ encoded.
 Note: OPENSSL_EC_EXPLICIT_CURVE was first added to OpenSSL 1.1.0, for previous
 versions of OpenSSL the value 0 must be used instead. Before OpenSSL 1.1.0 the
 default form was to use explicit parameters (meaning that applications would
-    have to explicitly set the named curve form) in OpenSSL 1.1.0 and later the
+have to explicitly set the named curve form) in OpenSSL 1.1.0 and later the
 named curve form is the default.
 ```
 So when using OpenSSL 3.x (or 1.1.0 and later the default is to use named curves
@@ -2038,7 +2038,7 @@ index ea8bdec388..5da0761834 100644
          case EVP_PKEY_CTRL_RSA_OAEP_MD:
              return EVP_PKEY_CTX_set_rsa_oaep_md(ctx, p2);
 ```
-With this change the OpenSSL test work and it seems the function returns
+With this change the OpenSSL tests work and it seems the function returns
 successfully.
 
 Next, I ran into another issue with the following function call:
@@ -2080,21 +2080,7 @@ is covered by the "special" `-1` keytype:
         case EVP_PKEY_CTRL_MD:
             return EVP_PKEY_CTX_set_signature_md(ctx, p2);
 ```
-So perhaps the optype should be changed in the header?:
-```console
-$ git diff include/
-diff --git a/include/openssl/rsa.h b/include/openssl/rsa.h
-index bf12b90088..311b070be5 100644
---- a/include/openssl/rsa.h
-+++ b/include/openssl/rsa.h
-@@ -166,7 +166,7 @@ int EVP_PKEY_CTX_get0_rsa_oaep_label(EVP_PKEY_CTX *ctx, unsigned char **label);
-
- #  define  EVP_PKEY_CTX_set_rsa_pss_keygen_md(ctx, md) \
-         EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_RSA_PSS,  \
--                          EVP_PKEY_OP_KEYGEN, EVP_PKEY_CTRL_MD,  \
-+                          EVP_PKEY_OP_KEYGEN, -1,  \
-                           0, (void *)(md))
-```
+So perhaps the optype should be changed in the header?
 
 ### ec walkthrough
 ```c
