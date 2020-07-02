@@ -35,7 +35,6 @@ int main(int arc, char *argv[]) {
   const EVP_MD* mgf1_md = EVP_get_digestbyname(mgf1_name);
 
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA_PSS, NULL);
-  //EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
   if (ctx == NULL) {
     printf("Could not create a context for RSA_PSS\n");
   }
