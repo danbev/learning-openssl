@@ -40,7 +40,7 @@ int main(int arc, char *argv[]) {
     error_and_exit("Could not set the param curve nid");
   }
   // Set the parameter encoding which can be either OPENSSL_EC_EXPLICIT_CURVE
-  // or OPENSSL_EC_NAMED_CURVE. The default for OpenSSL 3.x is named
+  // or OPENSSL_EC_NAMED_CURVE. The default for OpenSSL 3.x is named curve
   int ret = EVP_PKEY_CTX_set_ec_param_enc(ctx, OPENSSL_EC_NAMED_CURVE);
   if (ret  <= 0) {
     error_and_exit("EVP_PKEY_CTX_set_ec_param_enc is returning 0. Why?");
@@ -84,6 +84,12 @@ int main(int arc, char *argv[]) {
   }
   BIO_get_mem_ptr(pub_out, &bptr);
   printf("%s\n", bptr->data);
+
+  const EC_GROUP* group = EC_KEY_get0_group(ec_key);
+  int order = EC_GROUP_order_bits(group);
+  printf("Group order: %d\n", order);
+
+  const EC_POINT* generator = EC_GROUP_get0_generator(group);
 
   EVP_PKEY_CTX_free(ctx);
   exit(EXIT_SUCCESS);
