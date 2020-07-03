@@ -43,7 +43,8 @@ int main(int arc, char *argv[]) {
   // or OPENSSL_EC_NAMED_CURVE. The default for OpenSSL 3.x is named curve
   int ret = EVP_PKEY_CTX_set_ec_param_enc(ctx, OPENSSL_EC_NAMED_CURVE);
   if (ret  <= 0) {
-    error_and_exit("EVP_PKEY_CTX_set_ec_param_enc is returning 0. Why?");
+    printf("EVP_PKEY_CTX_set_ec_param_enc retuned: %d\n", ret);
+    error_and_exit("EVP_PKEY_CTX_set_ec_param_enc failed");
   } 
 
   EVP_PKEY* params = NULL;
