@@ -1510,6 +1510,43 @@ if (fips == NULL) {
   ...
 }
 ```
+The fips provider is implemented in `providers/fips/fipsprov.c`.
+
+There is an example of loading the fips provider in [fips-provider](./fips-provider.c).
+If you just compile this using 
+```console
+$ ./fips-provider
+FIPS Provider example
+Failed to load FIPS provider
+errno: 251658310, error:0F000046:common libcrypto routines::init fail
+```
+This will most likley happen if you have forgotten to run the post install task:
+```console
+$ ~/work/security/openssl_build_master/bin/openssl fipsinstall -module ~/work/security/openssl_build_master/lib/ossl-modules/fips.so -out fips.cnf -provider_name fips -section_name fipsinstall -mac_name HMAC -macopt digest:SHA256 -macopt hexkey:1
+HMAC : (Module_Integrity) : Pass
+SHA1 : (KAT_Digest) : Pass
+SHA2 : (KAT_Digest) : Pass
+SHA3 : (KAT_Digest) : Pass
+TDES : (KAT_Cipher) : Pass
+AES_GCM : (KAT_Cipher) : Pass
+RSA : (KAT_Signature) : Pass
+ECDSA : (KAT_Signature) : Pass
+DSA : (KAT_Signature) : Pass
+HKDF : (KAT_KDF) : Pass
+SSKDF : (KAT_KDF) : Pass
+HASH : (DRBG) : Pass
+CTR : (DRBG) : Pass
+HMAC : (DRBG) : Pass
+DH : (KAT_KA) : Pass
+ECDH : (KAT_KA) : Pass
+INSTALL PASSED
+```
+
+The default OPENSSL configuration file on my local build is:
+```
+openssl_build_master/ssl/openssl.cnf
+```
+
 For this to work you also have to update the `fipsmodule.cnf ` and comment out
 /remove `active = 1`.
 
