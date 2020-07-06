@@ -60,6 +60,9 @@ rsa: rsa.c
 rsa_pss: rsa_pss.c
 	$(CC) $(CFLAGS)
 
+provider: provider.c
+	$(CC) $(CFLAGS)
+
 
 .PHONY: clean 
 
