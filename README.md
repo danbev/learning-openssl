@@ -1485,8 +1485,10 @@ EVP_MD *sha256 = EVP_MD_fetch(NULL, "SHA2-256", "fips=yes");
 always set to zero. Related functions are deprecated.`
 
 #### FIPS
-The functions `FIPS_mode()` and `FIPS_mode_set()` are no longer available! We
-use these in Node.js. 
+The module is dynamically loadable(static linking is not supported).
+The version will be FIPS module 3.0 when OpenSSL 3.0 is released but the FIPS
+module might not be updated with each OpenSSL release so that will most likely
+drift apart with regards to the version.
 
 To enable FIPS by default modify the openssl configuration file::
 ```console
@@ -1510,6 +1512,13 @@ if (fips == NULL) {
 ```
 For this to work you also have to update the `fipsmodule.cnf ` and comment out
 /remove `active = 1`.
+
+```c
+int FIPS_mode_set(int on);
+int FIPS_mode(void);
+```
+The above will set/get the global property. But there are depracated and just
+provided for legacy code. New code should use EVP_set_default_alg_properties.
 
 #### OpenSSL installation info
 Show the directory where the configuration file is:
@@ -1898,6 +1907,7 @@ The `optype` is `EVP_PKEY_CTRL_EC_PARAM_ENC`.
 
 If default parameter encoding in versions prior to 1.1.0 was
 `OPENSSL_EC_EXPLICIT_CURVE`
+
 ```
 If asn1_flag is OPENSSL_EC_NAMED_CURVE then the named curve form is used and
 the parameters must have a corresponding named curve NID set.
