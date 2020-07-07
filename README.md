@@ -14,7 +14,8 @@ To configure and install to a build directory:
 #### Building on linux
 On linux:
 ```console
-$ ./config --debug --prefix=/home/danielbevenius/work/security/openssl_build_master
+$ ./config --debug --prefix=/home/danielbevenius/work/security/openssl_build_master linux-x86
+
 Operating system: x86_64-whatever-linux2
 Configuring OpenSSL version 3.0.0-alpha3-dev for target linux-x86_64
 Using os-specific seed configuration
