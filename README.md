@@ -2049,9 +2049,8 @@ and implementation for the specified `type`, which is our case is `rsa-pss`.
                                          privateFormat, privateType,
                                          cipher, passphrase, wrap);
 ```
-And we can see that we required `generateKeyPairRSAPS` from the internal
+And we can see that we required `generateKeyPairRSAPSS` from the internal
 `crypto` module which can be found in `src/node_crypto.cc`.
-
 
 RSAKeyPairGenerationConfig::Configure:
 ```c++
@@ -2088,7 +2087,7 @@ int RSA_pkey_ctx_ctrl(EVP_PKEY_CTX *ctx, int optype, int cmd, int p1, void *p2)
      return EVP_PKEY_CTX_ctrl(ctx, -1, optype, cmd, p1, p2);
 }
 ```
-Should there be a condition for EVP_PKEY_RSA_PSS?:
+Should there be a condition for `EVP_PKEY_RSA_PSS`?:
 ```console
 $ git diff crypto/evp/pmeth_lib.c
 diff --git a/crypto/evp/pmeth_lib.c b/crypto/evp/pmeth_lib.c
