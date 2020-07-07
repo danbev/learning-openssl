@@ -17,3 +17,5 @@ rsa
 rsa_pss
 provider
 fips-provider
+rand
+random

@@ -2306,3 +2306,66 @@ OSSL_METHOD_STORE *store = get_evp_method_store(libctx);
 ```
 `get_evp_method_store` is also a function in `evp_fetch.c` 
 
+### RAND_status in OpenSSl 3.0.0
+In Node.js I ran into an issue when upgrading and specifically when using
+alpha 4. When building the mksnapshot task would just hang and no further
+output produced when trying to create the snapshot. 
+
+This issue was in `src/node_crypto.cc` and the `CheckEntropy` function:
+```
+inline void CheckEntropy() {
+  for (;;) {
+    int status = RAND_status();
+    CHECK_GE(status, 0);  // Cannot fail.
+    if (status != 0)
+      break;
+
+    // Give up, RAND_poll() not supported.
+    if (RAND_poll() == 0)
+      break;
+  }
+```
+[rand.c](./rand.c) tries to reproduce this and it goes into a infinte loop, which
+is also what I was seeing. [#12290](https://github.com/openssl/openssl/issues/12290)
+was reported by someone else and there is a fix for it in upstream.
+
+With the latest upstream the output of rand is:
+```console
+$ ./rand
+RAND_status example
+status: 1
+```
+
+### Random
+
+#### Random Number Generator (RNG) 
+Are hardware devices or software programs which take as input which is
+non-deterministic like some physical measurment and generate unpredictable
+numbers as output. The physical measurement can be things like mouse momement,
+keyboard input, disk or network I/O. While these are good sources of entropy
+they are slow to produce data and they also depend on external triggers which
+makes them somewhat unreliable.
+
+#### Pseudo Random Number Generator
+These generators can use small amount of true random numbers (inital entropy)
+to generate a large amount of artificial random numbers.
+
+It maintains a large memory buffer called the entropy pool where the bytes from
+a RNG are stored. 
+To generate random bits a deterministic random bit generator (DRBG) is used which
+always produces the same output for the same input. But if the input is different
+each time the output will be as well.
+
+`/dev/random` and `/dev/urandom` are user space interfaces for PRNG.
+```console
+$ head -10 /dev/urandom > random
+```
+/dev/random will block if there is not enough entropy available while /dev/urandom
+will no block.
+
+The number of bits of randomness can be found in 
+```console
+$ cat /proc/sys/kernel/random/entropy_avail
+3872
+```
+

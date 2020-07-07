@@ -67,6 +67,9 @@ provider: provider.c
 fips-provider: fips-provider.c
 	$(CC) $(CFLAGS)
 
+rand: rand.c
+	$(CC) $(CFLAGS)
+
 
 .PHONY: clean 
 
