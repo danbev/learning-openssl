@@ -1542,6 +1542,10 @@ ECDH : (KAT_KA) : Pass
 INSTALL PASSED
 ```
 
+```console
+env OPENSSL_CONF=openssl.cnf ./fips-provider
+```
+
 The default OPENSSL configuration file on my local build is:
 ```
 openssl_build_master/ssl/openssl.cnf

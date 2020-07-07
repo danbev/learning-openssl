@@ -1,0 +1,10 @@
+openssl_conf = openssl_init
+
+.include fips.cnf
+
+[openssl_init]
+providers = prov
+
+[prov]
+fips = fipsinstall
+
