@@ -1542,8 +1542,14 @@ ECDH : (KAT_KA) : Pass
 INSTALL PASSED
 ```
 
+If you look in fips-provider.c you will find:
+```c
+  CONF_modules_load_file("./openssl.cnf", "openssl_conf", 0);
+```
+`openssl_conf` is the appname in this case and `openssl.cnf` includes `fips.cnf`.
+This allows us to run the program using simply:
 ```console
-env OPENSSL_CONF=openssl.cnf ./fips-provider
+$ ./fips-provider
 ```
 
 The default OPENSSL configuration file on my local build is:

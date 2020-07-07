@@ -7,8 +7,8 @@
 int main(int argc, char** argv) {
   printf("FIPS Provider example\n");
   OSSL_PROVIDER* fips;
-  //OPENSSL_config("./openssl.cnf");
-  //CONF_modules_load_file("./openssl.cnf", "something", 0);
+
+  CONF_modules_load_file("./openssl.cnf", "openssl_conf", 0);
 
   fips = OSSL_PROVIDER_load(NULL, "fips");
   if (fips == NULL) {
