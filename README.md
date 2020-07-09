@@ -976,11 +976,66 @@ Configurations/90-team.conf
 There is a config script in the root directory.
 
 ### Build system
-The build system is based on the Configure perl script. Running Configure will
+The build system is based on the Configure perl script.
+Running configure will generate configdata.pm which is a perl script that is
+created using the template configdata.pm.in. This perl script will then be
+executed:
+```perl
+print "Running $configdata_outname\n";
+my $perlcmd = (quotify("maybeshell", $config{PERL}))[0];
+my $cmd = "$perlcmd $configdata_outname";
+system($cmd);
+```
+
+The generated configdata.pm contains, among other things, the following:
+```perl
+our %config = (
+    ...
+    "build_file" => "Makefile",
+    "build_file_templates" => [
+        "Configurations/common0.tmpl",
+        "Configurations/unix-Makefile.tmpl",
+        "Configurations/common.tmpl"
+    ],
+    "build_infos" => [
+        "./build.info",
+        "crypto/build.info",
+    ...
+);
+```
+`%config` is a hash/map with key/value pairs.
+
+Now, in `Configure` we have the following:
+```perl
+  my @build_file_template_names =
+   ( $builder_platform."-".$target{build_file}.".tmpl",
+   $target{build_file}.".tmpl" );
+```
+On my system the array `build_file_template_names` will contain:
+```console
+unix-Makefile.tmpl
+Makefile.tmpl
+```
+`Makefile.tmpl` is also mentioned in Configurations/README.md` and there is a
+link to such a file but it does not exist. 
+
+A little further down in Configure we have:
+```perl
+for $_ (@build_file_templates) {
+        say "for each $_";
+        $build_file_template = $_;
+        last if -f $build_file_template;
+```
+`last` is a statement used to exit the loop immediately if the expression
+in the if statement is true. In this case `-f` is checking that the file
+is a plain file.
+
+
+Running Configure will
 generate a `Makefile` and also an `opensslconf.h` file. 
 
 ### build.info
-Information about these files can be found in `Configuration/README`.
+Information about these files can be found in `Configurations/README.md`.
 The README says that each line of a build.info files is processed with the Text::Template
 perl module. So where is this done?
 I think this is done in Configure with the help or `util/dofile.pl`.
@@ -991,9 +1046,10 @@ Lets take a look at the buildinfo.h file in `openssl/crypto`. The first line loo
 ```
 So the build.info is not itself a perl script but a template which can have
 perl "embedded" in it. For example, the above will use the 
-qw is a function that to specify multiple single quoted words. For I guess
-this is importing 'catdir' and 'catfile' from the File::Spec::Functions module. But I cannot find any usage 
-of `catdir` or `catfile` in crypto/build.info. This was fixed in [commit](https://github.com/openssl/openssl/pull/5832).
+qw is a function that to specify multiple single quoted words. From this I guess
+this is importing 'catdir' and 'catfile' from the File::Spec::Functions module.
+But I cannot find any usage of `catdir` or `catfile` in crypto/build.info. This
+was fixed in [commit](https://github.com/openssl/openssl/pull/5832).
 
 So, lets look at the next part of crypto/build.info:
 ```perl
@@ -1003,8 +1059,13 @@ LIBS=../libcrypto
 
 ### perlasm
 Assemblers usually have macros and other high-level features that make 
-assembly-language programming convenient. However, some assemblers do not have such features, and the ones that do all have different syntaxes. 
-OpenSSL has its own assembly language macro framework called `perlasm` to deal with this. Every OpenSSL assembly language source file is actually a Perl program that generates the assembly language file. The result is several large files of interleaved Perl and assembly language code.
+assembly-language programming convenient. However, some assemblers do not have
+such features, and the ones that do all have different syntaxes. 
+OpenSSL has its own assembly language macro framework called `perlasm` to deal
+with this. Every OpenSSL assembly language source file is actually a Perl program
+that generates the assembly language file. The result is several large files of
+interleaved Perl and assembly language code.
+
 For example, `crypto/aes/asm/aes-x86_64.pl`
 
 ### Advanced Vector Extensions 2 (AVX2)
@@ -2335,6 +2396,7 @@ $ ./rand
 RAND_status example
 status: 1
 ```
+And Node.js also build successfully when linking against the latest upstream.
 
 ### Random
 
