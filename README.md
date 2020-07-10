@@ -1030,9 +1030,31 @@ for $_ (@build_file_templates) {
 in the if statement is true. In this case `-f` is checking that the file
 is a plain file.
 
-
 Running Configure will
 generate a `Makefile` and also an `opensslconf.h` file. 
+
+### Running tests
+```console
+$ ./test/rsa_test --help
+# Usage: rsa_test [options]
+# Valid options are:
+#  -help         Display this summary
+#  -list         Display the list of tests available
+#  -test val     Run a single test by id or name
+#  -iter int     Run a single iteration of a test
+#  -indent +int  Number of tabs added to output
+#  -seed int     Seed value to randomize tests with
+```
+Run a single test (use -list to show the test ids):
+```console
+$ ./test/rsa_test -test test_rsa_pkcs1
+    # Subtest: test_rsa_pkcs1
+    1..3
+    ok 1 - iteration 1
+    ok 2 - iteration 2
+    ok 3 - iteration 3
+ok 1 - test_rsa_pkcs1
+```
 
 ### build.info
 Information about these files can be found in `Configurations/README.md`.
