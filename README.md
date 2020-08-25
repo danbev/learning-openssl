@@ -1576,15 +1576,16 @@ drift apart with regards to the version.
 
 To enable FIPS by default modify the openssl configuration file::
 ```console
-.include /usr/local/ssl/fipsmodule.cnf
+.include fips.cnf
 
 [openssl_init]
-providers = provider_sect
+providers = prov
 
-[provider_sect]
-fips = fips_sect
-
+[prov]
+fips = fipsinstall
 ```
+There is an example of the [openssl.cnf](./openssl.cnf), and
+[fips.cnf](./fips.cnf).
 
 Loading the fips module programatically:
 ```c
