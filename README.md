@@ -1648,7 +1648,7 @@ For this to work you also have to update the `fipsmodule.cnf ` and comment out
 int FIPS_mode_set(int on);
 int FIPS_mode(void);
 ```
-The above will set/get the global property. But there are depracated and just
+The above will set/get the global property. But these are depracated and just
 provided for legacy code. New code should use EVP_set_default_alg_properties.
 
 #### OpenSSL installation info
