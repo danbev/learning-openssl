@@ -2542,3 +2542,180 @@ TODO
 #### Alert protocol
 TODO
 
+
+### OpenSSL 3.x TLS1 issue
+I'm investigating test failures in Node.js while linking against OpenSSL 3.0
+Alpha 6.
+
+One of the tests that fails is:
+```console
+$ env NODE_DEBUG_NATIVE=tls out/Debug/node test/parallel/test-tls-session-cache.js
+CONNECTED(00000003)
+TLSWrap server (8) Created new TLSWrap
+TLSWrap server (8) Read 114 bytes from underlying stream
+TLSWrap server (8) Passing 114 bytes to the hello parser
+TLSWrap server (8) OnClientHelloParseEnd()
+TLSWrap server (8) Trying to write cleartext input
+TLSWrap server (8) Returning from ClearIn(), no pending data
+TLSWrap server (8) Trying to read cleartext output
+TLSWrap server (8) SSLInfoCallback(SSL_CB_HANDSHAKE_START);
+TLSWrap server (8) Read -1 bytes of cleartext output
+TLSWrap server (8) Got SSL error (1), calling onerror
+TLSWrap server (8) Trying to write encrypted output
+TLSWrap server (8) Writing 1 buffers to the underlying stream
+TLSWrap server (8) Write finished synchronously
+---
+no peer certificate available
+---
+No client certificate CA names sent
+---
+SSL handshake has read 7 bytes and written 114 bytes
+Verification: OK
+---
+New, (NONE), Cipher is (NONE)
+Secure Renegotiation IS NOT supported
+Compression: NONE
+Expansion: NONE
+No ALPN negotiated
+SSL-Session:
+    Protocol  : TLSv1
+    Cipher    : 0000
+    Session-ID:
+    Session-ID-ctx:
+    Master-Key:
+    PSK identity: None
+    PSK identity hint: None
+    SRP username: None
+    Start Time: 1598525437
+    Timeout   : 7200 (sec)
+    Verify return code: 0 (ok)
+    Extended master secret: no
+---
+TLSWrap server (8) Trying to write encrypted output
+TLSWrap server (8) Returning from EncOut(), write currently in progress
+TLSWrap server (8) OnStreamAfterWrite(status = 0)
+TLSWrap server (8) Trying to write cleartext input
+TLSWrap server (8) Returning from ClearIn(), no pending data
+TLSWrap server (8) Trying to write encrypted output
+TLSWrap server (8) No pending encrypted output
+TLSWrap server (8) No pending cleartext input, not inside DoWrite()
+TLSWrap server (8) InvokeQueued(0, (null))
+TLSWrap server (8) DestroySSL()
+TLSWrap server (8) InvokeQueued(-125, Canceled because of SSL destruction)
+TLSWrap server (8) DestroySSL() finished
+assert.js:143
+  throw err;
+  ^
+
+AssertionError [ERR_ASSERTION]: code: 1, signal: null, output: 40B16F7C197F0000:error::SSL routines::tlsv1 alert internal error:ssl/record/rec_layer_s3.c:1614:SSL alert number 80
+
+    at ChildProcess.<anonymous> (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-tls-session-cache.js:128:18)
+    at ChildProcess.<anonymous> (/home/danielbevenius/work/nodejs/openssl/test/common/index.js:366:15)
+    at ChildProcess.emit (events.js:314:20)
+    at Process.ChildProcess._handle.onexit (internal/child_process.js:276:12) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: undefined,
+  expected: undefined,
+  operator: 'fail'
+}
+```
+The error on the server can be seen when debugging
+```console
+lldb) jlh arg
+0x1b5403d5911: [JS_ERROR_TYPE]
+ - map: 0x234aec381519 <Map(HOLEY_ELEMENTS)> [FastProperties]
+ - prototype: 0x306c8f128f31 <Object map = 0x1bfd73ac6859>
+ - elements: 0x20b725280b29 <FixedArray[0]> [HOLEY_ELEMENTS]
+ - properties: 0x01b5403d5cb1 <PropertyArray[3]> {
+    #stack: 0x1d9d580c02e1 <AccessorInfo> (const accessor descriptor)
+    #message: 0x01b5403d58a1 <String[89]\: C0AF53F7FF7F0000:error::SSL routines::no suitable signature algorithm:ssl/t1_lib.c:3328:\n> (const data field 0)
+    0x20b7252846d9 <Symbol: (stack_trace_symbol)>: 0x01b5403d5b79 <FixedArray[1]> (const data field 1)
+    #library: 0x01b5403d5c19 <String[12]: SSL routines> (const data field 2) properties[0]
+    #reason: 0x01b5403d5cd9 <String[31]: no suitable signature algorithm> (const data field 3) properties[1]
+    #code: 0x01b5403d5d99 <String[39]: ERR_SSL_NO_SUITABLE_SIGNATURE_ALGORITHM> (const data field 4) properties[2
+
+```
+Notice the `message` above and the error `no suitable signature algorithm`.
+
+Inspecting the ClientHello message we see:
+```
+Transport Layer Security
+    TLSv1 Record Layer: Handshake Protocol: Client Hello
+        Content Type: Handshake (22)
+        Version: TLS 1.0 (0x0301)
+        Length: 109
+        Handshake Protocol: Client Hello
+            Handshake Type: Client Hello (1)
+            Length: 105
+            Version: TLS 1.0 (0x0301)
+            Random: accfce9186391b6188dae1fc56986e73d1afedd1db0391ff…
+            Session ID Length: 0
+            Cipher Suites Length: 18
+            Cipher Suites (9 suites)
+                Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA (0xc00a)
+                Cipher Suite: TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA (0xc014)
+                Cipher Suite: TLS_DHE_RSA_WITH_AES_256_CBC_SHA (0x0039)
+                Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA (0xc009)
+                Cipher Suite: TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA (0xc013)
+                Cipher Suite: TLS_DHE_RSA_WITH_AES_128_CBC_SHA (0x0033)
+                Cipher Suite: TLS_RSA_WITH_AES_256_CBC_SHA (0x0035)
+                Cipher Suite: TLS_RSA_WITH_AES_128_CBC_SHA (0x002f)
+                Cipher Suite: TLS_EMPTY_RENEGOTIATION_INFO_SCSV (0x00ff)
+            Compression Methods Length: 1
+            Compression Methods (1 method)
+            Extensions Length: 46
+            Extension: server_name (len=10)
+            Extension: ec_point_formats (len=4)
+            Extension: supported_groups (len=12)
+            Extension: encrypt_then_mac (len=0)
+            Extension: extended_master_secret (len=0)
+```
+
+This can be reproduces using OpenSSL's `s_server` and `s_client`:
+```console
+$ openssl s_server -key rsa_private.pem -cert rsa_cert.crt -port 7777
+Using default temp DH parameters
+ACCEPT
+```
+And then the client:
+```console
+$ openssl s_client -key rsa_private.pem -cert rsa_cert.crt -tls1 -port 7777 
+CONNECTED(00000003)
+409147A22A7F0000:error::SSL routines::tlsv1 alert internal error:ssl/record/rec_layer_s3.c:1614:SSL alert number 80
+---
+no peer certificate available
+---
+No client certificate CA names sent
+---
+SSL handshake has read 7 bytes and written 122 bytes
+Verification: OK
+---
+New, (NONE), Cipher is (NONE)
+Secure Renegotiation IS NOT supported
+Compression: NONE
+Expansion: NONE
+No ALPN negotiated
+SSL-Session:
+    Protocol  : TLSv1
+    Cipher    : 0000
+    Session-ID: 
+    Session-ID-ctx: 
+    Master-Key: 
+    PSK identity: None
+    PSK identity hint: None
+    SRP username: None
+    Start Time: 1598526099
+    Timeout   : 7200 (sec)
+    Verify return code: 0 (ok)
+    Extended master secret: no
+---
+```
+
+The error in the server's console is:
+```console
+ERROR
+4021A1934E7F0000:error::SSL routines::no suitable signature algorithm:ssl/t1_lib.c:3328:
+shutting down SSL
+CONNECTION CLOSED
+```
