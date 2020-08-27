@@ -2685,7 +2685,7 @@ Transport Layer Security
             Extension: extended_master_secret (len=0)
 ```
 
-This can be reproduces using OpenSSL's `s_server` and `s_client`:
+This can be reproduced using OpenSSL's `s_server` and `s_client`:
 ```console
 $ openssl s_server -key rsa_private.pem -cert rsa_cert.crt -port 7777
 Using default temp DH parameters
@@ -2732,3 +2732,15 @@ ERROR
 shutting down SSL
 CONNECTION CLOSED
 ```
+
+One thing I considered is if it perhaps what is needed is the `legacy` provider
+but I still get the same error if I add `-provider legacy` to the s_server
+options.
+
+After some debugging I found that the security level of 1 is used by default but
+setting this to 0 will allow things to work. This can be done by setting the
+`cipher` option on the s_server command:
+```console
+$ /openssl s_server -cipher "RSA@SECLEVEL=0" -tls1 -debug -msg -security_debug_verbose -provider legacy -provider default -key rsa_private.pem -cert rsa_cert.crt -port 7777
+```
+
