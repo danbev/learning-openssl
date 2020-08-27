@@ -2545,7 +2545,20 @@ TODO
 
 ### OpenSSL 3.x TLS1 issue
 I'm investigating test failures in Node.js while linking against OpenSSL 3.0
-Alpha 6.
+Alpha 6:
+```console
+$ openssl version -a
+OpenSSL 3.0.0-alpha6 6 Aug 2020 (Library: OpenSSL 3.0.0-alpha6 6 Aug 2020)
+built on: Wed Aug 26 13:03:09 2020 UTC
+platform: linux-x86_64
+options:  bn(64,64)
+compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -O0 -g -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL
+OPENSSLDIR: "/home/danielbevenius/work/security/openssl_build_master/ssl"
+ENGINESDIR: "/home/danielbevenius/work/security/openssl_build_master/lib/engines-3"
+MODULESDIR: "/home/danielbevenius/work/security/openssl_build_master/lib/ossl-modules"
+Seeding source: os-specific
+CPUINFO: OPENSSL_ia32cap=0x7ffaf3ffffebffff:0x29c6fbf
+```
 
 One of the tests that fails is:
 ```console
