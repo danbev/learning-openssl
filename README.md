@@ -1277,17 +1277,17 @@ This can also be calculated using:
 (2 - 1) * (7 - 1) = 
 (1) * (6) = 6
 ```
-So `L` will be `6`. This is 
+So `L` will be `6`.
 
 For encryption we will have a key that consists of a tuple, where one value
 will be the modulus we calculated above:
 ```
 (?, 14)
 ```
-The encryption key must be a value between 1 and the value of 'L', which is our
+The encryption key must be a value between 1 and the value of 'L', which in our
 case gives us 4 values to choose from, `2, 3, 4, 5`.
-The value we choose must be share no other factors besides 1 with L(6) and our
-modulus(14). `5` is the only option in our case:
+The value we choose must not share any other factors besides 1 with L(6), and
+our modulus(14). `5` is the only option in our case:
 ```
 (5, 14)
 ```
@@ -1304,12 +1304,17 @@ Decryption also uses a tuple with one being the modules as well:
 To calculate the private key value we use the following formula:
 ```
 D * E % L = 1
+```
+And with concrete values:
+```
 D * 5 % 6 = 1
 ```
 Options for D:
 ```
 5, 11, 17, 23, 29, 35, ...
-
+```
+Let choose `11`:
+```
 11 * 5 % 6 = 1
 55 % 6 = 1
 ```
