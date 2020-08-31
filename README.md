@@ -1249,6 +1249,9 @@ Where are the functions for the DSA type?
 These can be found in `/crypto/dsa/dsa_lib.c`
 
 ### Rivest Shamir and Aldeman (RSA)
+Is actually two algoritms, one for asymmetric key encryption (key exchange) and
+one for digital signatures (like signing public-key certificates).
+
 Is a public key encryption technique developed in 1978 by the people mentioned
 in the title. It is an asymmetric system that uses a private and a public key.
 RSA is somewhat slow and it not used to encrypt data in a communication, but
