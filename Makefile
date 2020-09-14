@@ -6,6 +6,8 @@ CFLAGS=-g -O0 -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) \
      -L$(OPENSSL_LIB_DIR)/ossl-modules -lcrypto \
      -lpthread -lssl -Wl,-rpath,$(OPENSSL_LIB_DIR) 
 
+CC := gcc
+
 basic: basic.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto 
 
@@ -13,7 +15,7 @@ ssl_method: ssl_method.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto -lssl
 
 hmac: hmac.c
-	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto
+	${CC} -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto
 
 digest: digest.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto
@@ -22,7 +24,7 @@ sign: sign.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto
 
 private: private.c
-	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto
+	${CC} -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto
 
 socket: socket.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto
@@ -68,6 +70,9 @@ fips-provider: fips-provider.c
 	$(CC) $(CFLAGS)
 
 rand: rand.c
+	$(CC) $(CFLAGS)
+
+store: store.c
 	$(CC) $(CFLAGS)
 
 

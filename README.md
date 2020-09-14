@@ -2763,3 +2763,103 @@ $ /openssl s_server -cipher "RSA@SECLEVEL=0" -tls1 -debug -msg -security_debug_v
 ```
 
 
+### error:16000069:STORE routines::unregistered scheme
+```console
+$ out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-https-client-renegotiation-limit.js
+_tls_common.js:149
+      c.context.setKey(key, passphrase);
+                ^
+
+Error: error:16000069:STORE routines::unregistered scheme
+    at Object.createSecureContext (_tls_common.js:149:17)
+    at Server.setSecureContext (_tls_wrap.js:1323:27)
+    at Server (_tls_wrap.js:1181:8)
+    at new Server (https.js:66:14)
+    at Object.createServer (https.js:90:10)
+    at test (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-https-client-renegotiation-limit.js:57:24)
+    at next (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-https-client-renegotiation-limit.js:46:5)
+    at Object.<anonymous> (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-https-client-renegotiation-limit.js:48:3)
+    at Module._compile (internal/modules/cjs/loader.js:1090:30)
+    at Object.Module._extensions..js (internal/modules/cjs/loader.js:1111:10) {
+  library: 'STORE routines',
+  reason: 'unregistered scheme',
+  code: 'ERR_OSSL_OSSL_STORE_UNREGISTERED_SCHEME'
+}
+```
+Breakpoint where error occurs:
+```console
+(lldb) br s -f crypto/store/store_register.c -l 240
+Breakpoint 2: where = libcrypto.so.3`ossl_store_get0_loader_int + 321 at store_register.c:240:9, address = 0x00007ffff7dfdecd
+(lldb) r
+(lldb) bt
+* thread #1, name = 'node', stop reason = breakpoint 2.1
+  * frame #0: 0x00007ffff7dfdecd libcrypto.so.3`ossl_store_get0_loader_int(scheme="file") at store_register.c:240:9
+    frame #1: 0x00007ffff7dfc68e libcrypto.so.3`OSSL_STORE_attach(bp=0x00000000057bcbe0, scheme="file", libctx=0x0000000000000000, propq=0x0000000000000000, ui_method=0x0000000005881ee0, ui_data=0x00007fffffffb638, post_process=0x0000000000000000, post_process_data=0x0000000000000000) at store_lib.c:935:19
+    frame #2: 0x00007ffff7d92fbe libcrypto.so.3`pem_read_bio_key(bp=0x00000000057bcbe0, x=0x0000000000000000, cb=(node`node::crypto::PasswordCallback(char *, int, int, void *) at node_crypto.cc:169:71), u=0x00007fffffffb638, libctx=0x0000000000000000, propq=0x0000000000000000, expected_store_info_type=4, try_secure=1) at pem_pkey.c:60:16
+    frame #3: 0x00007ffff7d932d7 libcrypto.so.3`PEM_read_bio_PrivateKey_ex(bp=0x00000000057bcbe0, x=0x0000000000000000, cb=(node`node::crypto::PasswordCallback(char *, int, int, void *) at node_crypto.cc:169:71), u=0x00007fffffffb638, libctx=0x0000000000000000, propq=0x0000000000000000) at pem_pkey.c:144:12
+    frame #4: 0x00007ffff7d93319 libcrypto.so.3`PEM_read_bio_PrivateKey(bp=0x00000000057bcbe0, x=0x0000000000000000, cb=(node`node::crypto::PasswordCallback(char *, int, int, void *) at node_crypto.cc:169:71), u=0x00007fffffffb638) at pem_pkey.c:151:12
+    frame #5: 0x000000000112f2fd node`node::crypto::SecureContext::SetKey(args=0x00007fffffffbaf0) at node_crypto.cc:732:43
+    frame #6: 0x000000000128882e node`v8::internal::FunctionCallbackArguments::Call(this=0x00007fffffffbbe0, handler=CallHandlerInfo @ r14) at api-arguments-inl.h:158:4
+    frame #7: 0x0000000001289764 node`v8::internal::(anonymous namespace)::HandleApiCallHelper<false>(isolate=0x00000000055aa860, function=<unavailable>, new_target=<unavailable>, fun_data=<unavailable>, receiver=Handle<v8::internal::Object> @ rbp, args=<unavailable>) at builtins-api.cc:111:40
+    frame #8: 0x000000000128d8d3 node`v8::internal::Builtin_Impl_HandleApiCall(args=BuiltinArguments @ 0x000055d5ad2c62c0, isolate=0x00000000055aa860) at builtins-api.cc:141:5
+    frame #9: 0x000000000128e6e8 node`v8::internal::Builtin_HandleApiCall(args_length=7, args_object=0x00007fffffffbd98, isolate=0x00000000055aa860) at builtins-api.cc:129:1
+```
+Notice that we are calling `PEM_read_bio_PrivateKey` from node_crypto.cc and
+that function can be found in pem_pkey.c
+```c+
+EVP_PKEY *PEM_read_bio_PrivateKey_ex(BIO *bp, EVP_PKEY **x,
+                                     pem_password_cb *cb, void *u,
+                                     OPENSSL_CTX *libctx, const char *propq)
+{
+    return pem_read_bio_key(bp, x, cb, u, libctx, propq,
+                            OSSL_STORE_INFO_PKEY, 1);
+}
+```
+```c
+static EVP_PKEY *pem_read_bio_key(BIO *bp, EVP_PKEY **x,
+                                  pem_password_cb *cb, void *u,
+                                  OPENSSL_CTX *libctx, const char *propq,
+                                  int expected_store_info_type,
+                                  int try_secure)
+{
+    EVP_PKEY *ret = NULL;
+    OSSL_STORE_CTX *ctx = NULL;
+    OSSL_STORE_INFO *info = NULL;
+    const UI_METHOD *ui_method = NULL;
+    UI_METHOD *allocated_ui_method = NULL;
+
+    if (expected_store_info_type != OSSL_STORE_INFO_PKEY
+        && expected_store_info_type != OSSL_STORE_INFO_PUBKEY
+        && expected_store_info_type != OSSL_STORE_INFO_PARAMS) {
+        ERR_raise(ERR_LIB_PEM, ERR_R_PASSED_INVALID_ARGUMENT);
+        return NULL;
+    }
+
+    if (u != NULL && cb == NULL)
+        cb = PEM_def_callback;
+    if (cb == NULL)
+        ui_method = UI_null();
+    else
+        ui_method = allocated_ui_method = UI_UTIL_wrap_read_pem_callback(cb, 0);
+    if (ui_method == NULL)
+        return NULL;
+
+    if ((ctx = OSSL_STORE_attach(bp, "file", libctx, propq, ui_method, u,
+                                 NULL, NULL)) == NULL)
+
+```
+And we can find OSSL_STORE_attach in store_lib.c:
+```c
+OSSL_STORE_CTX *OSSL_STORE_attach(BIO *bp, const char *scheme,
+                                  OPENSSL_CTX *libctx, const char *propq,
+                                  const UI_METHOD *ui_method, void *ui_data,
+                                  OSSL_STORE_post_process_info_fn post_process,
+                                  void *post_process_data)
+{
+  ...
+  #ifndef OPENSSL_NO_DEPRECATED_3_0                                                  
+    if ((loader = ossl_store_get0_loader_int(scheme)) != NULL)                     
+        loader_ctx = loader->attach(loader, bp, libctx, propq,                     
+                                    ui_method, ui_data);         
+  
+```
