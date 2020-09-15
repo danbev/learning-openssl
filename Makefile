@@ -75,6 +75,9 @@ rand: rand.c
 store: store.c
 	$(CC) $(CFLAGS)
 
+hash: hash.c
+	$(CC) $(CFLAGS)
+
 
 .PHONY: clean 
 

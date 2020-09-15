@@ -20,3 +20,4 @@ fips-provider
 rand
 random
 store
+hash
