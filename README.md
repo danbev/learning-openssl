@@ -1727,6 +1727,10 @@ ANS1 Object Identifier.
 Numeric identifier which are used to identify ANS1 Object Identifiers (OIDs)
 
 
+### OSSL_STORE
+TODO:
+
+
 ### ecparam
 Before being able to communitcate using Elliptic Curve cryptography we need to
 generate the values domain parameters (see #eliptic-curve-cryptography-(ecc)).
@@ -2859,7 +2863,98 @@ OSSL_STORE_CTX *OSSL_STORE_attach(BIO *bp, const char *scheme,
   ...
   #ifndef OPENSSL_NO_DEPRECATED_3_0                                                  
     if ((loader = ossl_store_get0_loader_int(scheme)) != NULL)                     
-        loader_ctx = loader->attach(loader, bp, libctx, propq,                     
-                                    ui_method, ui_data);         
-  
+```
+`ossl_store_get0_loader_int` can be found in crypto/store/store_register.c:
+```c
+const OSSL_STORE_LOADER *ossl_store_get0_loader_int(const char *scheme)
+{
+  ...
+  if (!ossl_store_register_init())
+        ERR_raise(ERR_LIB_OSSL_STORE, ERR_R_INTERNAL_ERROR);
+  else if ((loader = lh_OSSL_STORE_LOADER_retrieve(loader_register,
+                                                   &template)) == NULL)
+```
+Lets first take a look at `ossl_store_register_init`:
+```c
+static LHASH_OF(OSSL_STORE_LOADER) *loader_register = NULL;
+static int ossl_store_register_init(void)
+{
+    if (loader_register == NULL) {
+        loader_register = lh_OSSL_STORE_LOADER_new(store_loader_hash,
+                                                   store_loader_cmp);
+    }
+    return loader_register != NULL;
+}
+```
+`lh_OSSL_STORE_LOADER_new` is creating a new hash table and passing in the
+hash function, and the compare function to be used. Looking at a standalone
+example help me understand this better and can be found in [hash.c](./hash.c).
+
+To inspect what the preprocessor will generate the following command can be
+used:
+```
+$ gcc -I./include/ -E crypto/store/store_register.c 
+```
+
+This issue can be reproduced by [store](./store.c):
+```console
+$ make store
+$ ./store
+OpenSSL Store example
+errno: 369098857, error:16000069:STORE routines::unregistered scheme
+```
+
+Now, back to the place where the error occurs and after having hopefully a
+better understanding of the hash table implementation used we can understand
+what is going on:
+```c
+const OSSL_STORE_LOADER *ossl_store_get0_loader_int(const char *scheme) {
+  OSSL_STORE_LOADER *loader = NULL;
+
+  // This is the struct that will be passed into retrieve, and notice we are
+  // only setting the scheme member.
+  OSSL_STORE_LOADER template;
+  template.scheme = scheme;
+  template.open = NULL;
+  template.load = NULL;
+  template.eof = NULL;
+  template.close = NULL;
+  template.open_with_libctx = NULL;
+
+  ...
+  if (!ossl_store_register_init())                                               
+        ERR_raise(ERR_LIB_OSSL_STORE, ERR_R_INTERNAL_ERROR);                    
+  else if ((loader = lh_OSSL_STORE_LOADER_retrieve(loader_register,           
+                                                   &template)) == NULL) 
+}
+```
+And `ossl_store_register_init` will create the hash table:
+```c
+static LHASH_OF(OSSL_STORE_LOADER) *loader_register = NULL;
+static int ossl_store_register_init(void)
+{
+    if (loader_register == NULL) {
+        loader_register = lh_OSSL_STORE_LOADER_new(store_loader_hash,
+                                                   store_loader_cmp);
+    }
+    return loader_register != NULL;
+}
+```
+But notice that nothing has been inserted into the hash table, so it will not
+find the scheme 'file'.
+
+In `providers/baseprov.c` we have:
+```c
+static const OSSL_ALGORITHM base_store[] = {
+#define STORE(name, _fips, func_table)                           \
+    { name, "provider=base,fips=" _fips, (func_table) },
+
+#include "stores.inc"
+    { NULL, NULL, NULL }
+#undef STORE
+};
+```
+And stores.inc looks like this:
+```
+STORE("file", "yes", file_store_functions)
 ```
