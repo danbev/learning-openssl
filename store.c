@@ -1,6 +1,7 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/provider.h>
+#include <openssl/core_dispatch.h>
 #include <openssl/store.h>
 #include <openssl/ui.h>
 #include <stdio.h>
@@ -30,14 +31,18 @@ static int passwd_callback(char* buf, int size, int rwflag, void* u) {
 
 int main(int arc, char *argv[]) {
   printf("OpenSSL Store example\n");
-  OSSL_PROVIDER* def;
-  def = OSSL_PROVIDER_load(NULL, "default");
+  OSSL_PROVIDER* provider;
+  provider = OSSL_PROVIDER_load(NULL, "default");
+  int no_cache;
+  const OSSL_ALGORITHM* alg = OSSL_PROVIDER_query_operation(provider, OSSL_OP_STORE, &no_cache);
 
-  UI_METHOD* ui_method = UI_create_method("passwd_callback");
-  ui_method = UI_UTIL_wrap_read_pem_callback(passwd_callback, 0);
-  OPENSSL_CTX* libctx = NULL;
-  BIO* bio = NULL; //BIO_new_file("./test.key", "r");
+
+  UI_METHOD* ui_method = UI_UTIL_wrap_read_pem_callback(passwd_callback, 0);
+  OPENSSL_CTX* libctx = OPENSSL_CTX_new();
+  BIO* bio = NULL; 
   char* propq = NULL;
+
+  OSSL_STORE_LOADER* store_loader = OSSL_STORE_LOADER_fetch("file", libctx, NULL);
 
   OSSL_STORE_CTX* ctx = OSSL_STORE_attach(bio, "file", libctx, propq,
       ui_method, "pass", NULL, NULL);
@@ -45,7 +50,7 @@ int main(int arc, char *argv[]) {
   print_error();
 
   UI_destroy_method(ui_method);
-  OSSL_PROVIDER_unload(def);
+  OSSL_PROVIDER_unload(provider);
 
   exit(EXIT_SUCCESS);
 }
