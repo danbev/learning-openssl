@@ -1,7 +1,6 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/provider.h>
-#include <openssl/core_dispatch.h>
 #include <openssl/store.h>
 #include <openssl/ui.h>
 #include <stdio.h>
@@ -34,17 +33,15 @@ int main(int arc, char *argv[]) {
   OSSL_PROVIDER* provider;
   provider = OSSL_PROVIDER_load(NULL, "default");
   int no_cache;
-  const OSSL_ALGORITHM* alg = OSSL_PROVIDER_query_operation(provider, OSSL_OP_STORE, &no_cache);
-
 
   UI_METHOD* ui_method = UI_UTIL_wrap_read_pem_callback(passwd_callback, 0);
   OPENSSL_CTX* libctx = OPENSSL_CTX_new();
-  BIO* bio = NULL; 
-  char* propq = NULL;
+  BIO* bio = BIO_new_file("./rsa_cert.crt", "r");
 
-  OSSL_STORE_LOADER* store_loader = OSSL_STORE_LOADER_fetch("file", libctx, NULL);
+  //OSSL_STORE_LOADER* store_loader = OSSL_STORE_LOADER_fetch("file", libctx, NULL);
+  //OSSL_STORE_register_loader(store_loader);
 
-  OSSL_STORE_CTX* ctx = OSSL_STORE_attach(bio, "file", libctx, propq,
+  OSSL_STORE_CTX* ctx = OSSL_STORE_attach(bio, "file", libctx, NULL,
       ui_method, "pass", NULL, NULL);
 
   print_error();
