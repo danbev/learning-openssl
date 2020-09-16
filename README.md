@@ -2943,18 +2943,35 @@ static int ossl_store_register_init(void)
 But notice that nothing has been inserted into the hash table, so it will not
 find the scheme 'file'.
 
-In `providers/baseprov.c` we have:
-```c
-static const OSSL_ALGORITHM base_store[] = {
-#define STORE(name, _fips, func_table)                           \
-    { name, "provider=base,fips=" _fips, (func_table) },
+Previously when do_store_init was called the ossl_store_file_loader_init
+was also called. This was removed in Commit 16feca71544681cabf873fecd3f860f9853bdf07
+("STORE: Move the built-in 'file:' loader to become an engine module"):
+```console
+diff --git a/crypto/store/store_init.c b/crypto/store/store_init.c
+index b87730736d..4d434eb57b 100644
+--- a/crypto/store/store_init.c
++++ b/crypto/store/store_init.c
+@@ -14,8 +14,7 @@
+ static CRYPTO_ONCE store_init = CRYPTO_ONCE_STATIC_INIT;
+ DEFINE_RUN_ONCE_STATIC(do_store_init)
+ {
+-    return OPENSSL_init_crypto(0, NULL)
+-        && ossl_store_file_loader_init();
++    return OPENSSL_init_crypto(0, NULL);
+ }
+```
 
-#include "stores.inc"
-    { NULL, NULL, NULL }
-#undef STORE
-};
+Hmm, looking at the code again....after the error has been set there will be a
+fetch performed:
+```c
+if (loader == NULL
+         && (fetched_loader = OSSL_STORE_LOADER_fetch(scheme, libctx, propq)) != NULL) {
+         const OSSL_PROVIDER *provider = OSSL_STORE_LOADER_provider(fetched_loader);
 ```
-And stores.inc looks like this:
-```
-STORE("file", "yes", file_store_functions)
-```
+Perhaps the error just needs to be reset as we now found the loader for the
+scheme in question?  
+Just trying that out, adding ERR_clear_error() if the fetched_loader was found
+will work. I'm just not sure if this is a safe thing to do. Perhaps we should
+only remove single error.
+
+work in progress...
