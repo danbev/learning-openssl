@@ -116,6 +116,10 @@ inline void lh_SOMETHING_doall(struct lhash_st_SOMETHING *lh, void (*doall)(SOME
   OPENSSL_LH_doall((OPENSSL_LHASH *)lh, (OPENSSL_LH_DOALL_FUNC)doall);
 } struct lhash_st_SOMETHING;
 
+void do_all(SOMETHING* s) {
+  printf("s->name: %s\n", s->name);
+}
+
 int main(int argc, char** argv) {
   printf("OpenSSL lhash example\n");
   struct lhash_st_SOMETHING* lh = lh_SOMETHING_new(something_hash, something_compare);
@@ -129,6 +133,8 @@ int main(int argc, char** argv) {
   SOMETHING* inserted = lh_SOMETHING_retrieve(lh, &first);
   printf("Retrieved: %s\n", inserted->name);
 
+  printf("Do all:\n");
+  lh_SOMETHING_doall(lh, do_all);
 
   print_error();
   exit(EXIT_SUCCESS);
