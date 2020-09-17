@@ -2972,15 +2972,11 @@ Perhaps the error just needs to be reset as we now found the loader for the
 scheme in question?  
 Just trying that out, adding ERR_clear_error() if the fetched_loader was found
 will work. I'm just not sure if this is a safe thing to do. Perhaps we should
-only remove single error.
+only remove single error. The better solution is to use ERR_set_mark before
+the call to the where the error might be thrown and then use ERR_pop_to_mark
+which.
 
-work in progress...
-
-obj_dat.c:
-588  OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CONFIG, NULL);
-Before this call the error is still present, but not after it. It has been cleared
-for some reason.
-
+A PR for this work as been opened: https://github.com/openssl/openssl/pull/12901
 
 
 ### Testing in OpenSSL
