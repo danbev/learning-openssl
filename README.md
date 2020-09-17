@@ -2975,3 +2975,66 @@ will work. I'm just not sure if this is a safe thing to do. Perhaps we should
 only remove single error.
 
 work in progress...
+
+obj_dat.c:
+588  OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CONFIG, NULL);
+Before this call the error is still present, but not after it. It has been cleared
+for some reason.
+
+
+
+### Testing in OpenSSL
+
+Make the test in question:
+```console
+$ make test/ossl_store_test
+```
+
+Running a single test case:
+```console
+$ ./test/ossl_store_test -help
+$ ./test/ossl_store_test -test test_store_attach
+```
+
+Listing all tests:
+```console
+$ make list-tests
+```
+
+Run a single test:
+```console
+$ make test TESTS=test_store
+```
+
+```console
+/usr/bin/perl ./test/run_tests.pl
+```
+
+The main function for the test framework is defined in `test/testutil/main.c`.
+
+#### Adding a test
+Find an appropriate test in the test directory and look for the `setup_tests`
+function. Add the new test using one of the macros in test/testutil.h, for example:
+```c
+  ADD_TEST(test_store_attach);
+```
+Next add the test implementation:
+```c
+static int test_store_attach(void)
+{
+    int ret;
+    OSSL_STORE_CTX* ctx = OSSL_STORE_attach(NULL, "file", libctx, NULL,
+                                            NULL, NULL, NULL, NULL);
+    return 0;
+}
+```
+
+#### Printing out an error in lldb
+```console
+(lldb) expr ERR_peek_error()
+(unsigned long) $1 = 369098857
+
+
+(lldb) expr ERR_reason_error_string($1)
+(const char *) $2 = 0x00000000006c2024 "unregistered scheme"
+```
