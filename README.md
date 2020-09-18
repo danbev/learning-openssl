@@ -3008,6 +3008,22 @@ $ make test TESTS=test_store
 
 The main function for the test framework is defined in `test/testutil/main.c`.
 
+#### Address Sanitizer
+Install:
+```console
+$ sudo dnf install libasan libasan-static
+```
+
+Configure build:
+```console
+$ ./config --debug --prefix=/home/danielbevenius/work/security/openssl_build_master linux-x86_64 -fsanitize=address
+```
+
+Running tests with asan:
+```console
+$ make _tests
+```
+
 #### Adding a test
 Find an appropriate test in the test directory and look for the `setup_tests`
 function. Add the new test using one of the macros in test/testutil.h, for example:
