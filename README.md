@@ -2978,6 +2978,100 @@ which.
 
 A PR for this work as been opened: https://github.com/openssl/openssl/pull/12901
 
+After building and linking Node.js with OpenSSL including the PR above, I'm
+seeing the following error:
+```console
+$ out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-https-client-renegotiation-limit.js
+_tls_common.js:149
+      c.context.setKey(key, passphrase);
+                ^
+
+Error: PEM_read_bio_PrivateKey
+    at Object.createSecureContext (_tls_common.js:149:17)
+    at Server.setSecureContext (_tls_wrap.js:1323:27)
+    at Server (_tls_wrap.js:1181:8)
+    at new Server (https.js:66:14)
+    at Object.createServer (https.js:90:10)
+    at test (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-https-client-renegotiation-limit.js:57:24)
+    at next (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-https-client-renegotiation-limit.js:46:5)
+    at Object.<anonymous> (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-https-client-renegotiation-limit.js:48:3)
+    at Module._compile (internal/modules/cjs/loader.js:1090:30)
+    at Object.Module._extensions..js (internal/modules/cjs/loader.js:1111:10)
+```
+```console
+$ lldb -- out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-https-client-renegotiation-limit.js
+(lldb) br s -n PEM_read_bio_PrivateKey
+(lldb) r
+```
+This will break in node_crypto.cc SecureContext::SetKey:
+```c++
+void SecureContext::SetKey(const FunctionCallbackInfo<Value>& args) {
+  ...
+  BIOPointer bio(LoadBIO(env, args[0]));  
+
+  EVPKeyPointer key(
+      PEM_read_bio_PrivateKey(bio.get(),
+                              nullptr,
+                              PasswordCallback,
+                              *passphrase));
+
+```
+Lets take a look at args[0]:
+```console
+(lldb) jlh args[0]
+0x14ea12c410c9: [JSTypedArray]
+ - map: 0x36a8b7108239 <Map(UINT8ELEMENTS)> [FastProperties]
+ - prototype: 0x052d958f95d1 <FastBuffer map = 0x36a8b7108281>
+ - elements: 0x1fb5d6541e21 <ByteArray[0]> [UINT8ELEMENTS]
+ - embedder fields: 2
+ - buffer: 0x14ea12c40699 <ArrayBuffer map = 0x36a8b7100a21>
+ - byte_offset: 1456
+ - byte_length: 1679
+ - length: 1679
+ - data_ptr: 0x578ee00
+   - base_pointer: 0
+   - external_pointer: 0x578ee00
+ - properties: 0x1fb5d6540b29 <FixedArray[0]> {}
+ - elements: 0x1fb5d6541e21 <ByteArray[0]> {
+         0-4: 45
+         ...
+(lldb) expr *passphrase
+(char *) $5 = 0x00007fffffffb638 "undefined"
+```
+In pem_key.c we have `PEM_read_bio_PrivateKey`:
+```c
+EVP_PKEY *PEM_read_bio_PrivateKey(BIO *bp, EVP_PKEY **x, pem_password_cb *cb,
+                                  void *u)
+{
+    return PEM_read_bio_PrivateKey_ex(bp, x, cb, u, NULL, NULL);
+}
+```
+The callback is:
+```console
+(lldb) expr cb
+(pem_password_cb *) $1 = 0x000000000112d0a1 (node`node::crypto::PasswordCallback(char *, int, int, void *) at node_crypto.cc:169:71)
+(lldb) expr (const char*)u
+(const char *) $6 = 0x00007fffffffb638 "undefined"
+```
+
+```c
+EVP_PKEY *PEM_read_bio_PrivateKey_ex(BIO *bp, EVP_PKEY **x,
+                                     pem_password_cb *cb, void *u,
+                                     OPENSSL_CTX *libctx, const char *propq)
+{
+    return pem_read_bio_key(bp, x, cb, u, libctx, propq,
+                            OSSL_STORE_INFO_PKEY, 1);
+}
+```
+Which will call:
+```c
+static EVP_PKEY *pem_read_bio_key(BIO *bp, EVP_PKEY **x,
+                                  pem_password_cb *cb, void *u,
+                                  OPENSSL_CTX *libctx, const char *propq,
+                                  int expected_store_info_type,
+                                  int try_secure)
+{
+```
 
 ### Testing in OpenSSL
 
