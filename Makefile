@@ -78,6 +78,9 @@ store: store.c
 hash: hash.c
 	$(CC) $(CFLAGS)
 
+decoder: decoder.c
+	$(CC) $(CFLAGS)
+
 
 .PHONY: clean 
 
