@@ -375,6 +375,9 @@ Instead to set the callback we use (`crypto/bio/bio_lib.c):
 
 Now, lets take a closer look at `BIO_write`.
 
+### BIO_tell
+Returns the current file position of a file related BIO.
+
 
 ### BIO_METHOD ctrl
 What is this used for?  
@@ -400,7 +403,11 @@ OpenSSL is doing a read a signal might interrupt it.
 
 ### puts/write vs gets/read
 puts/gets read/write strings whereas write/read operate on bytes.
-All these functions return either the amount of data successfully read or written (if the return value is positive) or that no data was successfully read or written if the result is 0 or -1. If the return value is -2 then the operation is not implemented in the specific BIO type. The trailing NUL is not included in the length returned by BIO_gets().
+All these functions return either the amount of data successfully read or written 
+(if the return value is positive) or that no data was successfully read or 
+written if the result is 0 or -1. If the return value is -2 then the operation
+is not implemented in the specific BIO type. The trailing NUL is not included in
+the length returned by BIO_gets().
 
 A 0 or -1 return is not necessarily an indication of an error. In particular when the source/sink is non-blocking or of a certain type it may merely be an indication that no data is currently available and that the application should retry the operation later.
 
@@ -749,9 +756,14 @@ Next, you'll have to build the OpenSSL library with fips support and specify the
 ```
 
 ### Certificates
-Abstract Syntax Notation One (ASN.1) is a set of rules for defining, transporting and exchanging complex data structures and objects.
-X.509 uses the Distiguished Encoding Rules (DER, which is a subset of Basic Encoding Rules (BER)). Privacy-Enhanced Main (PEM) is an ASCII endocing of DER
-using base64 encoding.
+Abstract Syntax Notation One (ASN.1) is a set of rules for defining,
+transporting and exchanging complex data structures and objects.
+
+### DER
+Distiguished Encoding Rules (DER), is a subset of Basic Encoding Rules (BER)). 
+
+### PEM
+Privacy-Enhanced Main (PEM) is an ASCII endocing of DER using base64 encoding.
 
 #### Fields
 Version:  
@@ -847,8 +859,10 @@ Represents an ssl session with information about the ssl_version the keys.
 ### BIO retry
 BIO_read will try to read a certain nr of bytes. This function will return the nr of 
 bytes read, or 0, or -1.
+
 If the read operation is done on a blocking resource then 0 indicates that the resouces
 was closed (for example a socket), and -1 would indicate an error.
+
 On a non-blocking resource, 0 means no data was available, and -1 indicates an error.
 You can determine if there was an error by calling BIO_should_retry(bio).
 
