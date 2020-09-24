@@ -40,17 +40,18 @@ int main(int arc, char *argv[]) {
   OSSL_DECODER* der_decoder = OSSL_DECODER_fetch(libctx, "der", NULL);
   printf("der_decoder nr: %d\n", OSSL_DECODER_number(der_decoder));
 
-  OSSL_DECODER* pem_decoder = OSSL_DECODER_fetch(libctx, "pem", NULL);
-  printf("pem_decoder nr: %d\n", OSSL_DECODER_number(der_decoder));
+  OSSL_DECODER* pem_decoder = OSSL_DECODER_fetch(libctx, "RSA",
+      "provider=default,fips=yes,input=pem");
+  printf("pem_decoder nr: %d\n", OSSL_DECODER_number(pem_decoder));
+  OSSL_DECODER_names_do_all(pem_decoder, print_decoder, pem_decoder);
 
   OSSL_DECODER_CTX* decoder_ctx = OSSL_DECODER_CTX_new();
   OSSL_DECODER_CTX_add_decoder(decoder_ctx, der_decoder);
 
   BIO* bio = BIO_new_file("./rsa_private.pem", "r");
   int ret = OSSL_DECODER_from_bio(decoder_ctx, bio);
-  if (!ret) 
+  if (ret != 0)
     printf("OSSL_DECODER_from_bio returned: %d\n", ret);
-
 
   ERR_print_errors_fp(stdout);
 
