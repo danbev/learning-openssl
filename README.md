@@ -3010,6 +3010,8 @@ which.
 
 A PR for this work as been opened: https://github.com/openssl/openssl/pull/12901
 
+
+### RSA PEM decoder issue
 After building and linking Node.js with OpenSSL including the PR above, I'm
 seeing the following error:
 ```console
@@ -3032,7 +3034,7 @@ Error: PEM_read_bio_PrivateKey
 ```
 ```console
 $ lldb -- out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-https-client-renegotiation-limit.js
-(lldb) br s -n PEM_read_bio_PrivateKey
+(lldb) br s -f node_crypto.cc -l 728
 (lldb) r
 ```
 This will break in node_crypto.cc SecureContext::SetKey:
@@ -3048,28 +3050,6 @@ void SecureContext::SetKey(const FunctionCallbackInfo<Value>& args) {
                               *passphrase));
 
 ```
-Lets take a look at args[0]:
-```console
-(lldb) jlh args[0]
-0x14ea12c410c9: [JSTypedArray]
- - map: 0x36a8b7108239 <Map(UINT8ELEMENTS)> [FastProperties]
- - prototype: 0x052d958f95d1 <FastBuffer map = 0x36a8b7108281>
- - elements: 0x1fb5d6541e21 <ByteArray[0]> [UINT8ELEMENTS]
- - embedder fields: 2
- - buffer: 0x14ea12c40699 <ArrayBuffer map = 0x36a8b7100a21>
- - byte_offset: 1456
- - byte_length: 1679
- - length: 1679
- - data_ptr: 0x578ee00
-   - base_pointer: 0
-   - external_pointer: 0x578ee00
- - properties: 0x1fb5d6540b29 <FixedArray[0]> {}
- - elements: 0x1fb5d6541e21 <ByteArray[0]> {
-         0-4: 45
-         ...
-(lldb) expr *passphrase
-(char *) $5 = 0x00007fffffffb638 "undefined"
-```
 In pem_key.c we have `PEM_read_bio_PrivateKey`:
 ```c
 EVP_PKEY *PEM_read_bio_PrivateKey(BIO *bp, EVP_PKEY **x, pem_password_cb *cb,
@@ -3077,13 +3057,6 @@ EVP_PKEY *PEM_read_bio_PrivateKey(BIO *bp, EVP_PKEY **x, pem_password_cb *cb,
 {
     return PEM_read_bio_PrivateKey_ex(bp, x, cb, u, NULL, NULL);
 }
-```
-The callback is:
-```console
-(lldb) expr cb
-(pem_password_cb *) $1 = 0x000000000112d0a1 (node`node::crypto::PasswordCallback(char *, int, int, void *) at node_crypto.cc:169:71)
-(lldb) expr (const char*)u
-(const char *) $6 = 0x00007fffffffb638 "undefined"
 ```
 
 ```c
@@ -3104,6 +3077,260 @@ static EVP_PKEY *pem_read_bio_key(BIO *bp, EVP_PKEY **x,
                                   int try_secure)
 {
 ```
+
+```c
+OSSL_STORE_INFO *OSSL_STORE_load(OSSL_STORE_CTX *ctx)
+{
+
+Process 1291623 stopped
+* thread #1, name = 'node', stop reason = step in
+    frame #0: 0x00007ffff7dfb6b9 libcrypto.so.3`OSSL_STORE_load(ctx=0x0000000005789f90) at store_lib.c:393:37
+   390 	                                             ossl_pw_passphrase_callback_dec,
+   391 	                                             &ctx->pwdata)) {
+   392 	                if (!OSSL_STORE_eof(ctx))
+-> 393 	                    ctx->error_flag = 1;
+   394 	                return NULL;
+```
+
+The following call to `p_load` return 0 and NULL will be returned which is
+the cause or the error we are seeing:
+```c
+387             if (!ctx->fetched_loader->p_load(ctx->loader_ctx,
+388                                              ossl_store_handle_load_result,
+389                                              &load_data,
+390                                              ossl_pw_passphrase_callback_dec,
+391                                              &ctx->pwdata)) {
+392                 if (!OSSL_STORE_eof(ctx))
+393                     ctx->error_flag = 1;
+394                 return NULL;
+395             }
+396             v = load_data.v;
+```
+I can see that when Node failes p_load will return 0, but in my reproducer
+it will return one. One difference that I see between the two is that in Node
+it is reading the file as a buffer whereas I'm reading it directly from disk.
+
+To rule this out I've updated Node to read directly from disk and...that worked.
+
+Lets set a break point in store_lib:
+```console
+(lldb) br s -f store_lib.c -l 387
+> 387 	            if (!ctx->fetched_loader->p_load(ctx->loader_ctx,
+   38 8	                                             ossl_store_handle_load_result,
+   389 	                                             &load_data,
+   390 	                                             ossl_pw_passphrase_callback_dec,
+```
+`p_load` will land us in providers/implementations/storemgmt/file_store.c
+line 810: 
+```c
+static int file_load(void *loaderctx,
+                     OSSL_CALLBACK *object_cb, void *object_cbarg,
+                     OSSL_PASSPHRASE_CALLBACK *pw_cb, void *pw_cbarg)
+{
+    struct file_ctx_st *ctx = loaderctx;
+
+    switch (ctx->type) {
+    case IS_FILE:
+        return file_load_file(ctx, object_cb, object_cbarg, pw_cb, pw_cbarg);
+    case IS_DIR:
+        return
+            file_load_dir_entry(ctx, object_cb, object_cbarg, pw_cb, pw_cbarg);
+    default:
+        break;
+    }
+
+    /* ctx->type has an unexpected value */
+    assert(0);
+    return 0;
+}
+```
+In our case `file_load_file` will be called.
+```c
+static int file_load_file(struct file_ctx_st *ctx,
+                          OSSL_CALLBACK *object_cb, void *object_cbarg,
+                          OSSL_PASSPHRASE_CALLBACK *pw_cb, void *pw_cbarg)
+
+  if (!file_setup_decoders(ctx))
+        return 0;
+  ...
+  return OSSL_DECODER_from_bio(ctx->_.file.decoderctx, ctx->_.file.file);
+```
+Lets take a closer look at `file_setup_decoders` (providers/implementations/storemgmt/file_store.c):
+```c
+if (!ossl_decoder_ctx_setup_for_EVP_PKEY(ctx->_.file.decoderctx, &dummy,
+                                                 libctx, ctx->_.file.propq)     
+            || !OSSL_DECODER_CTX_add_extra(ctx->_.file.decoderctx,              
+                                           libctx, ctx->_.file.propq)) {        
+            ERR_raise(ERR_LIB_PROV, ERR_R_OSSL_DECODER_LIB);                    
+            goto err;                                                           
+    }            
+
+```
+In `ossl_decoder_ctx_setup_for_EVP_PKEY` (crypto/encode_decode/decoder_pkey.c)
+all the keymanagement are collected and pushed into a data structure:
+```c
+  EVP_KEYMGMT_do_all_provided(libctx, collect_keymgmt, data);
+```
+Keymangement info:
+```console
+keymgmt name: dhKeyAgreement, nr: 166
+keymgmt name: X9.42 DH, nr: 167
+keymgmt name: DSA, nr: 168
+keymgmt name: rsaEncryption, nr: 169
+keymgmt name: RSASSA-PSS, nr: 170
+keymgmt name: EC, nr: 171
+keymgmt name: X25519, nr: 172
+keymgmt name: X448, nr: 173
+keymgmt name: ED25519, nr: 174
+keymgmt name: ED448, nr: 175
+keymgmt name: TLS1-PRF, nr: 176
+keymgmt name: HKDF, nr: 177
+keymgmt name: SCRYPT, nr: 178
+keymgmt name: HMAC, nr: 179
+keymgmt name: SIPHASH, nr: 180
+keymgmt name: POLY1305, nr: 181
+keymgmt name: CMAC, nr: 182
+keymgmt name: SM2, nr: 183
+```
+The for every element in the above list, which were added to
+`data->process_data->keymgmts`, we collect the names of them:
+```c
+end_i = sk_EVP_KEYMGMT_num(data->process_data->keymgmts);                   
+    for (i = 0; i < end_i; i++) {                                               
+        EVP_KEYMGMT *keymgmt =                                                  
+            sk_EVP_KEYMGMT_value(data->process_data->keymgmts, i);              
+                                                                                
+        EVP_KEYMGMT_names_do_all(keymgmt, collect_name, data);                  
+                                                                                
+        if (data->error_occured)                                                
+            goto err;                                                           
+    }             
+```
+Notice that this is a call to "do all", so each keymgmt can have multiple names.
+For example, "rsaEncryption" has id 169 as does "RSA":
+```console
+(lldb) expr ossl_namemap_num2name(namemap, 169, 0)
+(const char *) $0 = 0x000000000088fec0 "rsaEncryption"
+(lldb) expr ossl_namemap_num2name(namemap, 169, 1)
+(const char *) $1 = 0x000000000088fe60 "RSA"
+```
+The names are the following:
+```console
+Add names for keymgmt: dhKeyAgreement, nr: 166
+adding dhKeyAgreement
+adding DH
+
+Add names for keymgmt: X9.42 DH, nr: 167
+adding X9.42 DH
+adding DHX
+adding dhpublicnumber
+
+Add names for keymgmt: DSA, nr: 168
+adding DSA
+adding dsaEncryption
+
+Add names for keymgmt: rsaEncryption, nr: 169
+adding rsaEncryption
+adding RSA
+
+Add names for keymgmt: RSASSA-PSS, nr: 170
+adding RSASSA-PSS
+adding RSA-PSS
+
+Add names for keymgmt: EC, nr: 171
+adding EC
+adding id-ecPublicKey
+
+Add names for keymgmt: X25519, nr: 172
+adding X25519
+
+Add names for keymgmt: X448, nr: 173
+adding X448
+
+Add names for keymgmt: ED25519, nr: 174
+adding ED25519
+
+Add names for keymgmt: ED448, nr: 175
+adding ED448
+
+Add names for keymgmt: TLS1-PRF, nr: 176
+adding TLS1-PRF
+
+Add names for keymgmt: HKDF, nr: 177
+adding HKDF
+
+Add names for keymgmt: SCRYPT, nr: 178
+adding SCRYPT
+adding id-scrypt
+
+Add names for keymgmt: HMAC, nr: 179
+adding HMAC
+
+Add names for keymgmt: SIPHASH, nr: 180
+adding SIPHASH
+
+Add names for keymgmt: POLY1305, nr: 181
+adding POLY1305
+
+Add names for keymgmt: CMAC, nr: 182
+adding CMAC
+
+Add names for keymgmt: SM2, nr: 183
+adding SM2
+```
+Next, for all the decoders that are available, check if the names collected
+in the previous set match the decoder (I think it is actually the ids that are
+compared), and if so add the decoder:
+```c
+  OSSL_DECODER_do_all_provided(libctx, collect_decoder, data); 
+```
+Below are the values for id 169 only:
+```console
+Start Decoder nr: 169, properties: provider=default,fips=yes,input=der
+name: rsaEncryption is a decoder for 169
+name: RSA is a decoder for 169
+
+Start Decoder nr: 169, properties: provider=default,fips=yes,input=mblob
+name: rsaEncryption is a decoder for 169
+name: RSA is a decoder for 169
+
+Start Decoder nr: 169, properties: provider=default,fips=yes,input=pvk
+name: rsaEncryption is a decoder for 169
+name: RSA is a decoder for 169
+```
+Notice that there is no entry for a decoder that takes `pem` as the input
+type. When reading a BIO from a file, there will be a peek of the file to
+see if it is of type PEM (providers/implementations/storemgmt/file_store.c):
+```c
+void *file_attach(void *provctx, OSSL_CORE_BIO *cin)
+{ 
+  ...
+  peekbuf[sizeof(peekbuf) - 1] = '\0';                                    
+  if (strstr(peekbuf, "-----BEGIN ") != NULL)                             
+    input_type = INPUT_TYPE_PEM;  
+  ...
+  if (BIO_tell(new_bio) != loc) {
+    /* In this case, anything goes */
+    input_type = INPUT_TYPE_ANY;
+}
+```
+Now, in the case of Node.js there is a in memory BIOs that does not support
+BIO_tell, but when reading from a file BIO_tell would be supported and the
+input type is set to null (so we don't hit this issue in that case). In our
+case the input_type will be "pem". But later when trying to find a decoder
+for that input type there will not be one available.
+
+If we add the following decoder to providers/decoders.inc:
+```c
+  DECODER("RSA", "yes", "pem", pem_to_der_decoder_functions),
+```
+Then the following decoder will be available:
+```console
+Start Decoder nr: 169, properties: provider=default,fips=yes,input=pem
+name: rsaEncryption is a decoder for 169
+name: RSA is a decoder for 169
+```
+__Work In Progress..._
 
 ### Testing in OpenSSL
 
