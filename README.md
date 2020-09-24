@@ -1578,6 +1578,24 @@ Example of loading a provider:
 OSSL_PROVIDER_load(NULL, "default");
 ```
 
+### Decoders
+Decoding is about transforming data or one type into another type in OpenSSL.
+The following struct is used for this process:
+```c
+struct decoder_process_data_st {
+    OSSL_DECODER_CTX *ctx;
+
+    /* Current BIO */
+    BIO *bio;
+
+    /* Index of the current decoder instance to be processed */
+    size_t current_decoder_inst_index;
+};
+```
+
+
+An example can be found in [decoder.c](./decoder.c).
+
 #### Fetch
 To use an algoritm an implementation must be retreived from the provider, and
 this is called fetching
