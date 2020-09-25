@@ -23,3 +23,4 @@ store
 hash
 decoder
 bio_read_file
+bio_in_mem
