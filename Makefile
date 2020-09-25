@@ -42,6 +42,9 @@ random_bytes: random_bytes.c
 bio: bio.c
 	$(CC) $(CFLAGS)
 
+bio_read_file: bio_read_file.c
+	$(CC) $(CFLAGS)
+
 bio_ssl: bio_ssl.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto -lssl
 
