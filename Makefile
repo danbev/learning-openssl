@@ -40,7 +40,7 @@ random_bytes: random_bytes.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto -lssl
 
 bio: bio.c
-	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto -lssl
+	$(CC) $(CFLAGS)
 
 bio_ssl: bio_ssl.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto -lssl
@@ -76,6 +76,12 @@ store: store.c
 	$(CC) $(CFLAGS)
 
 hash: hash.c
+	$(CC) $(CFLAGS)
+
+pem_key_read: pem_key_read.c
+	$(CC) $(CFLAGS)
+
+store-info: store-info.c
 	$(CC) $(CFLAGS)
 
 decoder: decoder.c
