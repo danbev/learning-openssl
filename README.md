@@ -212,21 +212,24 @@ in code:
 Every X509_OBJECT has a reference count. 
 
 ### BIO
-A BIO is an I/O stream abstraction; essentially OpenSSL's answer to the C library's FILE *.
+A BIO is an I/O stream abstraction; essentially OpenSSL's answer to the C
+library's FILE *.
 
 BIO is a typedef declared in `include/openssl/ossl_typ.h`:
-
+```c
     typedef struct bio_st BIO;
+```
 
-`bio_st` can be found in `crypto/bio/bio_lcl.h`:
-
+`bio_st` can be found in `crypto/bio/bio_local.h`:
+```c
    struct bio_st {
     const BIO_METHOD *method;
-
+```
 
 `BIO_METHOD` can be found in `include/openssl/bio.h` and is declared as:
-
+```c
     typedef struct bio_method_st BIO_METHOD;
+```
 
 `bio_method_st' is defined in include/internal/bio.h: 
 
@@ -246,7 +249,7 @@ BIO is a typedef declared in `include/openssl/ossl_typ.h`:
     };  
 
 Lets take a look at a concrete method struct, for example ssl/bio_ssl.c:
-
+```c
     static const BIO_METHOD methods_sslp = {
       BIO_TYPE_SSL, "ssl",
       ssl_write,
@@ -262,41 +265,47 @@ Lets take a look at a concrete method struct, for example ssl/bio_ssl.c:
     };
 
 # define BIO_TYPE_SSL            ( 7|BIO_TYPE_FILTER)
+```
 
-Now the docs for [BIO](https://wiki.openssl.org/index.php/BIO) say "BIOs come in two flavors: source/sink, or filter." The types can 
-be found in include/openssl/bio.h
-The rest are the name and functions that of this method type.
+Now the docs for [BIO](https://wiki.openssl.org/index.php/BIO) say "BIOs come
+in two flavors: source/sink, or filter." The types can be found in 
+include/openssl/bio.h The rest are the name and functions that of this method
+type.
 
-
+```c
     struct bio_st {
       const BIO_METHOD* method;
       BIO_callback_fn callback;
-
+```
 Lets take a look at using a BIO:
 
     BIO* bout = BIO_new_fp(stdout, BIO_NOCLOSE);
     BIO_write(bout, "bajja", 5);
 
-`BIO_new_fp` can be found in 'crypto/bio/bss_file.c' and `BIO_write` can be found in `crypto/bio/bio_lib.c`.
+`BIO_new_fp` can be found in 'crypto/bio/bss_file.c' and `BIO_write` can be
+found in `crypto/bio/bio_lib.c`.
 Lets take look at what BIO_new_fp looks like:
-
+```c
     BIO* BIO_new_fp(FILE* stream, int close_flag) {
       BIO* ret;
       if ((ret = BIO_new(BIO_s_file())) == NULL)
         return NULL;
       ...
-
-BIO_s_file() returns a pointer to methods_filep which is a BIO_METHOD struct. This is then passed to:
-
+```
+BIO_s_file() returns a pointer to methods_filep which is a BIO_METHOD struct.
+This is then passed to:
+```c
     BIO* BIO_new(const BIO_METHOD* method)
+```
 
-BIO_new will call OPENSSL_zalloc which calls memset() to zero the memory before returning.
-There is some error handling and then:
-
+BIO_new will call OPENSSL_zalloc which calls memset() to zero the memory before
+returning.  There is some error handling and then:
+```c++
     bio->method = method;
     bio->shutdown = 1;
     bio->references = 1;
-
+```
+```console
     (lldb) expr *bout
     (BIO) $1 = {
       method = 0x000000010023dee8
@@ -316,28 +325,32 @@ There is some error handling and then:
       ex_data = (sk = 0x0000000000000000)
       lock = 0x0000000100615570
     }
+```
 
 `next_bio` and `prev_bio` are used by filter BIOs.  
 `callback` is a function pointer that will be called for the following calls:
-
+```c
     # define BIO_CB_FREE     0x01
     # define BIO_CB_READ     0x02
     # define BIO_CB_WRITE    0x03
     # define BIO_CB_PUTS     0x04
     # define BIO_CB_GETS     0x05
     # define BIO_CB_CTRL     0x06
+```
 
-More details of callback can be found [here](https://www.openssl.org/docs/man1.1.0/crypto/BIO_set_callback_arg.html).
+More details of callback can be found
+[here](https://www.openssl.org/docs/man1.1.0/crypto/BIO_set_callback_arg.html).
 
 `ptr` might be a FILE* for example.
 
 When is `shutdown` used?   
 This is set to 1 by default in `crypto/bio/bio_lib.c`:
-  
+```c 
     bio->shutdown = 1;
+```
 
 One example is ssl/bio_ssl.c and it's `ssl_free` function:
-
+```c
     if (BIO_get_shutdown(a)) {
       if (BIO_get_init(a))
         SSL_free(bs->ssl);
@@ -345,16 +358,17 @@ One example is ssl/bio_ssl.c and it's `ssl_free` function:
       BIO_clear_flags(a, ~0);
       BIO_set_init(a, 0);
     }
+```
 
-So we can see that is shutdown is non-zero SSL_Free will be called on the BIO_SSL.
+So we can see that if shutdown is non-zero SSL_Free will be called on the BIO_SSL.
 
 
 Lets say we want to set the callback, my first though was:
-
+```c
     bout->callback = bio_callback;
-
-    $ make bio
-    clang -O0 -g -I/Users/danielbevenius/work/security/openssl/include bio.c -o bio -L/Users/danielbevenius/work/security/openssl -lcrypto -lssl
+```
+```console
+$ make bio
     bio.c:26:7: error: incomplete definition of type 'struct bio_st'
       bout->callback = bio_callback;
       ~~~~^
@@ -364,16 +378,20 @@ Lets say we want to set the callback, my first though was:
                    ^
     1 error generated.
     make: *** [bio] Error 1
-
-Now, this is because OpenSSL uses opaque pointer for the BIO struct. So the details are
-hidden from the client (us). But instead there are functions that perform operations
-on the BIO instance and those functions do know the details of the structure. The point
-here is that clients are not affected by changes to the internals of the struct.
-Instead to set the callback we use (`crypto/bio/bio_lib.c):
+```
+Now, this is because OpenSSL uses opaque pointer for the BIO struct. So the
+details are hidden from the client (us). But instead there are functions that
+perform operations on the BIO instance and those functions do know the details
+of the structure. The point here is that clients are not affected by changes to
+the internals of the struct.  Instead to set the callback we use
+(`crypto/bio/bio_lib.c):
+```c
 
     BIO_set_callback(bout, bio_callback);
+```
 
 Now, lets take a closer look at `BIO_write`.
+
 
 ### BIO_tell
 Returns the current file position of a file related BIO.
@@ -2596,6 +2614,10 @@ and kept secret. But someone listing on the trafic could store encrypted
 messages and if they do recover the private key one day they would be able to
 decrypt them. With ephemeral new keys are generated each time the protocol is
 run.
+
+
+### STORE_INFO
+
 
 ### OpenSSL 3.x TLS1 issue
 I'm investigating test failures in Node.js while linking against OpenSSL 3.0
