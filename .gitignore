@@ -24,3 +24,4 @@ hash
 decoder
 bio_read_file
 bio_in_mem
+bio_in_mem_nodejs

@@ -48,6 +48,9 @@ bio_read_file: bio_read_file.c
 bio_in_mem: bio_in_mem.c
 	$(CC) $(CFLAGS)
 
+bio_in_mem_nodejs: bio_in_mem_nodejs.c
+	$(CC) $(CFLAGS)
+
 bio_ssl: bio_ssl.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto -lssl
 
