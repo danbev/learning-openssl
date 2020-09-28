@@ -269,7 +269,7 @@ long ctrl(BIO* bio, int cmd, long larg, void* parg) {
 }
 
 int main(int arc, char *argv[]) {
-  printf("BIO in memory example\n");
+  printf("BIO in memory Node.js PEM_read_bio_PrivateKey issue\n");
   BIO_METHOD* method;
   BIO* file_bio;
   BIO* in_mem_bio;
