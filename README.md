@@ -3453,5 +3453,24 @@ Error: error:068000A8:asn1 encoding routines::wrong tag
   code: 'ERR_OSSL_ASN1_WRONG_TAG'
 }
 ```
+The code that produces this error is the following javascript code:
+```js
+  const privateDsa = fixtures.readKey('dsa_private_encrypted_1025.pem','ascii');
+  const privateKey = createPrivateKey({
+    key: privateDsa,
+    format: 'pem',
+    passphrase: 'secret'
+  });
+```
+
+This error originates from `crypto/asn1/tasn_dec.c`, which we can find by
+searching for 'wrong tag' and then finding `ASN1_R_WRONG_TAG` and then finding
+the places where it is used. In this case there was only one place.
+```console
+$ lldb -- out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-key-objects.js
+(lldb) br s -f tasn_dec.c -l 1133
+```
+So lets create a break point in that function and try to figure out what is
+happening.
 
 __work in progress__
