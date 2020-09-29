@@ -3426,3 +3426,32 @@ static int test_store_attach(void)
 (lldb) expr ERR_reason_error_string($1)
 (const char *) $2 = 0x00000000006c2024 "unregistered scheme"
 ```
+
+### asn1 wrong tag issue
+```console
+$ out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-key-objects.js
+internal/crypto/keys.js:351
+  handle.init(kKeyTypePrivate, data, format, type, passphrase);
+         ^
+
+Error: error:068000A8:asn1 encoding routines::wrong tag
+    at createPrivateKey (internal/crypto/keys.js:351:10)
+    at Object.<anonymous> (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-key-objects.js:325:22)
+    at Module._compile (internal/modules/cjs/loader.js:1089:30)
+    at Object.Module._extensions..js (internal/modules/cjs/loader.js:1110:10)
+    at Module.load (internal/modules/cjs/loader.js:954:32)
+    at Function.Module._load (internal/modules/cjs/loader.js:795:14)
+    at Function.executeUserEntryPoint [as runMain] (internal/modules/run_main.js:72:12)
+    at internal/main/run_main_module.js:17:47 {
+  opensslErrorStack: [
+    'error:0500000A:dsa routines::DSA lib',
+    'error:0680004C:asn1 encoding routines::nested asn1 error',
+    'error:0680004C:asn1 encoding routines::nested asn1 error'
+  ],
+  library: 'asn1 encoding routines',
+  reason: 'wrong tag',
+  code: 'ERR_OSSL_ASN1_WRONG_TAG'
+}
+```
+
+__work in progress__
