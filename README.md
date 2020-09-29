@@ -400,45 +400,46 @@ Returns the current file position of a file related BIO.
 ### BIO_METHOD ctrl
 What is this used for?  
 As you might have guessed this if for performing control operations.
-
+```c
     long (*ctrl) (BIO *, int, long, void *);
+```
 
-This is the type of the function pointer for a specifiec BIO (its METHOD), and the call
-used would be BIO_ctrl:
-
+This is the type of the function pointer for a specifiec BIO (its METHOD), and
+the call used would be BIO_ctrl:
+```c
     long BIO_ctrl(BIO *b, int cmd, long larg, void *parg)
+```
 
 The `cmd` operations available are specified in `include/openssl/bio.h`
-
+```c
     # define BIO_CTRL_RESET          1/* opt - rewind/zero etc */
     ...
-
-
+```
 
 ### BIO_clear_retry_flags
-This is used to handle signals that might interrupt a system call. For example, if 
-OpenSSL is doing a read a signal might interrupt it.
+This is used to handle signals that might interrupt a system call. For example,
+if OpenSSL is doing a read, a signal might interrupt it.
 
 ### puts/write vs gets/read
 puts/gets read/write strings whereas write/read operate on bytes.
-All these functions return either the amount of data successfully read or written 
-(if the return value is positive) or that no data was successfully read or 
-written if the result is 0 or -1. If the return value is -2 then the operation
+All these functions return either the amount of data successfully read or
+written (if the return value is positive) or that no data was successfully read
+or written if the result is 0 or -1. If the return value is -2 then the operation
 is not implemented in the specific BIO type. The trailing NUL is not included in
 the length returned by BIO_gets().
 
-A 0 or -1 return is not necessarily an indication of an error. In particular when the source/sink is non-blocking or of a certain type it may merely be an indication that no data is currently available and that the application should retry the operation later.
+A 0 or -1 return is not necessarily an indication of an error. In particular
+when the source/sink is non-blocking or of a certain type it may merely be an
+indication that no data is currently available and that the application should
+retry the operation later.
 
-
-### X509_up_ref
-What does this do?
-    
 
 ### Environment variables
 There are two environment variables that can be used (openssl/crypto/cryptlib.h):
-
+```c
     # define X509_CERT_DIR_EVP        "SSL_CERT_DIR"
     # define X509_CERT_FILE_EVP       "SSL_CERT_FILE"
+```
 
 When you do a X509_STORE_load_file and the method used is ctrl (by_file_ctrl)
 
