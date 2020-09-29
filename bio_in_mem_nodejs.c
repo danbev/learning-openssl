@@ -292,7 +292,6 @@ int node_bio_free(BIO *bio) {
   return 1;
 }
 
-
 int main(int arc, char *argv[]) {
   printf("BIO in memory Node.js PEM_read_bio_PrivateKey issue\n");
   BIO_METHOD *method;
@@ -328,5 +327,9 @@ int main(int arc, char *argv[]) {
   BIO_free(in_mem_bio);
   BIO_free(file_bio);
   EVP_PKEY_free(key);
+  BIO_meth_free(method);
+  free(nbio.read_head->data);
+  free(nbio.read_head);
+
   exit(EXIT_SUCCESS);
 }
