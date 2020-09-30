@@ -51,6 +51,17 @@ bio_in_mem: bio_in_mem.c
 bio_in_mem_nodejs: bio_in_mem_nodejs.c
 	$(CC) $(CFLAGS)
 
+asn1: asn1.c
+	$(CC) $(CFLAGS)
+
+.PHONY: asn1_prep
+asn1_prep: CFLAGS=-g -O0 -I$(OPENSSL_INCLUDE_DIR) $< -E -o $@ -L$(OPENSSL_LIB_DIR) \
+     -L$(OPENSSL_LIB_DIR)/ossl-modules -lcrypto \
+     -lpthread -lssl -Wl,-rpath,$(OPENSSL_LIB_DIR) 
+asn1_prep: asn1.c
+	$(CC) $(CFLAGS)
+	@echo "Generated $@."
+
 wrong-tag: wrong-tag.c
 	$(CC) $(CFLAGS)
 
