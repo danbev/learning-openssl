@@ -3462,6 +3462,23 @@ The code that produces this error is the following javascript code:
     passphrase: 'secret'
   });
 ```
+And `createPrivateKey` can be found in lib/internal/crypto/keys.js:
+```js
+const {
+  KeyObjectHandle,
+  ...
+} = internalBinding('crypto');
+
+function createPrivateKey(key) {
+  const { format, type, data, passphrase } =
+    prepareAsymmetricKey(key, kCreatePrivate);
+  const handle = new KeyObjectHandle();
+  handle.init(kKeyTypePrivate, data, format, type, passphrase);
+  return new PrivateKeyObject(handle);
+}
+```
+And `KeyObjectHandle` can be found in the native module src/node_crypto.cc and
+Notice that the `init` function is being called.
 
 This error originates from `crypto/asn1/tasn_dec.c`, which we can find by
 searching for 'wrong tag' and then finding `ASN1_R_WRONG_TAG` and then finding
@@ -3471,6 +3488,22 @@ $ lldb -- out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/
 (lldb) br s -f tasn_dec.c -l 1133
 ```
 So lets create a break point in that function and try to figure out what is
-happening.
+happening. One thing to note is that there are multiple tests that are run
+prior to the one that produces this error, what I've done is simply comment out
+all other tests apart from the one mentioned above.
+```console
+(lldb) br s -n asn1_check_tlen
+(lldb) r
+```
+Now, following the call chain backwards we can find that we land in node_crypto.cc
+`KeyObjectHandle::Init` which matches what found above when looking at the
+javascript code.
+
+Lets step through starting at Init:
+```console
+(lldb) br s -n KeyObjectHandle::Init
+(lldb) r
+```
 
 __work in progress__
+
