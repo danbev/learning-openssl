@@ -3453,6 +3453,14 @@ Error: error:068000A8:asn1 encoding routines::wrong tag
   code: 'ERR_OSSL_ASN1_WRONG_TAG'
 }
 ```
+The error printed using `ERR_print_errors_fp(stdout)` is:
+```console
+C0BF51F7FF7F0000:error::asn1 encoding routines:asn1_check_tlen:wrong tag:crypto/asn1/tasn_dec.c:1133:
+C0BF51F7FF7F0000:error::asn1 encoding routines:asn1_d2i_ex_primitive:nested asn1 error:crypto/asn1/tasn_dec.c:696:
+C0BF51F7FF7F0000:error::asn1 encoding routines:asn1_template_noexp_d2i:nested asn1 error:crypto/asn1/tasn_dec.c:628:Field=params.p, Type=DSA
+C0BF51F7FF7F0000:error::dsa routines:old_dsa_priv_decode:DSA lib:crypto/dsa/dsa_ameth.c:416:
+```
+
 The code that produces this error is the following javascript code:
 ```js
   const privateDsa = fixtures.readKey('dsa_private_encrypted_1025.pem','ascii');
@@ -3504,6 +3512,179 @@ Lets step through starting at Init:
 (lldb) br s -n KeyObjectHandle::Init
 (lldb) r
 ```
+In Init we find the following switch statement:
+```c++
+void KeyObjectHandle::Init(const FunctionCallbackInfo<Value>& args) {
+  KeyType type = static_cast<KeyType>(args[0].As<Uint32>()->Value());
+  unsigned int offset;
+  ManagedEVPPKey pkey;
+
+  switch (type) {
+    ...
+  case kKeyTypePrivate:
+    offset = 1;
+    pkey = GetPrivateKeyFromJs(args, &offset, false);
+    if (!pkey)
+      return;
+    key->data_ = KeyObjectData::CreateAsymmetric(type, pkey);
+    break;
+  }
+```
+And type is:
+```console
+(lldb) expr type
+(node::crypto::KeyType) $8 = kKeyTypePrivate
+```
+This will call GetPrivateKeyFromJs
+```c++
+static ManagedEVPPKey GetPrivateKeyFromJs(
+    const FunctionCallbackInfo<Value>& args,
+    unsigned int* offset,
+    bool allow_key_object) {
+  ...
+  ByteSource key = ByteSource::FromStringOrBuffer(env, args[(*offset)++]);
+  NonCopyableMaybe<PrivateKeyEncodingConfig> config =
+      GetPrivateKeyEncodingFromJs(args, offset, kKeyContextInput);
+
+  EVPKeyPointer pkey;
+  ParseKeyResult ret = ParsePrivateKey(&pkey, config.Release(), key.get(), key.size());
+```
+```c++
+static ParseKeyResult ParsePrivateKey(EVPKeyPointer* pkey,
+                                      const PrivateKeyEncodingConfig& config,
+                                      const char* key,
+                                      size_t key_len) {
+  // OpenSSL needs a non-const pointer, that's why the const_cast is required.
+  char* const passphrase = const_cast<char*>(config.passphrase_.get());
+
+  if (config.format_ == kKeyFormatPEM) {
+    BIOPointer bio(BIO_new_mem_buf(key, key_len));
+    if (!bio)
+      return ParseKeyResult::kParseKeyFailed;
+
+    pkey->reset(PEM_read_bio_PrivateKey(bio.get(),
+                                        nullptr,
+                                        PasswordCallback,
+                                        passphrase));
+```
+`PEM_read_bio_PrivateKey` is where we enter OpenSSL in crypto/pem/pem_pkey.c:
+```c
+EVP_PKEY *PEM_read_bio_PrivateKey(BIO *bp, EVP_PKEY **x, pem_password_cb *cb,
+                                  void *u)
+{
+    return PEM_read_bio_PrivateKey_ex(bp, x, cb, u, NULL, NULL);
+}
+
+EVP_PKEY *PEM_read_bio_PrivateKey_ex(BIO *bp, EVP_PKEY **x,
+                                     pem_password_cb *cb, void *u,
+                                     OPENSSL_CTX *libctx, const char *propq)
+{
+    return pem_read_bio_key(bp, x, cb, u, libctx, propq,
+                            OSSL_STORE_INFO_PKEY, 1);
+}
+
+static EVP_PKEY *pem_read_bio_key(BIO *bp, EVP_PKEY **x,
+                                  pem_password_cb *cb, void *u,
+                                  OPENSSL_CTX *libctx, const char *propq,
+                                  int expected_store_info_type,
+                                  int try_secure)
+  ...
+  while (!OSSL_STORE_eof(ctx)
+           && (info = OSSL_STORE_load(ctx)) != NULL) {
+```
+```c
+OSSL_STORE_INFO *OSSL_STORE_load(OSSL_STORE_CTX *ctx)
+{
+  ...
+  if (!ctx->fetched_loader->p_load(ctx->loader_ctx,
+                                   ossl_store_handle_load_result,
+                                   &load_data,
+                                   ossl_pw_passphrase_callback_dec,
+                                   &ctx->pwdata)) {
+    if (!OSSL_STORE_eof(ctx))
+      ctx->error_flag = 1;
+      return NULL;
+    }
+```
+```c
+static int file_load(void *loaderctx,
+                     OSSL_CALLBACK *object_cb, void *object_cbarg,
+                     OSSL_PASSPHRASE_CALLBACK *pw_cb, void *pw_cbarg)
+{
+    struct file_ctx_st *ctx = loaderctx;
+
+    switch (ctx->type) {
+    case IS_FILE:
+        return file_load_file(ctx, object_cb, object_cbarg, pw_cb, pw_cbarg);
+    ...
+```
+```c
+static int file_load_file(struct file_ctx_st *ctx,
+                          OSSL_CALLBACK *object_cb, void *object_cbarg,
+                          OSSL_PASSPHRASE_CALLBACK *pw_cb, void *pw_cbarg)
+  ...
+
+  return OSSL_DECODER_from_bio(ctx->_.file.decoderctx, ctx->_.file.file);
+```
+```c
+nt OSSL_DECODER_from_bio(OSSL_DECODER_CTX *ctx, BIO *in)
+{
+    struct decoder_process_data_st data;
+    int ok = 0;
+
+    memset(&data, 0, sizeof(data));
+    data.ctx = ctx;
+    data.bio = in;
+
+    /* Enable passphrase caching */
+    (void)ossl_pw_enable_passphrase_caching(&ctx->pwdata);
+
+    ok = decoder_process(NULL, &data);
+```
+```c
+static int decoder_process(const OSSL_PARAM params[], void *arg)
+{
+  ...
+
+  ok = new_decoder->decode(new_decoderctx, (OSSL_CORE_BIO *)bio,
+                                 decoder_process, &new_data,
+                                 ossl_pw_passphrase_callback_dec,
+                                 &new_data.ctx->pwdata);
+```
+decode_pem2der.c (providers/implementations/encode_decode/decode_pem2der.c):
+```c
+static int pem2der_decode(void *vctx, OSSL_CORE_BIO *cin,                          
+                          OSSL_CALLBACK *data_cb, void *data_cbarg,                
+                          OSSL_PASSPHRASE_CALLBACK *pw_cb, void *pw_cbarg)         
+{
+  ...
+  
+```
+
+There is a reproducer in [wrong-tag.c](./wrong-tag.c) which produces the
+following output:
+```console
+asn1 wrong tag issue
+key_len: 684
+key: -----BEGIN ENCRYPTED PRIVATE KEY-----
+MIIBvTBXBgkqhkiG9w0BBQ0wSjApBgkqhkiG9w0BBQwwHAQIqTW00yecdxMCAggA
+MAwGCCqGSIb3DQIJBQAwHQYJYIZIAWUDBAEqBBBKgO4UF0LfCkPyS+iCvSrtBIIB
+YD3W6FyEZ97/crnoyRqjPUtr2Mm4KJMtaB5ZiGFzZEzd6AH7N/dbtAAMIibtsjmd
+RYdIptpET6xTpUhM8TvpULyYaZnhZJKTpVUrTVdvFTS3DYDutu7aWRLTrle6LzcY
+XpIppeP8ZmYFdRBQxhF+KoDsP4O0QA+vWl2W2VmRfr+sK9R+qV89w0YMjEWHsYY+
+VZsDbJBGKkj9gzIvxIsRyack/+RsbiSDrh6WTw+D0jrX/IMbgPjvYfBFhpxGC7zR
+hDn9r3JaO2KdHh9kMtvQfshA1n636kb0X6ewY57BhEs3J4hpMg46c6YFry94to24
+jxl5KutM0CFea7mYGtNf6WJXBsm7JSW03kjlqYoZGK43KNgZhzKAsXaNkoRkA5cw
+BzGfgmG6dHTpeAY9G4vM4inhCmGFA8Tx189g+xzRv16uFXRb8WFIllne1fEFaXRr
+1Rz2G6SPJkA3fsrl8zUIB0Y=
+-----END ENCRYPTED PRIVATE KEY-----
+�
+40C0C642CB7F0000:error::asn1 encoding routines:asn1_check_tlen:wrong tag:crypto/asn1/tasn_dec.c:1133:
+40C0C642CB7F0000:error::asn1 encoding routines:asn1_d2i_ex_primitive:nested asn1 error:crypto/asn1/tasn_dec.c:696:
+40C0C642CB7F0000:error::asn1 encoding routines:asn1_template_noexp_d2i:nested asn1 error:crypto/asn1/tasn_dec.c:628:Field=params.p, Type=DSA
+40C0C642CB7F0000:error::dsa routines:old_dsa_priv_decode:DSA lib:crypto/dsa/dsa_ameth.c:416:
+```
+Notice that this matches the error reported above.
 
 __work in progress__
 
