@@ -3686,5 +3686,151 @@ BzGfgmG6dHTpeAY9G4vM4inhCmGFA8Tx189g+xzRv16uFXRb8WFIllne1fEFaXRr
 ```
 Notice that this matches the error reported above.
 
+
+I've added print statement to print the private key to see if it was been read
+successfully, which it seems to have been.
+
+If I set a break point where the error originates from it will get hit multiple
+times which has lead me to look into if this might be expected, and something
+different will be tried if it fails, but the error is not being cleared.
+
+```console
+Process 3260145 stopped
+* thread #1, name = 'wrong-tag', stop reason = step in
+    frame #0: 0x00007ffff7e68227 libcrypto.so.3`der2key_decode(vctx=0x0000000000438510, cin=0x000000000042d780, data_cb=(libcrypto.so.3`decoder_process at decoder_lib.c:419:1), data_cbarg=0x00007fffffffb950, pw_cb=(libcrypto.so.3`ossl_pw_passphrase_callback_dec at passphrase.c:323:1), pw_cbarg=0x000000000042c878) at decode_der2key.c:189:16
+   186 	                             libctx, NULL);
+   187 	    if (pkey == NULL) {
+   188 	        derp = der;
+-> 189 	        pkey = d2i_PUBKEY_ex(NULL, &derp, der_len, libctx, NULL);
+   190 	    }
+   191 	
+   192 	    if (pkey == NULL) {
+```
+If we step into d2i_PUBKEY_ex we will hit the error.
+
+```c
+if (exptag >= 0) {
+        if ((exptag != ptag) || (expclass != pclass)) {
+            /*
+             * If type is OPTIONAL, not an error: indicate missing type.
+             */
+            if (opt)
+                return -1;
+            asn1_tlc_clear(ctx);
+            ASN1err(ASN1_F_ASN1_CHECK_TLEN, ASN1_R_WRONG_TAG);
+            return 0;
+        }
+        /*
+         * We have a tag and class match: assume we are going to do something
+         * with it
+         */
+        asn1_tlc_clear(ctx);
+    }
+```
+And the values of `exptag` and `ptag`are:
+```console
+(lldb) expr exptag
+(int) $6 = 2
+(lldb) expr ptag
+(int) $7 = 16
+```
+So this was expecting a tag of 2 (INTEGER) but the actual tag was 16 (IASTRING).
+
+Lets set a break point in `crypto/asn1/d2i_pr.c` and the `d2i_PrivateKey_ex`
+function:
+```console
+$ lldb -- ./wrong-tag
+(lldb) br s -f d2i_pr.c -l 49 -c ret->ameth->old_priv_decode != NULL
+(lldb) r
+(lldb) bt
+* thread #1, name = 'wrong-tag', stop reason = breakpoint 2.1
+  * frame #0: 0x00007ffff7c0cc97 libcrypto.so.3`d2i_PrivateKey_ex(type=6, a=0x0000000000000000, pp=0x00007fffffffb8e8, length=350, libctx=0x00007ffff7fc58c0, propq=0x0000000000000000) at d2i_pr.c:49:13
+    frame #1: 0x00007ffff7e68214 libcrypto.so.3`der2key_decode(vctx=0x00000000004382f0, cin=0x000000000042d780, data_cb=(libcrypto.so.3`decoder_process at decoder_lib.c:419:1), data_cbarg=0x00007fffffffb940, pw_cb=(libcrypto.so.3`ossl_pw_passphrase_callback_dec at passphrase.c:323:1), pw_cbarg=0x000000000042c878) at decode_der2key.c:185:12
+    frame #2: 0x00007ffff7d09b1f libcrypto.so.3`decoder_process(params=0x0000000000000000, arg=0x00007fffffffb9e0) at decoder_lib.c:529:14
+    frame #3: 0x00007ffff7d08b6d libcrypto.so.3`OSSL_DECODER_from_bio(ctx=0x000000000042c850, in=0x000000000042d780) at decoder_lib.c:43:10
+    frame #4: 0x00007ffff7dfcf2d libcrypto.so.3`try_key_value(data=0x00007fffffffbae0, ctx=0x0000000000427ed0, cb=(libcrypto.so.3`ossl_pw_passphrase_callback_dec at passphrase.c:323:1), cbarg=0x0000000000427f18, libctx=0x00007ffff7fc58c0, propq=0x0000000000000000) at store_result.c:263:11
+    frame #5: 0x00007ffff7dfd412 libcrypto.so.3`try_key(data=0x00007fffffffbae0, v=0x00007fffffffbf40, ctx=0x0000000000427ed0, provider=0x000000000041f470, libctx=0x00007ffff7fc58c0, propq=0x0000000000000000) at store_result.c:380:18
+    frame #6: 0x00007ffff7dfca54 libcrypto.so.3`ossl_store_handle_load_result(params=0x00007fffffffbcc0, arg=0x00007fffffffbf40) at store_result.c:146:10
+    frame #7: 0x00007ffff7e88724 libcrypto.so.3`file_load_construct(decoder_inst=0x000000000042e450, params=0x00007fffffffbcc0, construct_data=0x00007fffffffbec0) at file_store.c:522:12
+    frame #8: 0x00007ffff7d09901 libcrypto.so.3`decoder_process(params=0x00007fffffffbcc0, arg=0x00007fffffffbdc0) at decoder_lib.c:450:16
+    frame #9: 0x00007ffff7e690a8 libcrypto.so.3`pem2der_decode(vctx=0x000000000042c2f0, cin=0x0000000000427db0, data_cb=(libcrypto.so.3`decoder_process at decoder_lib.c:419:1), data_cbarg=0x00007fffffffbdc0, pw_cb=(libcrypto.so.3`ossl_pw_passphrase_callback_dec at passphrase.c:323:1), pw_cbarg=0x0000000000427f78) at decode_pem2der.c:151:14
+    frame #10: 0x00007ffff7d09b1f libcrypto.so.3`decoder_process(params=0x0000000000000000, arg=0x00007fffffffbe60) at decoder_lib.c:529:14
+    frame #11: 0x00007ffff7d08b6d libcrypto.so.3`OSSL_DECODER_from_bio(ctx=0x0000000000427f50, in=0x0000000000427db0) at decoder_lib.c:43:10
+    frame #12: 0x00007ffff7e88abc libcrypto.so.3`file_load_file(ctx=0x000000000041e2d0, object_cb=(libcrypto.so.3`ossl_store_handle_load_result at store_result.c:103:1), object_cbarg=0x00007fffffffbf40, pw_cb=(libcrypto.so.3`ossl_pw_passphrase_callback_dec at passphrase.c:323:1), pw_cbarg=0x0000000000427f18) at file_store.c:640:12
+    frame #13: 0x00007ffff7e8908d libcrypto.so.3`file_load(loaderctx=0x000000000041e2d0, object_cb=(libcrypto.so.3`ossl_store_handle_load_result at store_result.c:103:1), object_cbarg=0x00007fffffffbf40, pw_cb=(libcrypto.so.3`ossl_pw_passphrase_callback_dec at passphrase.c:323:1), pw_cbarg=0x0000000000427f18) at file_store.c:814:16
+    frame #14: 0x00007ffff7df99cc libcrypto.so.3`OSSL_STORE_load(ctx=0x0000000000427ed0) at store_lib.c:387:18
+    frame #15: 0x00007ffff7d91c0e libcrypto.so.3`pem_read_bio_key(bp=0x0000000000407400, x=0x0000000000000000, cb=(wrong-tag`passwd_callback at wrong-tag.c:9:70), u=0x000000000040205f, libctx=0x0000000000000000, propq=0x0000000000000000, expected_store_info_type=4, try_secure=1) at pem_pkey.c:74:23
+    frame #16: 0x00007ffff7d91e4d libcrypto.so.3`PEM_read_bio_PrivateKey_ex(bp=0x0000000000407400, x=0x0000000000000000, cb=(wrong-tag`passwd_callback at wrong-tag.c:9:70), u=0x000000000040205f, libctx=0x0000000000000000, propq=0x0000000000000000) at pem_pkey.c:144:12
+    frame #17: 0x00007ffff7d91e8f libcrypto.so.3`PEM_read_bio_PrivateKey(bp=0x0000000000407400, x=0x0000000000000000, cb=(wrong-tag`passwd_callback at wrong-tag.c:9:70), u=0x000000000040205f) at pem_pkey.c:151:12
+    frame #18: 0x0000000000401334 wrong-tag`main(arc=1, argv=0x00007fffffffd198) at wrong-tag.c:36:10
+    frame #19: 0x00007ffff78a61a3 libc.so.6`.annobin_libc_start.c + 243
+    frame #20: 0x000000000040114e wrong-tag`.annobin_init.c.hot + 46
+
+(lldb) s
+(lldb) expr ERR_reason_error_string(ERR_peek_error())
+(const char *) $8 = 0x00007ffff7ea4839 "wrong tag"
+```
+
+Notice below that if `old_priv_decode` returns 0(false) the body of the if
+statement will be entered. This will then try EVP_PKCS82PKEY_with_libctx and
+if that is successful ret (EVP_PKEY) will be set to that value:
+```c
+    if (!ret->ameth->old_priv_decode ||
+        !ret->ameth->old_priv_decode(ret, &p, length)) {
+        if (ret->ameth->priv_decode != NULL
+                || ret->ameth->priv_decode_with_libctx != NULL) {
+            EVP_PKEY *tmp;
+            PKCS8_PRIV_KEY_INFO *p8 = NULL;
+            p8 = d2i_PKCS8_PRIV_KEY_INFO(NULL, &p, length);
+            if (p8 == NULL)
+                goto err;
+            tmp = EVP_PKCS82PKEY_with_libctx(p8, libctx, propq);
+            PKCS8_PRIV_KEY_INFO_free(p8);
+            if (tmp == NULL)
+                goto err;
+            EVP_PKEY_free(ret);
+            ret = tmp;
+            if (EVP_PKEY_type(type) != EVP_PKEY_base_id(ret))
+                goto err;
+        } else {
+            ASN1err(0, ERR_R_ASN1_LIB);
+            goto err;
+        }
+    }
+    *pp = p;
+    if (a != NULL)
+        (*a) = ret;
+    return ret;
+ err:
+    if (a == NULL || *a != ret)
+        EVP_PKEY_free(ret);
+    return NULL;
+```
+
+The suggestiong/idea I have is to mark and pop the error
+
+```
+diff --git a/crypto/asn1/d2i_pr.c b/crypto/asn1/d2i_pr.c
+index fcf8d2f8d0..de392d2b82 100644
+--- a/crypto/asn1/d2i_pr.c
++++ b/crypto/asn1/d2i_pr.c
+@@ -45,6 +45,7 @@ EVP_PKEY *d2i_PrivateKey_ex(int type, EVP_PKEY **a, const unsigned char **pp,
+         goto err;
+     }
+
++    ERR_set_mark();
+     if (!ret->ameth->old_priv_decode ||
+         !ret->ameth->old_priv_decode(ret, &p, length)) {
+         if (ret->ameth->priv_decode != NULL
+@@ -60,6 +61,7 @@ EVP_PKEY *d2i_PrivateKey_ex(int type, EVP_PKEY **a, const unsigned char **pp,
+                 goto err;
+             EVP_PKEY_free(ret);
+             ret = tmp;
++            ERR_pop_to_mark();
+             if (EVP_PKEY_type(type) != EVP_PKEY_base_id(ret))
+                 goto err;
+         } else {
+```
+
 __work in progress__
 
