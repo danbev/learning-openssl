@@ -117,5 +117,8 @@ something *something_new(void) {
 void something_free(something *a) {
   ASN1_item_free((ASN1_VALUE *)a, (something_it()));
 }
-
 ```
+Just a note about the naming of the functions generated. something_it creates
+a new ASN1_ITEM (it = item). d2i_something converts from DER, which is the
+binary format, to internal (i) C structure which in our case is struct something.
+
