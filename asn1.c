@@ -2,14 +2,15 @@
 #include <openssl/asn1t.h>
 
 struct something {
-  ASN1_INTEGER age;
+  int age;
 };
 
 typedef struct something something;
 
 static int something_cb(int operation, ASN1_VALUE **pval, const ASN1_ITEM *it,
                         void *exarg) {
-    return 1;
+  printf("something_cb; operation=%d\n", operation);
+  return 1;
 }
 
 ASN1_SEQUENCE_cb(something, something_cb) = {
@@ -20,9 +21,7 @@ IMPLEMENT_ASN1_FUNCTIONS(something)
 
 int main(int argc, char** argv) {
   printf("OpenSSL asn1 example\n");
-  ASN1_STRING* s = ASN1_STRING_new();
-  int type =  ASN1_STRING_type(s);
-  printf("type: %d\n", type);
+  const ASN1_ITEM* item = something_it();
 
   return 0;
 }
