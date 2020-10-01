@@ -34,8 +34,11 @@ int main(int arc, char *argv[]) {
   key_bio = BIO_new_mem_buf(key, key_len);
 
   pkey = PEM_read_bio_PrivateKey(key_bio, NULL, passwd_callback, "secret"); 
-  if (pkey) 
-    printf("pkey was not NULL but there might have been errors?\n");
+
+  BIO *bout;
+  bout = BIO_new_fp(stdout, BIO_NOCLOSE);
+  EVP_PKEY_print_private(bout, pkey, 0, NULL);
+  printf("pkey id = %d\n", EVP_PKEY_id(pkey));
 
   ERR_print_errors_fp(stdout);
 
