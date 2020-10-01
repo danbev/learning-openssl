@@ -3772,7 +3772,7 @@ $ lldb -- ./wrong-tag
 ```
 
 Notice below that if `old_priv_decode` returns 0(false) the body of the if
-statement will be entered. This will then try EVP_PKCS82PKEY_with_libctx and
+statement will be entered. This will then try EVP_PKCS82PKEY and
 if that is successful ret (EVP_PKEY) will be set to that value:
 ```c
     if (!ret->ameth->old_priv_decode ||
@@ -3784,7 +3784,7 @@ if that is successful ret (EVP_PKEY) will be set to that value:
             p8 = d2i_PKCS8_PRIV_KEY_INFO(NULL, &p, length);
             if (p8 == NULL)
                 goto err;
-            tmp = EVP_PKCS82PKEY_with_libctx(p8, libctx, propq);
+            tmp = EVP_PKCS82PKEY(p8, libctx, propq);
             PKCS8_PRIV_KEY_INFO_free(p8);
             if (tmp == NULL)
                 goto err;
@@ -3807,8 +3807,7 @@ if that is successful ret (EVP_PKEY) will be set to that value:
     return NULL;
 ```
 
-The suggestiong/idea I have is to mark and pop the error
-
+The suggestiong/idea I have is to mark and pop the error:
 ```
 diff --git a/crypto/asn1/d2i_pr.c b/crypto/asn1/d2i_pr.c
 index fcf8d2f8d0..de392d2b82 100644
