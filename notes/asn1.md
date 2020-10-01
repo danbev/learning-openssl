@@ -76,7 +76,7 @@ Is a base64 (binary-to-text encoding) translation of BER/DER asn1.
 
 
 ### ASN1 in OpenSSL
-There is an example in [asn1.c](./asn1.c) which is being used for exploring
+There is an example in [asn1.c](../asn1.c) which is being used for exploring
 asn1 funtionality. There are macros in this file that are used internally in
 OpenSSL which are really just used at the moment to see what is generated in
 isolation.
