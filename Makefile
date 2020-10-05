@@ -54,6 +54,9 @@ bio_in_mem_nodejs: bio_in_mem_nodejs.c
 asn1: asn1.c
 	$(CC) $(CFLAGS)
 
+err: err.c
+	$(CC) $(CFLAGS)
+
 .PHONY: asn1_prep
 asn1_prep: CFLAGS=-g -O0 -I$(OPENSSL_INCLUDE_DIR) $< -E -o $@ -L$(OPENSSL_LIB_DIR) \
      -L$(OPENSSL_LIB_DIR)/ossl-modules -lcrypto \
