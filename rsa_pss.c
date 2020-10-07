@@ -48,66 +48,23 @@ int main(int arc, char *argv[]) {
     error_and_exit("EVP_PKEY_keygen failed");
   }
 
-  // So we have our key generated. We can now use it to encrypt
-
-  // Create and initialize a new context for encryption.
-  EVP_PKEY_CTX* enc_ctx = EVP_PKEY_CTX_new(pkey, NULL);
-  if (EVP_PKEY_encrypt_init(enc_ctx) <= 0) {
-    error_and_exit("EVP_PKEY_encrypt_init failed");
+  EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+  const char* message = "bajja";
+  unsigned char sig[1024];
+  unsigned int sig_len = 0;
+  EVP_SignInit_ex(mdctx, md, NULL);
+  EVP_SignUpdate(mdctx, message, strlen(message));
+  EVP_SignFinal(mdctx, sig, &sig_len, pkey);
+  printf("sig_len: %d\n", sig_len);
+  printf("Digest is: ");
+  for (int i = 0; i < sig_len; i++) {
+    printf("%02x", sig[i]);
   }
-  // Any algorithm specific control operations can be performec now before
-  if (EVP_PKEY_CTX_set_rsa_padding(enc_ctx, RSA_PKCS1_OAEP_PADDING) <= 0) {
-    error_and_exit("EVP_PKEY_CTX_set_rsa_padding failed");
-  }
+  printf("\n");
 
-  unsigned char* in = (unsigned char*) "Bajja";
-  size_t outlen;
-  unsigned char* out;
-
-  printf("Going to encrypt: %s\n", in);
-  // Determine the size of the output
-  if (EVP_PKEY_encrypt(enc_ctx, NULL, &outlen, in, strlen ((char*)in)) <= 0) {
-    error_and_exit("EVP_PKEY_encrypt failed");
-  }
-  printf("Determined ciphertext to be of length: %d) is:\n", outlen);
-
-  out = OPENSSL_malloc(outlen);
-
-  if (EVP_PKEY_encrypt(enc_ctx, out, &outlen, in, strlen ((char*)in)) <= 0) {
-    error_and_exit("EVP_PKEY_encrypt failed");
-  }
-
-  printf("Encrypted ciphertext (len:%d) is:\n", outlen);
-  BIO_dump_fp(stdout, (const char*) out, outlen);
-
-  EVP_PKEY_CTX* dec_ctx = EVP_PKEY_CTX_new(pkey, NULL);
-  if (EVP_PKEY_decrypt_init(dec_ctx) <= 0) {
-    error_and_exit("EVP_PKEY_encrypt_init failed");
-  }
-
-  if (EVP_PKEY_CTX_set_rsa_padding(dec_ctx, RSA_PKCS1_OAEP_PADDING) <= 0) {
-    error_and_exit("EVP_PKEY_CTX_set_rsa_padding failed");
-  }
-
-  unsigned char* dout;
-  size_t doutlen;
-  if (EVP_PKEY_decrypt(dec_ctx, NULL, &doutlen, out, outlen) <= 0) {
-    error_and_exit("EVP_PKEY_decrypt get length failed");
-  }
-
-  printf("Determimed plaintext to be of lenght: %d:\n", doutlen);
-  dout = OPENSSL_malloc(doutlen);
-  if (!dout) {
-    error_and_exit("OPENSSL_malloc failed");
-  }
-
-  if (EVP_PKEY_decrypt(dec_ctx, dout, &doutlen, out, outlen) <= 0) {
-    error_and_exit("EVP_PKEY_decrypt failed");
-  }
-
-  printf("Decrypted Plaintext is:\n");
-  BIO_dump_fp(stdout, (const char*) dout, doutlen);
+  // So we have our key generated. RSA-PSS does not allow encryption
 
   EVP_PKEY_CTX_free(ctx);
+  EVP_MD_CTX_free(mdctx);
   exit(EXIT_SUCCESS);
 }
