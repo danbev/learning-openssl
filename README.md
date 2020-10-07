@@ -3830,6 +3830,8 @@ index fcf8d2f8d0..de392d2b82 100644
                  goto err;
          } else {
 ```
+This [PR](https://github.com/openssl/openssl/pull/13073) was opened for this
+issue.
 
 __work in progress__
 
