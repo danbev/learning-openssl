@@ -25,8 +25,6 @@ int main(int arc, char *argv[]) {
   const char* md_name = "sha256";
   const EVP_MD* md = EVP_get_digestbyname(md_name);
   const char* mgf1_name = "sha256";
-  // Mask Generation Function (MGF)
-  const EVP_MD* mgf1_md = EVP_get_digestbyname(mgf1_name);
 
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA_PSS, NULL);
   if (ctx == NULL) {
