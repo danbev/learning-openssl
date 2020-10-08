@@ -19,7 +19,6 @@ int main(int arc, char *argv[]) {
   printf("RSA_PSS example\n");
 
   int modulus_bits = 512;
-  const uint32_t exponent = 0x10001;
 
   const char* md_name = "sha256";
   const EVP_MD* md = EVP_get_digestbyname(md_name);
