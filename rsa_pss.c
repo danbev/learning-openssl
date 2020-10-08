@@ -20,11 +20,9 @@ int main(int arc, char *argv[]) {
 
   int modulus_bits = 512;
   const uint32_t exponent = 0x10001;
-  int salt_len = 16;
 
   const char* md_name = "sha256";
   const EVP_MD* md = EVP_get_digestbyname(md_name);
-  const char* mgf1_name = "sha256";
 
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA_PSS, NULL);
   if (ctx == NULL) {
