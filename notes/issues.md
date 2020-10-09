@@ -210,7 +210,9 @@ index 475fca0f89..efcc6c095c 100644
 
      /* TODO(3.0): Remove this eventually when no more legacy */
 ```
-But the following call will fail:
+
+### EVP_PKEY_CTX_set_rsa_pss_keygen_md issue
+After applying the above patch, the following call will fail:
 ```c
   if (EVP_PKEY_CTX_set_rsa_pss_keygen_md(ctx, md) <= 0) {
     error_and_exit("EVP_PKEY_CTX_set_rsa_pss_keygen_md failed");
