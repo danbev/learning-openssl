@@ -143,7 +143,7 @@ So lets create a break point `config_->Configure` and then enter it again from
 lldb:
 ```console
 (lldb) br s -n KeyPairGenerationConfig::Configure
-(lldb) (lldb) expr -i0 -- config_->Configure(ctx)
+(lldb) expr -i0 -- config_->Configure(ctx)
 * thread #10, name = 'node', stop reason = breakpoint 7.2
     frame #0: 0x000000000114af55 node`node::crypto::RSAPSSKeyPairGenerationConfig::Configure(this=0x00000000057cfb20, ctx=0x7fffe4000b80)> > const&) at node_crypto.cc:6094:47
 ```
