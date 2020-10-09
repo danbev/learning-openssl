@@ -18,6 +18,7 @@ void error_and_exit(const char* msg) {
 int main(int arc, char *argv[]) {
   printf("RSA_PSS example\n");
 
+  OSSL_PROVIDER* provider = OSSL_PROVIDER_load(NULL, "default");
   int modulus_bits = 512;
 
   const char* md_name = "sha256";
@@ -33,6 +34,7 @@ int main(int arc, char *argv[]) {
   }
 
   if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, modulus_bits) <= 0) {
+    printf("%d", EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, modulus_bits));
     error_and_exit("EVP_PKEY_CTX_set_rsa_keygen_bits failed");
   }
 
@@ -45,23 +47,56 @@ int main(int arc, char *argv[]) {
     error_and_exit("EVP_PKEY_keygen failed");
   }
 
-  EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
   const char* message = "bajja";
+
+  // Sign
   unsigned char sig[1024];
   unsigned int sig_len = 0;
-  EVP_SignInit_ex(mdctx, md, NULL);
-  EVP_SignUpdate(mdctx, message, strlen(message));
-  EVP_SignFinal(mdctx, sig, &sig_len, pkey);
-  printf("sig_len: %d\n", sig_len);
+  EVP_MD_CTX* s_mdctx = EVP_MD_CTX_new();
+  EVP_SignInit_ex(s_mdctx, md, NULL);
+  EVP_SignUpdate(s_mdctx, message, strlen(message));
+  EVP_SignFinal(s_mdctx, sig, &sig_len, pkey);
   printf("Digest is: ");
   for (int i = 0; i < sig_len; i++) {
     printf("%02x", sig[i]);
   }
   printf("\n");
 
-  // So we have our key generated. RSA-PSS does not allow encryption
+  // Verify
+  EVP_MD_CTX* v_mdctx = EVP_MD_CTX_new();
+  if (!EVP_DigestInit_ex(v_mdctx, md, NULL)) {
+    error_and_exit("EVP_DigestInit_ex failed");
+  }
+
+  if (!EVP_DigestUpdate(v_mdctx, "bajja", strlen(message))) {
+    error_and_exit("EVP_DigestInit_ex failed");
+  }
+
+  unsigned char m[1024];
+  unsigned int m_len = 0;
+  if (!EVP_DigestFinal_ex(v_mdctx, m, &m_len)) {
+    error_and_exit("EVP_DigestInit_ex failed");
+  }
+
+  EVP_PKEY_CTX* vctx = EVP_PKEY_CTX_new(pkey, NULL);
+  if (!EVP_PKEY_verify_init(vctx)) {
+    error_and_exit("EVP_verify_init failed");
+  }
+
+  if (!EVP_PKEY_CTX_set_signature_md(vctx, md)) {
+    error_and_exit("EVP_verify_init failed");
+  }
+
+  if(!EVP_PKEY_verify(vctx, sig, sig_len, m, m_len)) {
+    printf("Could not verify signature!\n");
+  } else {
+    printf("Verified signature!\n");
+  }
+
 
   EVP_PKEY_CTX_free(ctx);
-  EVP_MD_CTX_free(mdctx);
+  EVP_MD_CTX_free(s_mdctx);
+  EVP_MD_CTX_free(v_mdctx);
+  OSSL_PROVIDER_unload(provider);
   exit(EXIT_SUCCESS);
 }
