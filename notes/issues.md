@@ -1,4 +1,4 @@
-### test-crypto-keygen.js
+### EVP_PKEY_CTX_set_rsa_keygen_bits issue with EVP_PKEY_RSA_PSS
 https://github.com/openssl/openssl/issues/12384
 
 The following test fail when linking Node.js against the latest OpenSSL master
