@@ -643,15 +643,16 @@ But `EVP_SignFinal` is implemented in `crypto/evp/p_sign.c`:
                   unsigned int *siglen, EVP_PKEY *pkey) {
     }
 
-### Private key
+### EVP_PKEY
 EVP_PKEY is a general private key reference without any particular algorithm.
-
+```c
     EVP_PKEY* pkey = EVP_PKEY_new();
     EVP_PKEY_free(pkey);
+```
 
 There is also a function to increment the ref count named `EVP_PKEY_up_ref()`.
 But new only creates an empty structure for (../openssl/crypto/include/internal/evp_int.h):
-
+```c
     struct evp_pkey_st {
       int type;
       int save_type;
@@ -677,32 +678,40 @@ But new only creates an empty structure for (../openssl/crypto/include/internal/
       STACK_OF(X509_ATTRIBUTE) *attributes; /* [ 0 ] */
       CRYPTO_RWLOCK *lock;
     } /* EVP_PKEY */ ;
+```
+Recall that a union allows for the usage of a single memory location but for
+different data types.
 
-Recall that a union allows for the usage of a single memory location but for different data types.
-So set the private key on of the following functions is used:
+To set the private key on of the following functions is used:
+```c
 
     int EVP_PKEY_set1_RSA(EVP_PKEY *pkey, RSA *key);
     int EVP_PKEY_set1_DSA(EVP_PKEY *pkey, DSA *key);
     int EVP_PKEY_set1_DH(EVP_PKEY *pkey, DH *key);
     int EVP_PKEY_set1_EC_KEY(EVP_PKEY *pkey, EC_KEY *key);
+```
 
-Why are these called `set1_`? Lets take a look at `EVP_PKEY_set1_RSA` (openssl/crypto/evp/p_lib.c):
+Why are these called `set1_`?  
+"In accordance with the OpenSSL naming convention the key obtained from or
+assigned to the pkey using the 1 functions must be freed as well as pkey."
 
+Lets take a look at `EVP_PKEY_set1_RSA` (openssl/crypto/evp/p_lib.c):
+```c
     int EVP_PKEY_set1_RSA(EVP_PKEY *pkey, RSA *key) {
       int ret = EVP_PKEY_assign_RSA(pkey, key);
       if (ret)
         RSA_up_ref(key);
       return ret;
     }
+```
 
 Notice that the ref count is updated. There are then two getters:
-
+```c
     RSA *EVP_PKEY_get0_RSA(EVP_PKEY *pkey)
     RSA *EVP_PKEY_get1_RSA(EVP_PKEY *pkey)
-
-Where `EVP_PKEY_get1_RSA` will call EVP_PKEY_get0_RSA and then increment the ref count. This is
-the only reason I can think of that these function have 1 and 0. 1 for functions that update the ref count and 0 for those that dont. 
-"In accordance with the OpenSSL naming convention the key obtained from or assigned to the pkey using the 1 functions must be freed as well as pkey."
+```
+Where `EVP_PKEY_get1_RSA` will call EVP_PKEY_get0_RSA and then increment the ref
+count. 
 
 
 ### BIGNUM (BN)
