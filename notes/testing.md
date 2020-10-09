@@ -71,3 +71,30 @@ Running tests with asan:
 $ make _tests
 ```
 
+#### Adding a test
+Find an appropriate test in the test directory and look for the `setup_tests`
+function. Add the new test using one of the macros in test/testutil.h, for example:
+```c
+  ADD_TEST(test_store_attach);
+```
+Next add the test implementation:
+```c
+static int test_store_attach(void)
+{
+    int ret;
+    OSSL_STORE_CTX* ctx = OSSL_STORE_attach(NULL, "file", libctx, NULL,
+                                            NULL, NULL, NULL, NULL);
+    return 0;
+}
+```
+
+#### Printing out an error in lldb
+```console
+(lldb) expr ERR_peek_error()
+(unsigned long) $1 = 369098857
+
+
+(lldb) expr ERR_reason_error_string($1)
+(const char *) $2 = 0x00000000006c2024 "unregistered scheme"
+```
+
