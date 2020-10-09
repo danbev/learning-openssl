@@ -1,6 +1,6 @@
 ### EVP_PKEY_CTX_set_rsa_keygen_bits issue with EVP_PKEY_RSA_PSS
-[OpenSSL issue](https://github.com/openssl/openssl/issues/12384)  
-[rsa_pss.c](./rsa_pss.c) reproduces this issue.
+OpenSSL issue: [#12384](https://github.com/openssl/openssl/issues/12384)
+Reproducer: [rsa_pss.c](../rsa_pss.c)
 
 The following test fail when linking Node.js against the latest OpenSSL master
 branch:
