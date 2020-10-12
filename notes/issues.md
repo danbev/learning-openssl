@@ -448,4 +448,67 @@ Process 1847664 stopped
    86  	# ifndef OPENSSL_NO_DSA
 -> 87  	        DSAerr(0, DSA_R_BAD_FFC_PARAMETERS);
 ```
+So this errors is raised in ffc_validate_LN. 
+
+The test in question look like this:
+```js
+// Test async DSA key generation.
+  generateKeyPair('dsa', {
+    modulusLength: 512,
+    divisorLength: 256,
+    publicKeyEncoding: {
+      type: 'spki',
+      format: 'pem'
+    },
+    privateKeyEncoding: {
+      cipher: 'aes-128-cbc',
+      passphrase: 'secret',
+      ...privateKeyEncoding
+    }
+  }, common.mustCall((err, publicKey, privateKeyDER) => {
+    assert.ifError(err);
+
+    assert.strictEqual(typeof publicKey, 'string');
+    assert(spkiExp.test(publicKey));
+    // The private key is DER-encoded.
+    assert(Buffer.isBuffer(privateKeyDER));
+
+    assertApproximateSize(publicKey, 440);
+    assertApproximateSize(privateKeyDER, 336);
+
+    // Since the private key is encrypted, signing shouldn't work anymore.
+    assert.throws(() => {
+      return testSignVerify(publicKey, {
+        key: privateKeyDER,
+        ...privateKeyEncoding
+      });
+    }, {
+      name: 'TypeError',
+      code: 'ERR_MISSING_PASSPHRASE',
+      message: 'Passphrase required for encrypted key'
+    });
+```
+```console
+(lldb) bt
+* thread #8, name = 'node', stop reason = breakpoint 2.1
+  * frame #0: 0x00007ffff7d59063 libcrypto.so.3`ffc_validate_LN(L=512, N=256, type=0, verify=0) at ffc_params_generate.c:87:9
+    frame #1: 0x00007ffff7d59e5c libcrypto.so.3`ossl_ffc_params_FIPS186_4_gen_verify(libctx=0x00007ffff7fc58e0, params=0x00007fffe8001cf8, mode=1, type=0, L=512, N=256, res=0x00007ffff4d11bd8, cb=0x00007fffe80032b0) at ffc_params_generate.c:563:20
+    frame #2: 0x00007ffff7d5b091 libcrypto.so.3`ossl_ffc_params_FIPS186_4_generate(libctx=0x00007ffff7fc58e0, params=0x00007fffe8001cf8, type=0, L=512, N=256, res=0x00007ffff4d11bd8, cb=0x00007fffe80032b0) at ffc_params_generate.c:1040:12
+    frame #3: 0x00007ffff7ca0b9d libcrypto.so.3`dsa_generate_ffc_parameters(dsa=0x00007fffe8001cf0, type=0, pbits=512, qbits=256, cb=0x00007fffe80032b0) at dsa_gen.c:38:15
+    frame #4: 0x00007ffff7e7d7e4 libcrypto.so.3`dsa_gen(genctx=0x00007fffe8003210, osslcb=(libcrypto.so.3`ossl_callback_to_pkey_gencb at pmeth_gn.c:102:1), cbarg=0x00007fffe8000b80) at dsa_kmgmt.c:535:14
+    frame #5: 0x00007ffff7d44d1a libcrypto.so.3`evp_keymgmt_gen(keymgmt=0x0000000005785cb0, genctx=0x00007fffe8003210, cb=(libcrypto.so.3`ossl_callback_to_pkey_gencb at pmeth_gn.c:102:1), cbarg=0x00007fffe8000b80) at keymgmt_meth.c:349:12
+    frame #6: 0x00007ffff7d43cc9 libcrypto.so.3`evp_keymgmt_util_gen(target=0x00007fffe8001bc0, keymgmt=0x0000000005785cb0, genctx=0x00007fffe8003210, cb=(libcrypto.so.3`ossl_callback_to_pkey_gencb at pmeth_gn.c:102:1), cbarg=0x00007fffe8000b80) at keymgmt_lib.c:445:20
+    frame #7: 0x00007ffff7d4fe44 libcrypto.so.3`EVP_PKEY_gen(ctx=0x00007fffe8000b80, ppkey=0x00007ffff4d11d60) at pmeth_gn.c:187:13
+    frame #8: 0x00007ffff7d50075 libcrypto.so.3`EVP_PKEY_paramgen(ctx=0x00007fffe8000b80, ppkey=0x00007ffff4d11d60) at pmeth_gn.c:255:12
+    frame #9: 0x000000000114b1c8 node`node::crypto::DSAKeyPairGenerationConfig::Setup(this=0x00000000057af560) at node_crypto.cc:6146:26
+    frame #10: 0x000000000114baf2 node`node::crypto::GenerateKeyPairJob::GenerateKey(this=0x00000000057ad800) at node_crypto.cc:6295:43
+    frame #11: 0x000000000114baa0 node`node::crypto::GenerateKeyPairJob::DoThreadPoolWork(this=0x00000000057ad800) at node_crypto.cc:6286:21
+    frame #12: 0x0000000000f2ad56 node`node::ThreadPoolWork::ScheduleWork(__closure=0x0000000000000000, req=0x00000000057ad810)::'lambda'(uv_work_s*)::operator()(uv_work_s*) const at threadpoolwork-inl.h:39:31
+    frame #13: 0x0000000000f2ad76 node`node::ThreadPoolWork::ScheduleWork((null)=0x00000000057ad810)::'lambda'(uv_work_s*)::_FUN(uv_work_s*) at threadpoolwork-inl.h:40:7
+    frame #14: 0x0000000001e1e5e2 node`uv__queue_work(w=0x00000000057ad868) at threadpool.c:321:3
+    frame #15: 0x0000000001e1de01 node`worker(arg=0x0000000000000000) at threadpool.c:122:5
+    frame #16: 0x00007ffff76ee4e2 libpthread.so.0`start_thread + 226
+    frame #17: 0x00007ffff761d6a3 libc.so.6`__GI___clone + 67
+```
+Lets take a closer look at node::crypto::DSAKeyPairGenerationConfig::Setup.
 
