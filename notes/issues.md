@@ -405,3 +405,47 @@ Ctrl = rsa_pss_keygen_mgf1_md:sha512
 I've tried this but not been able to get it to work yet. I've opted to create
 a single unit test case for this instead and see if someone from the OpenSSL
 team can spot my mistake(s).
+
+###  bad ffc parameters
+The following test failure occurs after the patch for the above issue was
+used:
+```console
+$ out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-keygen.js
+assert.js:885
+    throw newErr;
+    ^
+
+AssertionError [ERR_ASSERTION]: ifError got unwanted exception: error:05000072:dsa routines::bad ffc parameters
+    at AsyncWrap.<anonymous> (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-keygen.js:330:12)
+    at AsyncWrap.<anonymous> (/home/danielbevenius/work/nodejs/openssl/test/common/index.js:366:15)
+    at AsyncWrap.wrap.ondone (internal/crypto/keygen.js:63:29)
+ {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [Error: error:05000072:dsa routines::bad ffc parameters],
+  expected: null,
+  operator: 'ifError'
+}
+```
+If we search for 'bad ffc parameters' we can find the dsa error in
+crypto/err/openssl.txt:
+```
+DSA_R_BAD_FFC_PARAMETERS:114:bad ffc parameters
+```
+If we search for `DSA_R_BAD_FFC_PARAMETERS` it is raised in two places in
+`crypto/ffc/ffc_params_generate.c`. Lets stick a break point in both of those
+lines and see which one get hit.
+```console
+$ lldb -- out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-keygen.js
+(lldb) br s -f ffc_params_generate.c -l 61
+(lldb) br s -f ffc_params_generate.c -l 87
+(lldb) r
+Process 1847664 stopped
+* thread #8, name = 'node', stop reason = breakpoint 2.1
+    frame #0: 0x00007ffff7d59063 libcrypto.so.3`ffc_validate_LN(L=512, N=256, type=0, verify=0) at ffc_params_generate.c:87:9
+   84  	        if (L == 3072 && N == 256)
+   85  	            return 128;
+   86  	# ifndef OPENSSL_NO_DSA
+-> 87  	        DSAerr(0, DSA_R_BAD_FFC_PARAMETERS);
+```
+
