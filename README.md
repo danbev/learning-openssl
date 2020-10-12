@@ -3771,3 +3771,10 @@ issue.
 
 __work in progress__
 
+### RSA-PSS
+Is one of the signature schemes in RSA. PSS stands for Probabilistic Signture
+Scheme. PSS requires parameters like the hash function to be used and the mask
+generation function (MGF). PSS is randomized and will create a different
+signature each time. Is a signature scheme with appendix which means that it
+does not sign the message itself but instead signs a hash of the message. This
+hash is produced by the hash/algorithm/message digest function.
