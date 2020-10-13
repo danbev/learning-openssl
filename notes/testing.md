@@ -98,3 +98,13 @@ static int test_store_attach(void)
 (const char *) $2 = 0x00000000006c2024 "unregistered scheme"
 ```
 
+### md-nits
+First install markdownling:
+```console
+$ gem install mdl
+```
+
+Run the md-nits target:
+```console
+$ make md-nits
+```
