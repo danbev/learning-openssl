@@ -21,7 +21,8 @@ int main(int arc, char *argv[]) {
   OSSL_PROVIDER* provider;
   provider = OSSL_PROVIDER_load(NULL, "default");
 
-  int modulus_bits = 512;
+  // 512 was the original value with caused a "bad ffc parameters" error
+  int modulus_bits = 2048; 
   uint32_t divisor_bits = 256;
 
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_DSA, NULL);
@@ -48,15 +49,8 @@ int main(int arc, char *argv[]) {
       error_and_exit("EVP_PKEY_CTX_set_rsa_keygen_bits failed");
   }
 
-  EVP_PKEY* pkey = NULL;
-  if (EVP_PKEY_keygen(ctx, &pkey) != 1) {
-    error_and_exit("EVP_PKEY_keygen failed");
-  }
-
-  // So we have our key generated. We can now use it to encrypt
-
   EVP_PKEY_CTX_free(ctx);
-  EVP_PKEY_free(pkey);
+  EVP_PKEY_free(raw_params);
 
   OSSL_PROVIDER_unload(provider);
   exit(EXIT_SUCCESS);

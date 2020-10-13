@@ -514,3 +514,26 @@ Lets take a closer look at node::crypto::DSAKeyPairGenerationConfig::Setup.
 
 [dsa.c](../dsa.c) is a standalone program that reproduces this issue and tries
 to do what the `Setup` function does.
+
+In our case we are passing in `L=512`, and `N=256` into `ffc_validate_LN`:
+```c
+static int ffc_validate_LN(size_t L, size_t N, int type, int verify)
+{
+    if (type == FFC_PARAM_TYPE_DH) {
+      ...
+    } else if (type == FFC_PARAM_TYPE_DSA) {
+        if (L == 1024 && N == 160)
+            return 80;
+        if (L == 2048 && (N == 224 || N == 256))
+            return 112;
+        if (L == 3072 && N == 256)
+            return 128;
+# ifndef OPENSSL_NO_DSA
+        DSAerr(0, DSA_R_BAD_FFC_PARAMETERS);
+# endif
+    }
+    return 0;
+}
+```
+Notice that our combination of L and N does not exist and the error will be
+raised. 
