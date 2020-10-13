@@ -512,3 +512,5 @@ The test in question look like this:
 ```
 Lets take a closer look at node::crypto::DSAKeyPairGenerationConfig::Setup.
 
+[dsa.c](./dsa.c) is a standalone program that reproduces this issue and tries
+to do what the `Setup` function does.
