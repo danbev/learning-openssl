@@ -537,3 +537,100 @@ static int ffc_validate_LN(size_t L, size_t N, int type, int verify)
 ```
 Notice that our combination of L and N does not exist and the error will be
 raised. 
+
+
+### EVP_PKEY_CTX_set1_hkdf_salt compilation error
+The following are compilation error that were discovered when upgrading Node.js
+to OpenSSL 3.x.
+
+```console
+../src/crypto/crypto_hkdf.cc: In static member function ‘static bool node::crypto::HKDFTraits::DeriveBits(node::Environment*, const node::crypto::HKDFConfig&, node::crypto::ByteSource*)’:
+../src/crypto/crypto_hkdf.cc:113:24: error: invalid conversion from ‘const char*’ to ‘const unsigned char*’ [-fpermissive]
+  113 |         params.salt.get(),
+      |         ~~~~~~~~~~~~~~~^~
+      |                        |
+      |                        const char*
+In file included from ../src/crypto/crypto_util.h:18,
+                 from ../src/crypto/crypto_keys.h:6,
+                 from ../src/crypto/crypto_hkdf.h:6,
+                 from ../src/crypto/crypto_hkdf.cc:1:
+/home/danielbevenius/work/security/openssl_build_master/include/openssl/kdf.h:130:54: note:   initializing argument 2 of ‘int EVP_PKEY_CTX_set1_hkdf_salt(EVP_PKEY_CTX*, const unsigned char*, int)’
+  130 |                                 const unsigned char *salt, int saltlen);
+      |                                 ~~~~~~~~~~~~~~~~~~~~~^~~~
+```
+In OpenSSL 3.x `EVP_PKEY_CTX_set1_hkdf_salt` is a function with the following
+signature:
+```c
+int EVP_PKEY_CTX_set1_hkdf_salt(EVP_PKEY_CTX *ctx,
+                                const unsigned char *salt, int saltlen);
+```
+In OpenSSL 1.1.1 this was a macro:
+```c
+# define EVP_PKEY_CTX_set1_hkdf_salt(pctx, salt, saltlen) \
+            EVP_PKEY_CTX_ctrl(pctx, -1, EVP_PKEY_OP_DERIVE, \
+                              EVP_PKEY_CTRL_HKDF_SALT, saltlen, (void *)(salt))
+```
+In node we have the following call:
+```c++
+EVP_PKEY_CTX_set1_hkdf_salt(
+        ctx.get(),
+        params.salt.get(),
+        params.salt.size()
+```
+And `salt` is of type `ByteSource` which can be found in `src/crypto/crypto_util.h`
+```c++
+class ByteSource {
+ public:
+  ByteSource() = default;
+  ByteSource(ByteSource&& other) noexcept;
+  ~ByteSource();
+
+  ByteSource& operator=(ByteSource&& other) noexcept;
+
+  const char* get() const;
+  ...
+```
+
+This can be worked around using a macro to check the version and then cast
+these values to `const unsigned char*`: 
+```console
+diff --git a/src/crypto/crypto_hkdf.cc b/src/crypto/crypto_hkdf.cc
+index f6339b129b..efd3026ef4 100644
+--- a/src/crypto/crypto_hkdf.cc
++++ b/src/crypto/crypto_hkdf.cc
+@@ -110,15 +110,27 @@ bool HKDFTraits::DeriveBits(
+       !EVP_PKEY_CTX_set_hkdf_md(ctx.get(), params.digest) ||
+       !EVP_PKEY_CTX_set1_hkdf_salt(
+         ctx.get(),
++#if OPENSSL_VERSION_NUMBER >= 805306368
++        reinterpret_cast<const unsigned char*>(params.salt.get()),
++#else
+         params.salt.get(),
++#endif
+         params.salt.size()) ||
+       !EVP_PKEY_CTX_set1_hkdf_key(
+         ctx.get(),
++#if OPENSSL_VERSION_NUMBER >= 805306368
++        reinterpret_cast<const unsigned char*>(params.key->GetSymmetricKey()),
++#else
+         params.key->GetSymmetricKey(),
++#endif
+         params.key->GetSymmetricKeySize()) ||
+       !EVP_PKEY_CTX_add1_hkdf_info(
+         ctx.get(),
++#if OPENSSL_VERSION_NUMBER >= 805306368
++        reinterpret_cast<const unsigned char*>(params.info.get()),
++#else
+         params.info.get(),
++#endif
+         params.info.size())) {
+     return false;
+   }
+```
+
+My understanding is that OpenSSL 3.x should be able to work with prior versions
+without having to restort to these types of macros. We could also just use
+reinterpret_cast for both versions and not have to use the macros.
+
+Why is this the type `const char*` in ByteSource? In which cases would negative
+values used for ByteSource?
