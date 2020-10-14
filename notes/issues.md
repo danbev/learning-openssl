@@ -634,3 +634,28 @@ reinterpret_cast for both versions and not have to use the macros.
 
 Why is this the type `const char*` in ByteSource? In which cases would negative
 values used for ByteSource?
+
+### test-webcrypto-wrap-unwrap.js
+```console
+$ out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-webcrypto-wrap-unwrap.js
+Segmentation fault (core dumped)
+
+$ lldb -- out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-webcrypto-wrap-unwrap.js
+(lldb) target create "out/Debug/node"
+Current executable set to 'out/Debug/node' (x86_64).
+(lldb) settings set -- target.run-args  "/home/danielbevenius/work/nodejs/openssl/test/parallel/test-webcrypto-wrap-unwrap.js"
+(lldb) r
+Process 2421467 launched: '/home/danielbevenius/work/nodejs/openssl/out/Debug/node' (x86_64)
+Process 2421467 stopped
+* thread #9, name = 'node', stop reason = signal SIGSEGV: invalid address (fault address: 0x8)
+    frame #0: 0x00007ffff7d44a49 libcrypto.so.3`EVP_KEYMGMT_provider(keymgmt=0x0000000000000000) at keymgmt_meth.c:244:19
+   241
+   242 	const OSSL_PROVIDER *EVP_KEYMGMT_provider(const EVP_KEYMGMT *keymgmt)
+   243 	{
+-> 244 	    return keymgmt->prov;
+   245 	}
+   246
+   247 	int EVP_KEYMGMT_number(const EVP_KEYMGMT *keymgmt)
+```
+_work_in_progress
+
