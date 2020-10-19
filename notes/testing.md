@@ -60,6 +60,10 @@ Install:
 ```console
 $ sudo dnf install libasan libasan-static
 ```
+And debuginfo can be optionally install using:
+```console
+$ sudo dnf debuginfo-install libasan
+```
 
 Configure build:
 ```console
