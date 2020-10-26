@@ -635,6 +635,53 @@ reinterpret_cast for both versions and not have to use the macros.
 Why is this the type `const char*` in ByteSource? In which cases would negative
 values used for ByteSource?
 
+### crypto_hkdf compilation error
+The following error is currently being generated:
+```console
+./src/crypto/crypto_hkdf.cc: In static member function ‘static bool node::crypto::HKDFTraits::DeriveBits(node::Environment*, const node::crypto::HKDFConfig&, node::crypto::ByteSource*)’:
+../src/crypto/crypto_hkdf.cc:113:24: error: invalid conversion from ‘const char*’ to ‘const unsigned char*’ [-fpermissive]
+  113 |         params.salt.get(),
+      |         ~~~~~~~~~~~~~~~^~
+      |                        |
+      |                        const char*
+In file included from ../src/crypto/crypto_util.h:18,
+                 from ../src/crypto/crypto_keys.h:6,
+                 from ../src/crypto/crypto_hkdf.h:6,
+                 from ../src/crypto/crypto_hkdf.cc:1:
+/home/danielbevenius/work/security/openssl_build_master/include/openssl/kdf.h:130:54: note:   initializing argument 2 of ‘int EVP_PKEY_CTX_set1_hkdf_salt(EVP_PKEY_CTX*, const unsigned char*, int)’
+  130 |                                 const unsigned char *salt, int saltlen);
+      |                                 ~~~~~~~~~~~~~~~~~~~~~^~~~
+../src/crypto/crypto_hkdf.cc:117:36: error: invalid conversion from ‘const char*’ to ‘const unsigned char*’ [-fpermissive]
+  117 |         params.key->GetSymmetricKey(),
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+      |                                    |
+      |                                    const char*
+In file included from ../src/crypto/crypto_util.h:18,
+                 from ../src/crypto/crypto_keys.h:6,
+                 from ../src/crypto/crypto_hkdf.h:6,
+                 from ../src/crypto/crypto_hkdf.cc:1:
+/home/danielbevenius/work/security/openssl_build_master/include/openssl/kdf.h:133:53: note:   initializing argument 2 of ‘int EVP_PKEY_CTX_set1_hkdf_key(EVP_PKEY_CTX*, const unsigned char*, int)’
+  133 |                                const unsigned char *key, int keylen);
+      |                                ~~~~~~~~~~~~~~~~~~~~~^~~
+../src/crypto/crypto_hkdf.cc:121:24: error: invalid conversion from ‘const char*’ to ‘const unsigned char*’ [-fpermissive]
+  121 |         params.info.get(),
+      |         ~~~~~~~~~~~~~~~^~
+      |                        |
+      |                        const char*
+In file included from ../src/crypto/crypto_util.h:18,
+                 from ../src/crypto/crypto_keys.h:6,
+                 from ../src/crypto/crypto_hkdf.h:6,
+                 from ../src/crypto/crypto_hkdf.cc:1:
+/home/danielbevenius/work/security/openssl_build_master/include/openssl/kdf.h:136:54: note:   initializing argument 2 of ‘int EVP_PKEY_CTX_add1_hkdf_info(EVP_PKEY_CTX*, const unsigned char*, int)’
+  136 |                                 const unsigned char *info, int infolen);
+      |                                 ~~~~~~~~~~~~~~~~~~~~~^~~~
+```
+A workaround that seems to work with both OpenSSL 1.1.1 and 3.0 is using
+a const cast:
+```c++
+  reinterpret_cast<const unsigned char*>(params.salt.get())
+```
+
 ### test-webcrypto-wrap-unwrap.js
 ```console
 $ out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-webcrypto-wrap-unwrap.js
