@@ -38,6 +38,64 @@ with asymmetric algorithms.
 Specifies if this key can be extracted using `exportKey` or `wrapKey`. If this
 value is false and those functions are called an exception will be thrown.
 
+#### algorithm 
+Is an object which can be one of the following types:
+`AesKeyGenParams`, `RsaHashedKeyGenParams`, `EcKeyGenParams`, `HmacKeyGenParams`.
+
+#### usages
+`usages` is an Array with values of one or more of the following values:
+```
+encrypt: The key may be used to encrypt messages.
+decrypt: The key may be used to decrypt messages.
+sign: The key may be used to sign messages.
+verify: The key may be used to verify signatures.
+deriveKey: The key may be used in deriving a new key.
+deriveBits: The key may be used in deriving bits.
+wrapKey: The key may be used to wrap a key.
+unwrapKey: The key may be used to unwrap a key
+
+### AesKeyGenParams
+Has two properties `name` and `length`.
+
+`name` can be one of `AES-CBC`, `AES-CTR`, `AES-GCM`, or `AES-KW` (Key-Wrap)
+which specifies the mode of operation.
+
+`length` is the number of key to generate (in bits) and can be `128`, `192` or
+`256`.
+
+### RsaHashedKeyGenParams
+Are the parameters used when generating a RSA based key and is used for the
+algoritms `RSASSA-PKCS1-v1_5`, `RSA-PSS`, or `RSA-OAEP`.
+
+This object has the following properties:
+`name` which is a string and one of `RSASSA-PKCS1-v1_5`, `RSA-PSS`, or `RSA-OAEP`.
+
+`modulusLength` the length of the RSA modulus and should be atleast 2048.
+
+`publicExponent` is of type Uint8Array. 
+
+`hash` is the name of the digest function to use and can be one of `SHA-256`,
+`SHA-384`, or `SHA-512`.
+
+### EcKeyGenParams
+Uses as parameters when the algorithm is either `ECDSA` or `ECDH`.
+
+`name` can be one of `ECDSA` or `ECDH`.
+
+`namedCurve` the elliptic curve to use and can be one of `P-256`, `P-384`, or
+`P-512`.
+
+
+### HmacKeyGenParams
+Used when the algorithm is `HMAC`.
+
+`name` should be `HMAC`.
+
+`hash` is the name of the digest function to use and can be one of `SHA-1`,
+`SHA-256`, `SHA-384`, or `SHA-512`.
+
+`length` is an optional length in bits of the key. 
+
 ### importKey
 Takes a key and returns it as a `CryptoKey`.
 ```js
@@ -50,17 +108,7 @@ crypto.subtle.importKey(format,
 `format` can be `raw`, `pkcs8`, `spki`, or `jwk` (JSON Web Key format).
 
 
-`keyUsages` is an Array with values of one or more of the following values:
-```
-encrypt: The key may be used to encrypt messages.
-decrypt: The key may be used to decrypt messages.
-sign: The key may be used to sign messages.
-verify: The key may be used to verify signatures.
-deriveKey: The key may be used in deriving a new key.
-deriveBits: The key may be used in deriving bits.
-wrapKey: The key may be used to wrap a key.
-unwrapKey: The key may be used to unwrap a key
-```
+`keyUsages` can be any of the values specified in CryptoKey.usages.
 
 The name subtle is to reflect that many of the algorithms have subtle usage
 requirements in order to provide the required algorithmic security guarantees.
