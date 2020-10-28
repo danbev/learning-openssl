@@ -704,5 +704,29 @@ Process 2421467 stopped
    246
    247 	int EVP_KEYMGMT_number(const EVP_KEYMGMT *keymgmt)
 ```
-_work_in_progress
+Lets start by figuring out where this call originated from so we can determine
+the type of key and possible options provided.
+```console
+(node::crypto::WebCryptoKeyFormat) $8 = kWebCryptoKeyFormatSPKI
+```
+This was actually caused by on of the open PRs we have against OpenSSL.
+
+### test-webcrypto-export-import.js
+```console
+$ out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-webcrypto-export-import.js
+out/Debug/node[1117391]: ../src/crypto/crypto_ecdh.cc:607:v8::Maybe<bool> node::crypto::ExportJWKEcKey(node::Environment*, std::shared_ptr<node::crypto::KeyObjectData>, v8::Local<v8::Object>): Assertion `(ec) != nullptr' failed.
+ 1: 0xf19b16 node::DumpBacktrace(_IO_FILE*) [out/Debug/node]
+ 2: 0xfed03b node::Abort() [out/Debug/node]
+ 3: 0xfed0f1  [out/Debug/node]
+ 4: 0x11d50de node::crypto::ExportJWKEcKey(node::Environment*, std::shared_ptr<node::crypto::KeyObjectData>, v8::Local<v8::Object>) [out/Debug/node]
+ 5: 0x11f53fe  [out/Debug/node]
+ 6: 0x11f8924 node::crypto::KeyObjectHandle::ExportJWK(v8::FunctionCallbackInfo<v8::Value> const&) [out/Debug/node]
+ 7: 0x1330bae v8::internal::FunctionCallbackArguments::Call(v8::internal::CallHandlerInfo) [out/Debug/node]
+ 8: 0x1331a29  [out/Debug/node]
+ 9: 0x1335dbc  [out/Debug/node]
+10: 0x1336b58 v8::internal::Builtin_HandleApiCall(int, unsigned long*, v8::internal::Isolate*) [out/Debug/node]
+11: 0x21b0fc0  [out/Debug/node]
+Aborted (core dumped)
+```
+__work in progress__
 
