@@ -728,5 +728,14 @@ out/Debug/node[1117391]: ../src/crypto/crypto_ecdh.cc:607:v8::Maybe<bool> node::
 11: 0x21b0fc0  [out/Debug/node]
 Aborted (core dumped)
 ```
+Running the same test multiple times (noticed this when running it in the
+debugger) I somethimes get different errors:
+```console
+$ out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-webcrypto-export-import.js
+crypto/evp/p_lib.c:1616: OpenSSL internal error: refcount error
+Aborted (core dumped)
+```
+
 __work in progress__
+
 
