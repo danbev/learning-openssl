@@ -959,7 +959,7 @@ Maybe<bool> EcKeyGenTraits::AdditionalConfig(
 }
 ```
 
-Stand alone reproducer: [ec-keygen.c](./ec-keygen.c)
+Stand alone reproducer: [ec-keygen.c](../ec-keygen.c)
 
 __work in progress__
 
