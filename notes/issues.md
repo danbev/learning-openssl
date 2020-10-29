@@ -736,6 +736,49 @@ crypto/evp/p_lib.c:1616: OpenSSL internal error: refcount error
 Aborted (core dumped)
 ```
 
+The second error only happens sometimes so I'm going to try to debug the first
+issue and see if these two might be related to each other.
+
+The error is generated from the following check in Node.js:
+```console
+Maybe<bool> ExportJWKEcKey(
+    Environment* env,
+    std::shared_ptr<KeyObjectData> key,
+    Local<Object> target) {
+  ManagedEVPPKey pkey = key->GetAsymmetricKey();
+  CHECK_EQ(EVP_PKEY_id(pkey.get()), EVP_PKEY_EC);
+
+  EC_KEY* ec = EVP_PKEY_get0_EC_KEY(pkey.get());
+  CHECK_NOT_NULL(ec);
+  ...
+}
+```
+Alright, lets try to reproduce this in a standalone program.
+The first thing that happens is that a asymmetric key pair is generated with
+the following configuration:
+```js
+const { publicKey, privateKey } = await subtle.generateKey({
+      name: 'ECDSA',
+      namedCurve: 'P-384'
+    }, true, ['sign', 'verify']);
+```
+
+The implementation of this can be found in `lib/internal/crypto/webcrypto.js`:
+```js
+async function generateKey(                                                     
+  algorithm,                                                                    
+  extractable,                                                                  
+  keyUsages) {
+   ...
+   case 'ECDSA':
+      // Fall through
+    case 'ECDH':
+      return lazyRequire('internal/crypto/ec')
+        .ecGenerateKey(algorithm, extractable, keyUsages);
+    ...
+```
+
+
 __work in progress__
 
 
