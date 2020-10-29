@@ -800,7 +800,6 @@ function generateKeyPair(type, options, callback) {
 
   const job = check(kCryptoJobAsync, type, options);
 
-  console.log(type, options, callback);
   job.ondone = (error, result) => {
     if (error) return FunctionPrototypeCall(callback, job, error);
     // If no encoding was chosen, return key objects instead.
@@ -861,8 +860,6 @@ void Initialize(Local<Object> target,
 
 NODE_MODULE_CONTEXT_AWARE_INTERNAL(crypto, node::crypto::Initialize)
 ```
-
-
 
 And we find `ECDH::Initialize` in `src/crypto/crypto_ecdh.cc`:
 ```c++
@@ -958,6 +955,333 @@ Maybe<bool> EcKeyGenTraits::AdditionalConfig(
   node::MaybeStackBuffer<char, 1024> = (length_ = 5, capacity_ = 1024, buf_ = "P-384", buf_st_ = "P-384")
 }
 ```
+Next, back in `KeyPairGenTraits<node::crypto::EcKeyGenTraits>::AdditionalConfig`
+we have:
+```c++
+  params->public_key_encoding = ManagedEVPPKey::GetPublicKeyEncodingFromJs(      
+        args,                                                                      
+        offset,                                                                    
+        kKeyContextGenerate);                                                      
+                                                                                   
+    auto private_key_encoding =                                                    
+        ManagedEVPPKey::GetPrivateKeyEncodingFromJs(                               
+            args,                                                                  
+            offset,                                                                
+            kKeyContextGenerate);                                                  
+                                                                                   
+    if (!private_key_encoding.IsEmpty())                                           
+      params->private_key_encoding = private_key_encoding.Release();               
+                                                                                   
+    return v8::Just(true);                
+```
+```console
+(lldb) expr params->public_key_encoding
+(node::crypto::PublicKeyEncodingConfig) $12 = {
+  output_key_object_ = true
+  format_ = kKeyFormatDER
+  type_ = (has_value_ = false, value_ = kKeyEncodingPKCS1)
+}
+(node::NonCopyableMaybe<node::crypto::PrivateKeyEncodingConfig>) $13 = {
+  empty_ = false
+  value_ = {
+    node::crypto::AsymmetricKeyEncodingConfig = {
+      output_key_object_ = true
+      format_ = kKeyFormatDER
+      type_ = (has_value_ = false, value_ = kKeyEncodingPKCS1)
+    }
+    cipher_ = 0x00007fffffffb740
+    passphrase_ = (data_ = 0x0000000000000000, allocated_data_ = 0x0000000000000000, size_ = 0)
+  }
+}
+```
+After this the last thing in `New` is:
+```c++
+  new KeyGenJob<KeyGenTraits>(env, args.This(), mode, std::move(params));
+```
+So those are the parameters that are configured. Next, we need to see what
+the actual call to generateKeyPair does.
+```js
+  const job = check(kCryptoJobAsync, type, options);
+
+  job.ondone = (error, result) => {
+    if (error) return FunctionPrototypeCall(callback, job, error);
+    // If no encoding was chosen, return key objects instead.
+    let [pubkey, privkey] = result;
+    pubkey = wrapKey(pubkey, PublicKeyObject);
+    privkey = wrapKey(privkey, PrivateKeyObject);
+    FunctionPrototypeCall(callback, job, null, pubkey, privkey);
+  };
+
+  job.run();
+}
+```
+`run()` is initialized in `src/crypto/crypto_util.h`:
+```c++
+template <typename CryptoJobTraits>
+class CryptoJob : public AsyncWrap, public ThreadPoolWork {
+  static void Initialize(v8::FunctionCallback new_fn, Environment* env,
+      v8::Local<v8::Object> target) {
+    v8::Local<v8::FunctionTemplate> job = env->NewFunctionTemplate(new_fn);
+    v8::Local<v8::String> class_name = OneByteString(env->isolate(), CryptoJobTraits::JobName);
+    job->SetClassName(class_name);
+    job->Inherit(AsyncWrap::GetConstructorTemplate(env));
+    job->InstanceTemplate()->SetInternalFieldCount(AsyncWrap::kInternalFieldCount);
+    env->SetProtoMethod(job, "run", Run);
+    target->Set(env->context(), class_name, job->GetFunction(env->context()).ToLocalChecked()).Check();
+  }
+
+  static void Run(const v8::FunctionCallbackInfo<v8::Value>& args) {
+    Environment* env = Environment::GetCurrent(args);
+
+    CryptoJob<CryptoJobTraits>* job;
+    ASSIGN_OR_RETURN_UNWRAP(&job, args.Holder());
+    if (job->mode() == kCryptoJobAsync)
+      return job->ScheduleWork();
+
+    v8::Local<v8::Value> ret[2];
+    env->PrintSyncTrace();
+    job->DoThreadPoolWork();
+    if (job->ToResult(&ret[0], &ret[1]).FromJust()) {
+      args.GetReturnValue().Set(
+          v8::Array::New(env->isolate(), ret, arraysize(ret)));
+    }
+  }
+};
+```
+And `DothreadPoolWork` can be found in `src/crypto/crypto_keygen.h` in the
+class KeyGenJob`:
+```c++
+void DoThreadPoolWork() override {
+    // Make sure the the CSPRNG is properly seeded so the results are secure
+    CheckEntropy();
+
+    AdditionalParams* params = CryptoJob<KeyGenTraits>::params();
+
+    switch (KeyGenTraits::DoKeyGen(AsyncWrap::env(), params)) {
+      case KeyGenJobStatus::ERR_OK:
+        status_ = KeyGenJobStatus::ERR_OK;
+        // Success!
+        break;
+      case KeyGenJobStatus::ERR_FAILED: {
+        CryptoErrorVector* errors = CryptoJob<KeyGenTraits>::errors();
+        errors->Capture();
+        if (errors->empty())
+          errors->push_back(std::string("Key generation job failed"));
+      }
+    }
+  }
+```
+And the call to `KeyGenTraits::DoKeyGen`
+```c++
+  static KeyGenJobStatus DoKeyGen(Environment* env, AdditionalParameters* params) {
+    EVPKeyCtxPointer ctx = KeyPairAlgorithmTraits::Setup(params);
+    if (!ctx || EVP_PKEY_keygen_init(ctx.get()) <= 0)
+      return KeyGenJobStatus::ERR_FAILED;
+
+    // Generate the key
+    EVP_PKEY* pkey = nullptr;
+    if (!EVP_PKEY_keygen(ctx.get(), &pkey))
+      return KeyGenJobStatus::ERR_FAILED;
+
+    params->key = ManagedEVPPKey(EVPKeyPointer(pkey));
+    return KeyGenJobStatus::ERR_OK;
+  }
+```
+`KeyPairAlgorithmTraits::Setup` can be found in `src/crypto/crypto_ecdh.cc`:
+```c++
+EVPKeyCtxPointer EcKeyGenTraits::Setup(EcKeyPairGenConfig* params) {
+  EVPKeyCtxPointer param_ctx(EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr));
+  EVP_PKEY* raw_params = nullptr;
+  if (!param_ctx ||
+      EVP_PKEY_paramgen_init(param_ctx.get()) <= 0 ||
+      EVP_PKEY_CTX_set_ec_paramgen_curve_nid(
+          param_ctx.get(), params->params.curve_nid) <= 0 ||
+      EVP_PKEY_CTX_set_ec_param_enc(
+          param_ctx.get(), params->params.param_encoding) <= 0 ||
+      EVP_PKEY_paramgen(param_ctx.get(), &raw_params) <= 0) {
+    return EVPKeyCtxPointer();
+  }
+  EVPKeyPointer key_params(raw_params);
+  EVPKeyCtxPointer key_ctx(EVP_PKEY_CTX_new(key_params.get(), nullptr));
+
+  if (!key_ctx || EVP_PKEY_keygen_init(key_ctx.get()) <= 0)
+    return EVPKeyCtxPointer();
+
+  return key_ctx;
+}
+```
+After Setup returns the key will be generated in `DoKeyGen` and then it will
+be wrapped in a ManagedEVPPKey:
+```c++
+    params->key = ManagedEVPPKey(EVPKeyPointer(pkey));
+```
+This will create move pkey so that it is owned by ManagedEVPPKey, and then the
+`=` operator for ManagedEVPPKey will be called which looks like this:
+```c++
+ManagedEVPPKey& ManagedEVPPKey::operator=(const ManagedEVPPKey& that) {
+  pkey_.reset(that.get());
+
+  if (pkey_)
+    EVP_PKEY_up_ref(pkey_.get());
+
+  return *this;
+}
+```
+Now, `that.get()` will return an EVP_PKEY* pointer from `EVPKeyPointer pkey_`
+field and EVPKeyPointer can be found in crypto_util.h:
+```c++
+using EVPKeyPointer = DeleteFnPtr<EVP_PKEY, EVP_PKEY_free>;
+```
+So get will just return the raw pointer to EVP_PKEY:
+```c++
+
+EVP_PKEY* ManagedEVPPKey::get() const {
+  return pkey_.get();
+}
+```
+'reset' will destroy the currently managed object but at this point it is nullptr
+so nothing gets destroyed:
+```c++
+(lldb) expr pkey_
+(node::crypto::EVPKeyPointer) $3 = nullptr {
+  pointer = 0x0000000000000000
+}
+```
+And after the reset it will be:
+```console
+(lldb) expr pkey_
+(node::crypto::EVPKeyPointer) $4 = 0x7fffe0002a50 {
+  pointer = 0x00007fffe0002a50
+}
+```
+Next there is the call to EVP_PKEY_up_ref passing in the raw EVP_PKEY*:
+```c
+int EVP_PKEY_up_ref(EVP_PKEY *pkey)
+{
+    int i;
+
+    if (CRYPTO_UP_REF(&pkey->references, &i, pkey->lock) <= 0)
+        return 0;
+
+    REF_PRINT_COUNT("EVP_PKEY", pkey);
+    REF_ASSERT_ISNT(i < 2);
+    return ((i > 1) ? 1 : 0);
+}
+```
+`CRYPTO_UP_REF` can be found in `include/internal/refcount.h`:
+```c
+static inline int CRYPTO_UP_REF(_Atomic int *val, int *ret, void *lock)
+{
+    *ret = atomic_fetch_add_explicit(val, 1, memory_order_relaxed) + 1;
+    return 1;
+}
+```
+And notice that we are passing in &pkey->references:
+```console
+(lldb) expr pkey->references
+(int) $6 = 1
+(lldb) expr &pkey->references
+(int *) $7 = 0x00007fffe0002a78
+```
+This is the value that atomic object to be modified, the value `&i` will be
+the value of the atomic object before the increment and adding 1 to that will
+give the current number of references.
+
+After this there is check `REF_ASSERT_ISNT` to verify that the reference count
+is greater than 2.
+
+After this function returns the work in DoThreadPoolWork will be done, and at
+a later point `AfterThreadPoolWork` (src/crypto/crypto_util.h) will be called.
+```c++
+void AfterThreadPoolWork(int status) override {
+    Environment* env = AsyncWrap::env();
+    CHECK_EQ(mode_, kCryptoJobAsync);
+    CHECK(status == 0 || status == UV_ECANCELED);
+    std::unique_ptr<CryptoJob> ptr(this);
+    if (status == UV_ECANCELED) return;
+    v8::HandleScope handle_scope(env->isolate());
+    v8::Context::Scope context_scope(env->context());
+    v8::Local<v8::Value> args[2];
+    if (ptr->ToResult(&args[0], &args[1]).FromJust())
+      ptr->MakeCallback(env->ondone_string(), arraysize(args), args);
+  }
+```
+Lets inspect the value of `ptr`:
+```console
+(lldb) expr ptr
+(std::unique_ptr<node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> >, std::default_delete<node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> > > >) $15 = 0x58fc950 {
+  pointer = 0x00000000058fc950
+}
+```
+Notice that `ptr->ToResult` will land in crypto_keygen.h:
+```c++
+v8::Maybe<bool> ToResult(
+      v8::Local<v8::Value>* err,
+      v8::Local<v8::Value>* result) override {
+    Environment* env = AsyncWrap::env();
+    CryptoErrorVector* errors = CryptoJob<KeyGenTraits>::errors();
+    AdditionalParams* params = CryptoJob<KeyGenTraits>::params();
+    if (status_ == KeyGenJobStatus::ERR_OK &&
+        LIKELY(!KeyGenTraits::EncodeKey(env, params, result).IsNothing())) {
+      *err = Undefined(env->isolate());
+      return v8::Just(true);
+    }
+
+    if (errors->empty())
+      errors->Capture();
+    CHECK(!errors->empty());
+    *result = Undefined(env->isolate());
+    return v8::Just(errors->ToException(env).ToLocal(err));
+  }
+```
+```console
+(lldb) expr status_
+(node::crypto::KeyGenJobStatus) $16 = ERR_OK
+```
+`KeyGenTraits::EncodeKey` will end up in `src/crypto/crypto_keygen.h`
+```c++
+static v8::Maybe<bool> EncodeKey(
+      Environment* env,
+      AdditionalParameters* params,
+      v8::Local<v8::Value>* result) {
+    v8::Local<v8::Value> keys[2];
+    if (ManagedEVPPKey::ToEncodedPublicKey(
+            env,
+            std::move(params->key),
+            params->public_key_encoding,
+            &keys[0]).IsNothing() ||
+        ManagedEVPPKey::ToEncodedPrivateKey(
+            env,
+            std::move(params->key),
+            params->private_key_encoding,
+            &keys[1]).IsNothing()) {
+      return v8::Nothing<bool>();
+    }
+    *result = v8::Array::New(env->isolate(), keys, arraysize(keys));
+    return v8::Just(true);
+  }
+```
+```c++
+Maybe<bool> ManagedEVPPKey::ToEncodedPublicKey(
+    Environment* env,
+    ManagedEVPPKey key,
+    const PublicKeyEncodingConfig& config,
+    Local<Value>* out) {
+  if (!key) return Nothing<bool>();
+  if (config.output_key_object_) {
+    std::shared_ptr<KeyObjectData> data =
+          KeyObjectData::CreateAsymmetric(kKeyTypePublic, std::move(key));
+    return Just(KeyObjectHandle::Create(env, data).ToLocal(out));
+  }
+  return Just(WritePublicKey(env, key.get(), config).ToLocal(out));
+}
+```
+
+
+
+
+I'd really like to the the `REF_PRINT_COUNT` output but this is not getting
+set even though I've added -DREF_PRINT when building OpenSSL.
 
 Stand alone reproducer: [ec-keygen.c](../ec-keygen.c)
 
