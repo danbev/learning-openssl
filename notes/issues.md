@@ -765,6 +765,8 @@ const { publicKey, privateKey } = await subtle.generateKey({
 
 The implementation of this can be found in `lib/internal/crypto/webcrypto.js`:
 ```js
+
+...
 async function generateKey(                                                     
   algorithm,                                                                    
   extractable,                                                                  
@@ -777,7 +779,187 @@ async function generateKey(
         .ecGenerateKey(algorithm, extractable, keyUsages);
     ...
 ```
+And we can find `ecGenerateKey` in `lib/internal/crypto/ec.js`:
+```js
+const {
+  generateKeyPair,
+} = require('internal/crypto/keygen');
+...
 
+async function ecGenerateKey(algorithm, extractable, keyUsages) {
+  ...
+  return new Promise((resolve, reject) => {
+    generateKeyPair('ec', { namedCurve }, (err, pubKey, privKey) => {
+...
+}
+```
+And we can find `generateKeyPair` in `lib/internal/crypto/keygen.js`:
+```js
+function generateKeyPair(type, options, callback) {
+  ...
+
+  const job = check(kCryptoJobAsync, type, options);
+
+  console.log(type, options, callback);
+  job.ondone = (error, result) => {
+    if (error) return FunctionPrototypeCall(callback, job, error);
+    // If no encoding was chosen, return key objects instead.
+    let [pubkey, privkey] = result;
+    pubkey = wrapKey(pubkey, PublicKeyObject);
+    privkey = wrapKey(privkey, PrivateKeyObject);
+    FunctionPrototypeCall(callback, job, null, pubkey, privkey);
+  };
+
+  job.run();
+}
+```
+The `check` function actually returns a EcKeyPairGenJob
+```js
+const {
+  EcKeyPairGenJob,
+  ...
+} = internalBinding('crypto');
+
+function check(mode, type, options) {
+  switch (type) {
+    ...
+    case 'ec':
+    {
+      validateObject(options, 'options');
+      const { namedCurve } = options;
+      if (typeof namedCurve !== 'string')
+        throw new ERR_INVALID_ARG_VALUE('options.namedCurve', namedCurve);
+      let { paramEncoding } = options;
+      if (paramEncoding == null || paramEncoding === 'named')
+        paramEncoding = OPENSSL_EC_NAMED_CURVE;
+      else if (paramEncoding === 'explicit')
+        paramEncoding = OPENSSL_EC_EXPLICIT_CURVE;
+      else
+        throw new ERR_INVALID_ARG_VALUE('options.paramEncoding', paramEncoding);
+
+      return new EcKeyPairGenJob(
+        mode,
+        namedCurve,
+        paramEncoding,
+        ...encoding);
+    }
+    ...
+  }
+}
+```
+Notice that `EcKeyPairGenJob` is imported from `crypto` which is defined in
+`src/node_crypto.cc`:
+```c++
+void Initialize(Local<Object> target,
+                Local<Value> unused,
+                Local<Context> context,
+                void* priv) {
+  ...
+  ECDH::Initialize(env, target);
+  ...
+}
+
+NODE_MODULE_CONTEXT_AWARE_INTERNAL(crypto, node::crypto::Initialize)
+```
+
+
+
+And we find `ECDH::Initialize` in `src/crypto/crypto_ecdh.cc`:
+```c++
+void ECDH::Initialize(Environment* env, Local<Object> target) {
+  ...
+  ECKeyPairGenJob::Initialize(env, target);
+  ...
+}
+```
+And we can find `ECKeyPairGenJob` which is declared in `src/crypto/crypto_ecdh.h`:
+```c++
+using ECKeyPairGenJob = KeyGenJob<KeyPairGenTraits<EcKeyGenTraits>>;
+```
+
+Now, when the JavaScript call to `new EcKeyPairGenJob` is run this will land
+in `src/crypto/crypto_keygen.h` and `New` function in `KeyGenJob`:
+```c++
+template <typename KeyGenTraits>                                                   
+class KeyGenJob final : public CryptoJob<KeyGenTraits> {                           
+ public:                                                                           
+  using AdditionalParams = typename KeyGenTraits::AdditionalParameters;            
+                                                                                   
+  static void New(const v8::FunctionCallbackInfo<v8::Value>& args) {               
+    Environment* env = Environment::GetCurrent(args);                              
+    CHECK(args.IsConstructCall());                                                 
+                                                                                   
+    CryptoJobMode mode = GetCryptoJobMode(args[0]);                                
+                                                                                   
+    unsigned int offset = 1;                                                       
+                                                                                   
+    AdditionalParams params;                                                       
+    if (KeyGenTraits::AdditionalConfig(mode, args, &offset, &params)               
+            .IsNothing()) {                                                        
+      // The KeyGenTraits::AdditionalConfig is responsible for                     
+      // calling an appropriate THROW_CRYPTO_* variant reporting                   
+      // whatever error caused initialization to fail.                             
+      return;                                                                      
+    }                                                                              
+                                                                                   
+    new KeyGenJob<KeyGenTraits>(env, args.This(), mode, std::move(params));        
+  }
+```
+```console
+(lldb) expr mode
+(node::crypto::CryptoJobMode) $4 = kCryptoJobAsync
+```
+`KeyGenTraits::AdditionalConfig` will land in `src/crypto/crypto_keygen.h`:
+```c++
+static v8::Maybe<bool> AdditionalConfig(                                         
+      CryptoJobMode mode,                                                          
+      const v8::FunctionCallbackInfo<v8::Value>& args,                             
+      unsigned int* offset,                                                        
+      AdditionalParameters* params) {                                              
+    if (KeyPairAlgorithmTraits::AdditionalConfig(mode, args, offset, params)       
+            .IsNothing()) {                                                        
+      return v8::Just(false);                                                      
+    }                      
+```
+`KeyPairAlgorithmTraits::AdditionalConfig` can be found in
+`src/crypto/crypto_ecdh.cc` :
+```c++
+Maybe<bool> EcKeyGenTraits::AdditionalConfig(                                   
+    CryptoJobMode mode,                                                         
+    const FunctionCallbackInfo<Value>& args,                                    
+    unsigned int* offset,                                                       
+    EcKeyPairGenConfig* params) {                                               
+  Environment* env = Environment::GetCurrent(args);                             
+  CHECK(args[*offset]->IsString());  // curve name                              
+  CHECK(args[*offset + 1]->IsInt32());  // param encoding                       
+                                                                                
+  Utf8Value curve_name(env->isolate(), args[*offset]);                          
+  params->params.curve_nid = GetCurveFromName(*curve_name);                     
+  if (params->params.curve_nid == NID_undef) {                                  
+    THROW_ERR_CRYPTO_INVALID_CURVE(env);                                        
+    return Nothing<bool>();                                                     
+  }                                                                             
+                                                                                
+  params->params.param_encoding = args[*offset + 1].As<Int32>()->Value();       
+  if (params->params.param_encoding != OPENSSL_EC_NAMED_CURVE &&                
+      params->params.param_encoding != OPENSSL_EC_EXPLICIT_CURVE) {             
+    THROW_ERR_OUT_OF_RANGE(env, "Invalid param_encoding specified");            
+    return Nothing<bool>();                                                     
+  }                                                                             
+                                                                                
+  *offset += 2;                                                                 
+                                                                                
+  return Just(true);                                                            
+}
+```
+```console
+(lldb) expr curve_name
+(node::Utf8Value) $6 = {
+  node::MaybeStackBuffer<char, 1024> = (length_ = 5, capacity_ = 1024, buf_ = "P-384", buf_st_ = "P-384")
+}
+```
+
+Stand alone reproducer: [ec-keygen.c](./ec-keygen.c)
 
 __work in progress__
 

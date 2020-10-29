@@ -91,6 +91,9 @@ generator: generator.cc
 ec: ec.c
 	$(CC) $(CFLAGS)
 
+ec-keygen: ec-keygen.c
+	$(CC) $(CFLAGS)
+
 rsa: rsa.c
 	$(CC) $(CFLAGS)
 

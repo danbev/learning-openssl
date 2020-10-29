@@ -13,6 +13,7 @@ hmac
 bio
 bio_ssl
 ec
+ec-keygen
 rsa
 rsa_pss
 provider
