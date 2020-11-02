@@ -112,3 +112,12 @@ Run the md-nits target:
 ```console
 $ make md-nits
 ```
+
+### Enable REF_PRINT
+Enable `REF_PRINT`in OpenSSL build:
+```console
+$ ./config --debug --prefix=/home/danielbevenius/work/security/openssl_build_master linux-x86_64 -DREF_PRINT
+$ make clean
+$ make -j8 
+$ make install_sw
+```
