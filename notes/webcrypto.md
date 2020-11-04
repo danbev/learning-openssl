@@ -96,8 +96,15 @@ Used when the algorithm is `HMAC`.
 
 `length` is an optional length in bits of the key. 
 
+### exportKey
+Takes a `CryptoKey` and produces it in a portable external format:
+```js
+const result = crypto.subtle.exportKey(format, key);
+```
+The key is not encrypted, if that is desired then use `wrapKey` instead.
+
 ### importKey
-Takes a key and returns it as a `CryptoKey`.
+Takes a key in external format and returns it as a `CryptoKey`.
 ```js
 crypto.subtle.importKey(format,
                         keyData,
@@ -116,5 +123,19 @@ requirements in order to provide the required algorithmic security guarantees.
 ```js
 window.crypto.getRandomValues();
 ```
+
+### wrapKey
+This function will call exportKey and then encrypt the result from that call.
+This produces a key in a portable format that is encrypted.
+```js
+const result = crypto.subtle.wrapKey(format, key, wrappingKey, wrapAlgo);
+```
+
+### encrypt
+Encrypts the plaintext (`data` below) using the specified algorithm and key:
+```js
+const result = crypto.subtle.encrypt(algorithm, key, data);
+```
+The result is a promise what when fulfilled will be an ArrayBuffer.
 
 
