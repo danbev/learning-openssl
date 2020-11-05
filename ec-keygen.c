@@ -91,6 +91,10 @@ int main(int arc, char *argv[]) {
   pthread_create(&get_pkcs8_t, NULL, get_pkcs8, pkey);
   pthread_create(&get_ec_key_t, NULL, get_ec_key, pkey);
 
-  EVP_PKEY_CTX_free(ctx);
+  void* status;
+  pthread_join(get_pkcs8_t, &status);
+  pthread_join(get_ec_key_t, &status);
+
+  //EVP_PKEY_CTX_free(ctx);
   exit(EXIT_SUCCESS);
 }
