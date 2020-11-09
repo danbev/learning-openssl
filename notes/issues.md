@@ -729,13 +729,12 @@ out/Debug/node[1117391]: ../src/crypto/crypto_ecdh.cc:607:v8::Maybe<bool> node::
 Aborted (core dumped)
 ```
 Running the same test multiple times (noticed this when running it in the
-debugger) I somethimes get different errors:
+debugger) I sometimes get different errors:
 ```console
 $ out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-webcrypto-export-import.js
 crypto/evp/p_lib.c:1616: OpenSSL internal error: refcount error
 Aborted (core dumped)
 ```
-
 The second error only happens sometimes so I'm going to try to debug the first
 issue and see if these two might be related to each other.
 
@@ -753,7 +752,9 @@ Maybe<bool> ExportJWKEcKey(
   ...
 }
 ```
-Alright, lets try to reproduce this in a standalone program.
+Alright, lets try to reproduce this in a standalone program and for that we need
+to figure out how the test was configured.
+
 The first thing that happens is that a asymmetric key pair is generated with
 the following configuration:
 ```js
@@ -765,7 +766,6 @@ const { publicKey, privateKey } = await subtle.generateKey({
 
 The implementation of this can be found in `lib/internal/crypto/webcrypto.js`:
 ```js
-
 ...
 async function generateKey(                                                     
   algorithm,                                                                    
@@ -812,7 +812,8 @@ function generateKeyPair(type, options, callback) {
   job.run();
 }
 ```
-The `check` function actually returns a EcKeyPairGenJob
+The `check` function actually returns a EcKeyPairGenJob (this has now been
+changed https://github.com/nodejs/node/commit/65c9d678ed959d9274cf784dbdb281c2b6d77d0a):
 ```js
 const {
   EcKeyPairGenJob,
@@ -902,7 +903,10 @@ class KeyGenJob final : public CryptoJob<KeyGenTraits> {
     new KeyGenJob<KeyGenTraits>(env, args.This(), mode, std::move(params));        
   }
 ```
+`New` will be called from the main thread:
 ```console
+(lldb) thread info
+thread #1: tid = 1919291, 0x00000000011e2f16 node`node::crypto::KeyGenJob<node::crypto::KeyPairGenTraits<node::crypto::RsaKeyGenTraits> >::New(args=0x00007fffffffb8f0) at crypto_keygen.h:36:47, name = 'node', stop reason = breakpoint 2.3
 (lldb) expr mode
 (node::crypto::CryptoJobMode) $4 = kCryptoJobAsync
 ```
@@ -919,7 +923,7 @@ static v8::Maybe<bool> AdditionalConfig(
     }                      
 ```
 `KeyPairAlgorithmTraits::AdditionalConfig` can be found in
-`src/crypto/crypto_ecdh.cc` :
+`src/crypto/crypto_ecdh.cc`:
 ```c++
 Maybe<bool> EcKeyGenTraits::AdditionalConfig(                                   
     CryptoJobMode mode,                                                         
@@ -997,7 +1001,55 @@ we have:
 After this the last thing in `New` is:
 ```c++
   new KeyGenJob<KeyGenTraits>(env, args.This(), mode, std::move(params));
+}
 ```
+I know this looks weird, as it looks like we are creating an instace of a
+KeyGenJob and then discarding it. The thing to understand is that we are passing
+in a v8::Local<v8::Object> as the second parameter:
+```c++
+template <typename KeyGenTraits>
+class KeyGenJob final : public CryptoJob<KeyGenTraits> {
+  ...
+
+  KeyGenJob(
+      Environment* env,
+      v8::Local<v8::Object> object,
+      CryptoJobMode mode,
+      AdditionalParams&& params)
+      : CryptoJob<KeyGenTraits>(
+            env,
+            object,
+            KeyGenTraits::Provider,
+            mode,
+            std::move(params)) {}
+};
+
+template <typename CryptoJobTraits>
+class CryptoJob : public AsyncWrap, public ThreadPoolWork {
+
+class AsyncWrap : public BaseObject {
+
+class BaseObject : public MemoryRetainer {
+
+  // Associates this object with `object`. It uses the 0th internal field for
+  // that, and in particular aborts if there is no such field.
+  inline BaseObject(Environment* env, v8::Local<v8::Object> object);
+```
+And in `BaseObject::BaseObject` we will set a pointer to this `KeyGenJob` instance
+we are creating on the `object`: 
+```c++
+BaseObject::BaseObject(Environment* env, v8::Local<v8::Object> object)          
+    : persistent_handle_(env->isolate(), object), env_(env) {                   
+  CHECK_EQ(false, object.IsEmpty());                                            
+  CHECK_GT(object->InternalFieldCount(), 0);                                    
+  object->SetAlignedPointerInInternalField(                                     
+      BaseObject::kSlot,                                                        
+      static_cast<void*>(this));                                                
+  env->AddCleanupHook(DeleteMe, static_cast<void*>(this));                      
+  env->modify_base_object_count(1);                                             
+} 
+```
+
 So those are the parameters that are configured. Next, we need to see what
 the actual call to generateKeyPair does.
 ```js
@@ -1048,6 +1100,29 @@ class CryptoJob : public AsyncWrap, public ThreadPoolWork {
   }
 };
 ```
+Notice the check of the mode of the job, so if this is an async job it will
+be scheduled to run at some later point:
+```c++
+void ThreadPoolWork::ScheduleWork() {
+  env_->IncreaseWaitingRequestCounter();
+  int status = uv_queue_work(
+      env_->event_loop(),
+      &work_req_,
+      [](uv_work_t* req) {
+        ThreadPoolWork* self = ContainerOf(&ThreadPoolWork::work_req_, req);
+        self->DoThreadPoolWork();
+      },
+      [](uv_work_t* req, int status) {
+        ThreadPoolWork* self = ContainerOf(&ThreadPoolWork::work_req_, req);
+        self->env_->DecreaseWaitingRequestCounter();
+        self->AfterThreadPoolWork(status);
+      });
+  CHECK_EQ(status, 0);
+}
+```
+`DoThreadPoolWork` will be run on a thread from the thread pool and
+`AfterThreadPoolWork` will be run from the main thread.
+
 And `DothreadPoolWork` can be found in `src/crypto/crypto_keygen.h` in the
 class KeyGenJob`:
 ```c++
@@ -1071,6 +1146,10 @@ void DoThreadPoolWork() override {
     }
   }
 ```
+Now, when debugging make sure to check which thread a breakpoint is stopped
+on and select that thread ((lldb) thread select 8) to switch to the correct
+thread).
+
 And the call to `KeyGenTraits::DoKeyGen`
 ```c++
   static KeyGenJobStatus DoKeyGen(Environment* env, AdditionalParameters* params) {
@@ -1110,88 +1189,23 @@ EVPKeyCtxPointer EcKeyGenTraits::Setup(EcKeyPairGenConfig* params) {
   return key_ctx;
 }
 ```
+In the above case we are setting the parameter and returning a `EVP_PKEY_CTX`
+context which can now be used to generate a `EVP_PKEY` in `DoKeyGen`. 
+
 After Setup returns the key will be generated in `DoKeyGen` and then it will
 be wrapped in a ManagedEVPPKey:
 ```c++
+    EVP_PKEY* pkey = nullptr;                                                   
+    if (!EVP_PKEY_keygen(ctx.get(), &pkey))                                     
+      return KeyGenJobStatus::ERR_FAILED; 
+
     params->key = ManagedEVPPKey(EVPKeyPointer(pkey));
 ```
-This will create move pkey so that it is owned by ManagedEVPPKey, and then the
-`=` operator for ManagedEVPPKey will be called which looks like this:
-```c++
-ManagedEVPPKey& ManagedEVPPKey::operator=(const ManagedEVPPKey& that) {
-  pkey_.reset(that.get());
-
-  if (pkey_)
-    EVP_PKEY_up_ref(pkey_.get());
-
-  return *this;
-}
-```
-Now, `that.get()` will return an EVP_PKEY* pointer from `EVPKeyPointer pkey_`
-field and EVPKeyPointer can be found in crypto_util.h:
-```c++
-using EVPKeyPointer = DeleteFnPtr<EVP_PKEY, EVP_PKEY_free>;
-```
-So get will just return the raw pointer to EVP_PKEY:
-```c++
-
-EVP_PKEY* ManagedEVPPKey::get() const {
-  return pkey_.get();
-}
-```
-'reset' will destroy the currently managed object but at this point it is nullptr
-so nothing gets destroyed:
-```c++
-(lldb) expr pkey_
-(node::crypto::EVPKeyPointer) $3 = nullptr {
-  pointer = 0x0000000000000000
-}
-```
-And after the reset it will be:
-```console
-(lldb) expr pkey_
-(node::crypto::EVPKeyPointer) $4 = 0x7fffe0002a50 {
-  pointer = 0x00007fffe0002a50
-}
-```
-Next there is the call to EVP_PKEY_up_ref passing in the raw EVP_PKEY*:
-```c
-int EVP_PKEY_up_ref(EVP_PKEY *pkey)
-{
-    int i;
-
-    if (CRYPTO_UP_REF(&pkey->references, &i, pkey->lock) <= 0)
-        return 0;
-
-    REF_PRINT_COUNT("EVP_PKEY", pkey);
-    REF_ASSERT_ISNT(i < 2);
-    return ((i > 1) ? 1 : 0);
-}
-```
-`CRYPTO_UP_REF` can be found in `include/internal/refcount.h`:
-```c
-static inline int CRYPTO_UP_REF(_Atomic int *val, int *ret, void *lock)
-{
-    *ret = atomic_fetch_add_explicit(val, 1, memory_order_relaxed) + 1;
-    return 1;
-}
-```
-And notice that we are passing in &pkey->references:
-```console
-(lldb) expr pkey->references
-(int) $6 = 1
-(lldb) expr &pkey->references
-(int *) $7 = 0x00007fffe0002a78
-```
-This is the value that atomic object to be modified, the value `&i` will be
-the value of the atomic object before the increment and adding 1 to that will
-give the current number of references.
-
-After this there is check `REF_ASSERT_ISNT` to verify that the reference count
-is greater than 2.
+This work is being done on thread from the thread pool.
 
 After this function returns the work in DoThreadPoolWork will be done, and at
-a later point `AfterThreadPoolWork` (src/crypto/crypto_util.h) will be called.
+a later point `AfterThreadPoolWork` (src/crypto/crypto_util.h) will be called 
+from the main thread:
 ```c++
 void AfterThreadPoolWork(int status) override {
     Environment* env = AsyncWrap::env();
@@ -1206,85 +1220,87 @@ void AfterThreadPoolWork(int status) override {
       ptr->MakeCallback(env->ondone_string(), arraysize(args), args);
   }
 ```
-Lets inspect the value of `ptr`:
-```console
-(lldb) expr ptr
-(std::unique_ptr<node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> >, std::default_delete<node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> > > >) $15 = 0x58fc950 {
-  pointer = 0x00000000058fc950
-}
-```
-Notice that `ptr->ToResult` will land in crypto_keygen.h:
-```c++
-v8::Maybe<bool> ToResult(
-      v8::Local<v8::Value>* err,
-      v8::Local<v8::Value>* result) override {
-    Environment* env = AsyncWrap::env();
-    CryptoErrorVector* errors = CryptoJob<KeyGenTraits>::errors();
-    AdditionalParams* params = CryptoJob<KeyGenTraits>::params();
-    if (status_ == KeyGenJobStatus::ERR_OK &&
-        LIKELY(!KeyGenTraits::EncodeKey(env, params, result).IsNothing())) {
-      *err = Undefined(env->isolate());
-      return v8::Just(true);
-    }
-
-    if (errors->empty())
-      errors->Capture();
-    CHECK(!errors->empty());
-    *result = Undefined(env->isolate());
-    return v8::Just(errors->ToException(env).ToLocal(err));
-  }
-```
-```console
-(lldb) expr status_
-(node::crypto::KeyGenJobStatus) $16 = ERR_OK
-```
-`KeyGenTraits::EncodeKey` will end up in `src/crypto/crypto_keygen.h`
-```c++
-static v8::Maybe<bool> EncodeKey(
-      Environment* env,
-      AdditionalParameters* params,
-      v8::Local<v8::Value>* result) {
-    v8::Local<v8::Value> keys[2];
-    if (ManagedEVPPKey::ToEncodedPublicKey(
-            env,
-            std::move(params->key),
-            params->public_key_encoding,
-            &keys[0]).IsNothing() ||
-        ManagedEVPPKey::ToEncodedPrivateKey(
-            env,
-            std::move(params->key),
-            params->private_key_encoding,
-            &keys[1]).IsNothing()) {
-      return v8::Nothing<bool>();
-    }
-    *result = v8::Array::New(env->isolate(), keys, arraysize(keys));
-    return v8::Just(true);
-  }
-```
-```c++
-Maybe<bool> ManagedEVPPKey::ToEncodedPublicKey(
-    Environment* env,
-    ManagedEVPPKey key,
-    const PublicKeyEncodingConfig& config,
-    Local<Value>* out) {
-  if (!key) return Nothing<bool>();
-  if (config.output_key_object_) {
-    std::shared_ptr<KeyObjectData> data =
-          KeyObjectData::CreateAsymmetric(kKeyTypePublic, std::move(key));
-    return Just(KeyObjectHandle::Create(env, data).ToLocal(out));
-  }
-  return Just(WritePublicKey(env, key.get(), config).ToLocal(out));
-}
-```
-
-
-
-
-I'd really like to the the `REF_PRINT_COUNT` output but this is not getting
-set even though I've added -DREF_PRINT when building OpenSSL.
 
 Stand alone reproducer: [ec-keygen.c](../ec-keygen.c)
 
+Lets set a break point and print out the value:
+```console
+(lldb) br s -f p_lib.c -l 1659 -c 'printf("i = %d\n", i);'
+```
+
+In `evp_pkey_downgrade` has the following line of code:
+```c
+EC_KEY *EVP_PKEY_get0_EC_KEY(const EVP_PKEY *pkey)
+{
+    if (!evp_pkey_downgrade((EVP_PKEY *)pkey)) {
+        ERR_raise(ERR_LIB_EVP, EVP_R_INACCESSIBLE_KEY);
+        return NULL;
+    }
+    if (EVP_PKEY_base_id(pkey) != EVP_PKEY_EC) {
+        EVPerr(EVP_F_EVP_PKEY_GET0_EC_KEY, EVP_R_EXPECTING_A_EC_KEY);
+        return NULL;
+    }
+    return pkey->pkey.ec;
+}
+```
+When `evp_pkey_downgrade`is called it will try to aquire a lock on pkey->lock,
+so only one thread at a time should be allowed to enter this function.
+
+When we call EVP_PKEY2PKCS8(pkey) it will also call evp_pkey_downgrade from
+EVP_PKEY_get0(const EVP_PKEY *pkey). This will successfully aquire the lock.
+
+So running this single threaded everything works as expected, but with multiple
+threads it is possible that the lock being used is not the same:
+```console
+evp_pkey_downgrade got lock for pk-lock: 0x7fd7940262b0, pk: 0x7fd794026ce0
+evp_pkey_downgrade is legacy: 0
+evp_pkey_downgrade has provider for pk: 0x7fd794026ce0, ec: (nil)
+0x7fd794026ce0:   2:EVP_PKEY
+Thread: 140564154822592 up ref for 0x7fd794026ce0
+0x7fd794026ce0:   3:EVP_PKEY
+0x7fd794026ce0:   2:EVP_PKEY
+Thread: 140564154822592 up ref for 0x7fd794026ce0
+0x7fd794026ce0:   3:EVP_PKEY
+[2760126400] EVP_PKEY_get0_EC_KEY enter: pkey->pkey.ec: (nil), locked: 0
+evp_pkey_downgrade got lock for pk-lock: 0x7fd78c000d40, pk: 0x7fd794026ce0
+```
+
+In evp_pkey_downgrade we have the following code:
+```c
+int evp_pkey_downgrade(EVP_PKEY *pk)
+{
+    EVP_PKEY tmp_copy;              /* Stack allocated! */
+    CRYPTO_RWLOCK *tmp_lock = NULL; /* Temporary lock */
+    int rv = 0;
+
+    if (!ossl_assert(pk != NULL))
+        return 0;
+
+    /*
+     * Throughout this whole function, we must ensure that we lock / unlock
+     * the exact same lock.  Note that we do pass it around a bit.
+     */
+    if (!CRYPTO_THREAD_write_lock(pk->lock))
+        return 0;
+```
+Notice that a write lock is aquired for pk->lock. 
+
+Next we have:
+```c
+    tmp_copy = *pk;              /* |tmp_copy| now owns THE lock */
+
+    if (evp_pkey_reset_unlocked(pk)
+        && evp_pkey_copy_downgraded(&pk, &tmp_copy)) {
+        /* Grab the temporary lock to avoid lock leak */
+        tmp_lock = pk->lock;
+```
+`evp_pkey_reset_unlocked` will reset the memory pointed to be pk and it will
+poplulate memory, and pk->lock will be a new one. 
+Now, this will set `pk->lock` to a new value, so another thread trying to
+aquire the pk->lock will succeed even though I'm pretty sure the intention is
+that nothing else be able to lock pk for the duration of this function.
+
 __work in progress__
+
 
 
