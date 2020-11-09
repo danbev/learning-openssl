@@ -1299,6 +1299,21 @@ poplulate memory, and pk->lock will be a new one.
 Now, this will set `pk->lock` to a new value, so another thread trying to
 aquire the pk->lock will succeed even though I'm pretty sure the intention is
 that nothing else be able to lock pk for the duration of this function.
+The usage of memset here:
+```c
+static int evp_pkey_reset_unlocked(EVP_PKEY *pk)
+{
+  ...
+  memset(pk, 0, sizeof(*pk));
+```
+After this function call has returned `pk->lock` will be NULL. At this point
+any other thread trying to aquire the lock, like another thread entering
+`evp_key_downgrade`, it will try to require a lock on that NULL poiter. Later
+in `evp_pkey_reset_unlocked` a new lock is created and the to the newly memset/
+cleared memory. This will now be a different lock compared to the one that was
+used when this thread entered `evp_pkey_downgrade` so another thread entering
+that function would be able to aquire the new lock (since it has not been locked
+by the current thread.
 
 __work in progress__
 
