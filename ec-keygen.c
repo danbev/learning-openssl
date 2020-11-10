@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <openssl/provider.h>
 #include <openssl/evp.h>
 #include <openssl/ec.h>
@@ -87,9 +88,13 @@ int main(int arc, char *argv[]) {
 
   printf("created EVP_PKEY, now create threads and pass reference as args\n");
   pthread_t get_pkcs8_t;
+
   pthread_t get_ec_key_t;
+
   pthread_create(&get_pkcs8_t, NULL, get_pkcs8, pkey);
+  pthread_setname_np(get_pkcs8_t, "getpkcs8 thread");
   pthread_create(&get_ec_key_t, NULL, get_ec_key, pkey);
+  pthread_setname_np(get_ec_key_t, "get_ec_key thread");
 
   pthread_join(get_ec_key_t, NULL);
   pthread_join(get_pkcs8_t, NULL);
