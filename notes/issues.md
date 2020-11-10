@@ -1294,26 +1294,53 @@ Next we have:
         /* Grab the temporary lock to avoid lock leak */
         tmp_lock = pk->lock;
 ```
-`evp_pkey_reset_unlocked` will reset the memory pointed to be pk and it will
-poplulate memory, and pk->lock will be a new one. 
-Now, this will set `pk->lock` to a new value, so another thread trying to
-aquire the pk->lock will succeed even though I'm pretty sure the intention is
-that nothing else be able to lock pk for the duration of this function.
-The usage of memset here:
+Notice that `tmp_copy` is stack allocated so this will create a new EVP_PKEY
+on the stack with the values contained in the memory location pointed to by
+`*pk`. So `tmp_copy->lock will be pointing to the lock that was locked by this
+thread above.
+
+`evp_pkey_reset_unlocked` will reset the memory pointed to by `pk`:
 ```c
 static int evp_pkey_reset_unlocked(EVP_PKEY *pk)
 {
   ...
   memset(pk, 0, sizeof(*pk));
+  ...
 ```
+Any thread that enters `evp_pkey_downgrade` will now try to aquire a lock for
+NULL.
+
+A few lines down we have the creation of a new lock:
+```c
+  memset(pk, 0, sizeof(*pk));
+  pk->type = EVP_PKEY_NONE;
+  pk->save_type = EVP_PKEY_NONE;
+  pk->references = 1;
+  pk->save_parameters = 1;
+
+  pk->lock = CRYPTO_THREAD_lock_new();
+```
+Now, this will set `pk->lock` to a new value, so another thread trying to aquire
+the `pk->lock` will now succeed since there is no thread that is holding a lock
+to it (remember the lock is being held on the value in tmp_copy->lock which is
+on the stack).
+
+The usage of memset here:
 After this function call has returned `pk->lock` will be NULL. At this point
 any other thread trying to aquire the lock, like another thread entering
 `evp_key_downgrade`, it will try to require a lock on that NULL poiter. Later
-in `evp_pkey_reset_unlocked` a new lock is created and the to the newly memset/
-cleared memory. This will now be a different lock compared to the one that was
-used when this thread entered `evp_pkey_downgrade` so another thread entering
-that function would be able to aquire the new lock (since it has not been locked
-by the current thread.
+in `evp_pkey_reset_unlocked` a new lock is created and set on the newly memset/
+cleared memory pointed to by pk->lock. This will now be a different lock
+compared to the one that was used when this thread entered `evp_pkey_downgrade`
+so another thread entering that function would be able to aquire the new lock 
+since it has not been locked by the current thread.
+
+`evp_pkey_reset_unlocked` is called by two functions, `EVP_PKEY_new` and
+`evp_pkey_downgrade`. `EVP_PKEY_new` will calls it with a newly malloced EVP_PKEY
+so it is basically setting the values for the new instance, including creating
+a new lock. For that path calling memset is fine as there will not be anything
+else using the pk->lock, but for the calls to `evp_pkey_downgrade` this is not
+true and there might be lock held, in which case calling memset will not work.
 
 __work in progress__
 
