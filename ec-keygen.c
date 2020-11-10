@@ -34,6 +34,7 @@ void* get_pkcs8(void* args) {
   if  (i2d_PKCS8_PRIV_KEY_INFO_bio(pkcs8_bio, pkcs8) <= 0) {
     error_and_exit("Could not convert to PKCS8 format");
   }
+  printf("[%u] get_pkcs8: pkcs8: %p\n", pthread_self(), pkcs8);
   pthread_exit(NULL);
 }
 
