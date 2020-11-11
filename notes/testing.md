@@ -67,7 +67,7 @@ $ sudo dnf debuginfo-install libasan
 
 Configure build:
 ```console
-$ ./config --debug --prefix=/home/danielbevenius/work/security/openssl_build_master linux-x86_64 -fsanitize=address
+$ ./config --strict-warnings --debug --prefix=/home/danielbevenius/work/security/openssl_build_master linux-x86_64 -fsanitize=address
 ```
 
 Running tests with asan:
