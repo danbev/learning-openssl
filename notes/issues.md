@@ -712,6 +712,10 @@ the type of key and possible options provided.
 This was actually caused by on of the open PRs we have against OpenSSL.
 
 ### test-webcrypto-export-import.js
+This test failes when linked to OpenSSL 3.x (current master which should be
+similar to Alpha 7).
+
+#### Error
 ```console
 $ out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-webcrypto-export-import.js
 out/Debug/node[1117391]: ../src/crypto/crypto_ecdh.cc:607:v8::Maybe<bool> node::crypto::ExportJWKEcKey(node::Environment*, std::shared_ptr<node::crypto::KeyObjectData>, v8::Local<v8::Object>): Assertion `(ec) != nullptr' failed.
@@ -737,6 +741,14 @@ Aborted (core dumped)
 ```
 The second error only happens sometimes so I'm going to try to debug the first
 issue and see if these two might be related to each other.
+
+#### Reproducer
+Standalone reproducer: [ec-keygen.c](../ec-keygen.c)
+
+#### Node.js Investigation/troubleshooting
+This section contains details about this issue topdown so it start in Node.js
+and a later section will contain OpenSSL specific information which might save
+OpenSSL developers having to go through is section.
 
 The error is generated from the following check in Node.js:
 ```console
@@ -1221,13 +1233,12 @@ void AfterThreadPoolWork(int status) override {
   }
 ```
 
-Stand alone reproducer: [ec-keygen.c](../ec-keygen.c)
-
 Lets set a break point and print out the value:
 ```console
 (lldb) br s -f p_lib.c -l 1659 -c 'printf("i = %d\n", i);'
 ```
 
+#### OpenSSL investigatio/troubleshooting
 In `evp_pkey_downgrade` has the following line of code:
 ```c
 EC_KEY *EVP_PKEY_get0_EC_KEY(const EVP_PKEY *pkey)
@@ -1242,27 +1253,6 @@ EC_KEY *EVP_PKEY_get0_EC_KEY(const EVP_PKEY *pkey)
     }
     return pkey->pkey.ec;
 }
-```
-When `evp_pkey_downgrade`is called it will try to aquire a lock on pkey->lock,
-so only one thread at a time should be allowed to enter this function.
-
-When we call EVP_PKEY2PKCS8(pkey) it will also call evp_pkey_downgrade from
-EVP_PKEY_get0(const EVP_PKEY *pkey). This will successfully aquire the lock.
-
-So running this single threaded everything works as expected, but with multiple
-threads it is possible that the lock being used is not the same:
-```console
-evp_pkey_downgrade got lock for pk-lock: 0x7fd7940262b0, pk: 0x7fd794026ce0
-evp_pkey_downgrade is legacy: 0
-evp_pkey_downgrade has provider for pk: 0x7fd794026ce0, ec: (nil)
-0x7fd794026ce0:   2:EVP_PKEY
-Thread: 140564154822592 up ref for 0x7fd794026ce0
-0x7fd794026ce0:   3:EVP_PKEY
-0x7fd794026ce0:   2:EVP_PKEY
-Thread: 140564154822592 up ref for 0x7fd794026ce0
-0x7fd794026ce0:   3:EVP_PKEY
-[2760126400] EVP_PKEY_get0_EC_KEY enter: pkey->pkey.ec: (nil), locked: 0
-evp_pkey_downgrade got lock for pk-lock: 0x7fd78c000d40, pk: 0x7fd794026ce0
 ```
 
 In evp_pkey_downgrade we have the following code:
@@ -1283,7 +1273,7 @@ int evp_pkey_downgrade(EVP_PKEY *pk)
     if (!CRYPTO_THREAD_write_lock(pk->lock))
         return 0;
 ```
-Notice that a write lock is aquired for pk->lock. 
+Notice that a write lock is aquired for `pk->lock`. 
 
 Next we have:
 ```c
@@ -1299,7 +1289,8 @@ on the stack with the values contained in the memory location pointed to by
 `*pk`. So `tmp_copy->lock will be pointing to the lock that was locked by this
 thread above.
 
-`evp_pkey_reset_unlocked` will reset the memory pointed to by `pk`:
+`evp_pkey_reset_unlocked` will reset the memory pointed to by `pk` using
+`memset`:
 ```c
 static int evp_pkey_reset_unlocked(EVP_PKEY *pk)
 {
@@ -1307,8 +1298,8 @@ static int evp_pkey_reset_unlocked(EVP_PKEY *pk)
   memset(pk, 0, sizeof(*pk));
   ...
 ```
-Any thread that enters `evp_pkey_downgrade` will now try to aquire a lock for
-NULL.
+Any thread that enters `evp_pkey_downgrade` will after this call try to aquire
+a lock for NULL.
 
 A few lines down we have the creation of a new lock:
 ```c
@@ -1322,8 +1313,7 @@ A few lines down we have the creation of a new lock:
 ```
 Now, this will set `pk->lock` to a new value, so another thread trying to aquire
 the `pk->lock` will now succeed since there is no thread that is holding a lock
-to it (remember the lock is being held on the value in tmp_copy->lock which is
-on the stack).
+to it (remember the lock is being held in the value in pk->lock).
 
 The usage of memset here:
 After this function call has returned `pk->lock` will be NULL. At this point
