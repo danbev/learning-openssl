@@ -1238,7 +1238,7 @@ Lets set a break point and print out the value:
 (lldb) br s -f p_lib.c -l 1659 -c 'printf("i = %d\n", i);'
 ```
 
-#### OpenSSL investigatio/troubleshooting
+#### OpenSSL investigation/troubleshooting
 In `evp_pkey_downgrade` has the following line of code:
 ```c
 EC_KEY *EVP_PKEY_get0_EC_KEY(const EVP_PKEY *pkey)
