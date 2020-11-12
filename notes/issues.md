@@ -1332,6 +1332,99 @@ a new lock. For that path calling memset is fine as there will not be anything
 else using the pk->lock, but for the calls to `evp_pkey_downgrade` this is not
 true and there might be lock held, in which case calling memset will not work.
 
+The following [pull request](https://github.com/openssl/openssl/pull/13374) was
+opened for this issue. 
+
+There was a [suggestion](https://github.com/openssl/openssl/pull/13374#issuecomment-725391083)
+in the above PR to still use memset, something like the below:
+```c
+    if (pk->lock) {                                                                
+      const size_t offset = (unsigned char *)&pk->lock - (unsigned char *)pk;   
+      memset(pk, 0, offset);                                                        
+      memset(&pk->lock + sizeof(pk->lock), 0, sizeof(*pk) - offset - sizeof(pk->lock));
+    } else {                                                                    
+      memset(pk, 0, sizeof(*pk));                                               
+    }     
+```
+After the first call to memset, which will set all the values up to pk->lock
+to zero:
+```console
+(lldb) expr *pk
+(EVP_PKEY) $7 = {
+  type = 0
+  save_type = 0
+  ameth = 0x0000000000000000
+  engine = 0x0000000000000000
+  pmeth_engine = 0x0000000000000000
+  pkey = {
+    ptr = 0x0000000000000000
+    rsa = 0x0000000000000000
+    dsa = 0x0000000000000000
+    dh = 0x0000000000000000
+    ec = 0x0000000000000000
+    ecx = 0x0000000000000000
+  }
+  references = 0
+  lock = 0x00000000004520b0
+  attributes = 0x0000000000000000
+  save_parameters = 1
+  ex_data = {
+    ctx = 0x0000000000000000
+    sk = 0x0000000000000000
+  }
+  keymgmt = 0x000000000044fbb0
+  keydata = 0x000000000045aea0
+```
+And just take note of the address of pk->lock:
+```console
+(lldb) expr pk->lock
+(CRYPTO_RWLOCK *) $3 = 0x00000000004520b0
+(lldb) memory read -c 1 -f x -s 8 &pk->lock
+0x00450a90: 0x00000000004520b0
+```
+
+Next we are going to use `memset` once again with the address of the lock
+plus the size of the pointer (which is 8)
+```console
+(lldb) expr &pk->lock + sizeof(pk->lock)
+(CRYPTO_RWLOCK **) $8 = 0x0000000000450ad0  ------------+
+(lldb) expr sizeof(pk->lock)                            |
+(unsigned long) $9 = 8                                  |
+(lldb) memory read -c 20 -s 8 -f x pk                   |
+0x00450a60: 0x0000000000000000 0x0000000000000000       |
+0x00450a70: 0x0000000000000000 0x0000000000000000       |
+0x00450a80: 0x0000000000000000 0x0000000000000000       |
+0x00450a90: 0x00000000004520b0 0x0000000000000000       |
+0x00450aa0: 0x0000000000000001 0x0000000000000000       |
+0x00450ab0: 0x0000000000000000 0x000000000044fbb0       |
+0x00450ac0: 0x000000000045aea0 0x0000000000000000       |
+    +---------------------------------------------------+    
+    ↓
+0x00450ad0: 0x0000000000000000 0x0000000000000000       
+0x00450ae0: 0x0000000000000000 0x0000000000000000
+0x00450af0: 0x0000000000000000 0x0000000000000000
+```
+Notice that this skipped a bit further than expected. In the code we are adding
+8 to the address of pk->lock, but pk-lock is a pointer and perhaps it should
+only be adding 1?:
+```console
+(lldb) memory read -c 1 -s 8 -f x '&pk->lock + 1'
+0x00450a98: 0x0000000000000000
+  ↑ 
+  +-------------------------------------------------+
+0x00450a60: 0x0000000000000000 0x0000000000000000   |
+0x00450a70: 0x0000000000000000 0x0000000000000000   |
+0x00450a80: 0x0000000000000000 0x0000000000000000   |
+                                      +-------------+
+                                      ↓
+0x00450a90: 0x00000000004520b0 0x0000000000000000
+0x00450aa0: 0x0000000000000001 0x0000000000000000
+0x00450ab0: 0x0000000000000000 0x000000000044fbb0
+0x00450ac0: 0x000000000045aea0 0x0000000000000000
+0x00450ad0: 0x0000000000000000 0x0000000000000000       
+0x00450ae0: 0x0000000000000000 0x0000000000000000
+0x00450af0: 0x0000000000000000 0x0000000000000000
+```
 __work in progress__
 
 
