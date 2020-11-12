@@ -101,6 +101,8 @@ int main(int arc, char *argv[]) {
   pthread_join(get_pkcs8_t, NULL);
 
   printf("all done in main...\n");
-  //EVP_PKEY_CTX_free(ctx);
+  EVP_PKEY_free(pkey);
+  EVP_PKEY_CTX_free(ctx);
+  EVP_PKEY_CTX_free(key_ctx);
   exit(EXIT_SUCCESS);
 }
