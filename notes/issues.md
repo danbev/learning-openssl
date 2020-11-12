@@ -1425,7 +1425,69 @@ only be adding 1?:
 0x00450ae0: 0x0000000000000000 0x0000000000000000
 0x00450af0: 0x0000000000000000 0x0000000000000000
 ```
-__work in progress__
 
+### refcount error
+This error occurs with the same webcrypto test as the previous error
+[test-webcrypto-wrap-unwrap.js](#test-webcrypto-wrap-unwrap.js).
+
+```console
+$ out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-webcrypto-export-import.js
+0x7f8998025810:   2:EVP_PKEY
+0x7f8998025810:   1:EVP_PKEY
+Thread: 140229063206656 up ref for 0x7f8998026ce0
+0x7f8998026ce0:   2:EVP_PKEY
+0x7f8998026ce0:   1:EVP_PKEY
+0x7f8998025810:   0:EVP_PKEY
+0x7f8998025940:   0:EC_KEY
+Thread: 140229173370816 up ref for 0x7f8998026ce0
+0x7f8998026ce0:   2:EVP_PKEY
+Thread: 140229173370816 up ref for 0x7f8998026ce0
+0x7f8998026ce0:   3:EVP_PKEY
+Thread: 140229173370816 up ref for 0x7f8998026ce0
+0x7f8998026ce0:   4:EVP_PKEY
+Thread: 140229173370816 up ref for 0x7f8998026ce0
+0x7f8998026ce0:   5:EVP_PKEY
+0x7f8998026ce0:   4:EVP_PKEY
+0x7f8998026ce0:   3:EVP_PKEY
+Now export keys...
+Thread: 140229054813952 PKEY_PKCS8_Export: 
+Thread: 140229054813952 up ref for 0x7f8998026ce0
+0x7f8998026ce0:   4:EVP_PKEY
+0x7f8998026ce0:   2:EVP_PKEY
+Thread: 140229173370816 up ref for 0x7f8998026ce0
+0x7f8998026ce0:   3:EVP_PKEY
+0x7f8998026ce0:   2:EVP_PKEY
+Thread: 140229173370816 up ref for 0x7f8998026ce0
+0x7f8998026ce0:   3:EVP_PKEY
+0x7f8998026ce0:   2:EVP_PKEY
+0x7f8998026ce0:   3:EVP_PKEY
+Thread: 140229054813952 PKEY_PKCS8_Export return
+0x7f8990000b60:   0:BIO
+ExportJKWEcKey errno: 0, error:00000000:lib(0)::reason(0)
+Thread: 140229173370816 ExportJWKEcKey: 0x7f8998026ce0
+0x7f8998026ce0:   2:EVP_PKEY
+0x7f8998026ce0:   1:EVP_PKEY
+0x5b4fd70:   2:EC_KEY
+Thread: 140229173370816 up ref for 0x5b50680
+0x5b50680:   2:EVP_PKEY
+0x5b50680:   1:EVP_PKEY
+0x5b4fd70:   1:EC_KEY
+Thread: 140229173370816 up ref for 0x5b50680
+0x5b50680:   2:EVP_PKEY
+0x5b50680:   1:EVP_PKEY
+Thread: 140229173370816 up ref for 0x5b50680
+0x5b50680:   2:EVP_PKEY
+0x5b50680:   1:EVP_PKEY
+0x5b50680:   0:EVP_PKEY
+0x5b4fd70:   0:EC_KEY
+0x7f8998026ce0:   0:EVP_PKEY
+0x7f899801b350:   0:EC_KEY
+0x7f8990001640:   0:EC_KEY
+0x7f8998026ce0:  -1:EVP_PKEY
+crypto/evp/p_lib.c:1667: OpenSSL internal error: refcount error
+Aborted (core dumped)
+```
+
+__work in progress__
 
 
