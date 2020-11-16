@@ -17,10 +17,14 @@ void error_and_exit(const char* msg) {
   printf("errno: %d, %s\n", err, buf);
 }
 
+pthread_mutex_t pkey_lock;
+
 void* get_ec_key(void* args) {
   EVP_PKEY* pkey = (EVP_PKEY*) args;
   printf("[%u] get_ec_keys: pkey: %p\n", pthread_self(), pkey);
+  pthread_mutex_lock(&pkey_lock);
   EC_KEY* ec_key = EVP_PKEY_get0_EC_KEY(pkey);
+  pthread_mutex_unlock(&pkey_lock);
   printf("[%u] get_ec_keys: ec_key: %p\n", pthread_self(), ec_key);
   pthread_exit(NULL);
 }
@@ -29,7 +33,9 @@ void* get_pkcs8(void* args) {
   EVP_PKEY* pkey = (EVP_PKEY*) args;
   printf("[%u] get_pkcs8: pkey: %p\n", pthread_self(), pkey);
 
+  pthread_mutex_lock(&pkey_lock);
   PKCS8_PRIV_KEY_INFO* pkcs8 = EVP_PKEY2PKCS8(pkey);
+  pthread_mutex_unlock(&pkey_lock);
   BIO* pkcs8_bio = BIO_new(BIO_s_mem());
   if  (i2d_PKCS8_PRIV_KEY_INFO_bio(pkcs8_bio, pkcs8) <= 0) {
     error_and_exit("Could not convert to PKCS8 format");
@@ -97,8 +103,8 @@ int main(int arc, char *argv[]) {
   pthread_create(&get_ec_key_t, NULL, get_ec_key, pkey);
   pthread_setname_np(get_ec_key_t, "get_ec_key thread");
 
-  pthread_join(get_ec_key_t, NULL);
   pthread_join(get_pkcs8_t, NULL);
+  pthread_join(get_ec_key_t, NULL);
 
   printf("all done in main...\n");
   EVP_PKEY_free(pkey);
