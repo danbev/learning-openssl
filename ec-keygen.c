@@ -94,6 +94,11 @@ int main(int arc, char *argv[]) {
   }
 
   printf("created EVP_PKEY, now create threads and pass reference as args\n");
+
+  if (pthread_mutex_init(&pkey_lock, NULL) != 0) {
+    printf("pthread_mutext_init failed\n");
+    return 1;
+  }
   pthread_t get_pkcs8_t;
 
   pthread_t get_ec_key_t;
@@ -105,6 +110,7 @@ int main(int arc, char *argv[]) {
 
   pthread_join(get_pkcs8_t, NULL);
   pthread_join(get_ec_key_t, NULL);
+  pthread_mutex_destroy(&pkey_lock);
 
   printf("all done in main...\n");
   EVP_PKEY_free(pkey);
