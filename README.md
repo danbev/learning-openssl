@@ -443,6 +443,180 @@ There are two environment variables that can be used (openssl/crypto/cryptlib.h)
 
 When you do a X509_STORE_load_file and the method used is ctrl (by_file_ctrl)
 
+### EVP_PKEY_CTX
+Is a struct that is a public key algorithm context.
+
+The declaration can be found in include/openssl/types.h:
+```c
+typedef struct evp_pkey_ctx_st EVP_PKEY_CTX;
+```
+And the definition in include/crypto/evp.h:
+```c
+struct evp_pkey_ctx_st {
+    /* Actual operation */
+    int operation;
+
+    /*
+     * Library context, property query, keytype and keymgmt associated with
+     * this context
+     */
+    OSSL_LIB_CTX *libctx;
+    const char *propquery;
+    const char *keytype;
+    EVP_KEYMGMT *keymgmt;
+
+```
+
+### EVP_PKEY
+The declaration can be found in include/openssl/types.h:
+```c
+typedef struct evp_pkey_st EVP_PKEY;
+```
+And the definition in include/crypto/evp.h:
+```c
+struct evp_pkey_st {
+    /* == Legacy attributes == */
+    int type;
+    int save_type;
+
+# ifndef FIPS_MODULE
+    /*
+     * Legacy key "origin" is composed of a pointer to an EVP_PKEY_ASN1_METHOD,
+     * a pointer to a low level key and possibly a pointer to an engine.
+     */
+    const EVP_PKEY_ASN1_METHOD *ameth;
+
+    CRYPTO_REF_COUNT references;
+    CRYPTO_RWLOCK *lock;
+```
+So, an instance of `evp_pkey_st` can hold legacy (pre 3.0) data, for example
+this is what `evp_pkey_st` looks like in 1.1.1:
+```c
+struct evp_pkey_st {                                                            
+    int type;                                                                   
+    int save_type;                                                              
+    CRYPTO_REF_COUNT references;                                                
+    const EVP_PKEY_ASN1_METHOD *ameth; /* algoritm methods? */
+    ENGINE *engine;
+    ENGINE *pmeth_engine; /* If not NULL public key ENGINE to use */
+    union {
+        void *ptr;
+# ifndef OPENSSL_NO_RSA
+        struct rsa_st *rsa;     /* RSA */
+# endif
+# ifndef OPENSSL_NO_DSA
+        struct dsa_st *dsa;     /* DSA */
+# endif
+# ifndef OPENSSL_NO_DH
+        struct dh_st *dh;       /* DH */
+# endif
+# ifndef OPENSSL_NO_EC
+        struct ec_key_st *ec;   /* ECC */
+        ECX_KEY *ecx;           /* X25519, X448, Ed25519, Ed448 */
+# endif
+    } pkey;
+    int save_parameters;
+    STACK_OF(X509_ATTRIBUTE) *attributes; /* [ 0 ] */
+    CRYPTO_RWLOCK *lock;
+} /* EVP_PKEY */ ;
+```
+The data from the 1.1.1 struct is also included in the struct in 3.0,  but it
+also contains additional data:
+```c
+    EVP_KEYMGMT *keymgmt;
+    void *keydata;
+    size_t dirty_cnt;
+
+    struct {
+        EVP_KEYMGMT *keymgmt;
+        void *keydata;
+    } operation_cache[10];
+    size_t dirty_cnt_copy;
+    struct {
+        int bits;
+        int security_bits;
+        int size;
+    } cache;
+} 
+```
+And the following fields are shared between them both:
+```
+    CRYPTO_REF_COUNT references;                                                
+    CRYPTO_RWLOCK *lock;                                                        
+    STACK_OF(X509_ATTRIBUTE) *attributes; /* [ 0 ] */                           
+    int save_parameters;                                                        
+    CRYPTO_EX_DATA ex_data;                                                     
+```
+
+All public keys instances of this struct have type. For example when we want
+to create a EVP_PKEY we use a EVP_PKEY_CTX and specify the type, `EVP_PKEY_EC`
+in the following example:
+```c
+  EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
+```
+And EVP_PKEY_EC is defined as (in include/crypto/evp.h):
+```c
+# define EVP_PKEY_EC     NID_X9_62_id_ecPublicKey
+```
+And in include/openssl/obj_mac.h we have:
+```c
+#define NID_X9_62_id_ecPublicKey                408
+```
+
+A EVP_PKEY is not [thread safe](https://github.com/openssl/openssl/pull/13374#issuecomment-725337844)
+and if multiple threads need access to one they need to be synchronized. I'm not
+sure this was required prior to 1.1.1, well I believe they were never said to
+be thread safe but I don't think they were ever handled in the way they are
+in 3.x. In 3.x a EVP_PKEY can be downgraded to a legacy key and in the process
+the memory location pointed to by a EVP_PKEY* will be cleared and other threads
+that need to read fields will return early or segfault.
+
+
+### EVP_KEYMGMT
+Is a struct that contains data and functions to enable providers import/export
+key material.
+
+```c
+struct evp_keymgmt_st {                                                         
+    int id;
+    int name_id;                                                                
+    OSSL_PROVIDER *prov;                                                        
+    CRYPTO_REF_COUNT refcnt;                                                    
+    CRYPTO_RWLOCK *lock;                                                        
+                                                                                
+    /* Constructor(s), destructor, information */                               
+    OSSL_FUNC_keymgmt_new_fn *new;                                              
+    OSSL_FUNC_keymgmt_free_fn *free;                                            
+    OSSL_FUNC_keymgmt_get_params_fn *get_params;                                
+    OSSL_FUNC_keymgmt_gettable_params_fn *gettable_params;                      
+    OSSL_FUNC_keymgmt_set_params_fn *set_params;                                
+    OSSL_FUNC_keymgmt_settable_params_fn *settable_params;                      
+                                                                                
+    /* Generation, a complex constructor */                                     
+    OSSL_FUNC_keymgmt_gen_init_fn *gen_init;                                    
+    OSSL_FUNC_keymgmt_gen_set_template_fn *gen_set_template;                    
+    OSSL_FUNC_keymgmt_gen_set_params_fn *gen_set_params;                        
+    OSSL_FUNC_keymgmt_gen_settable_params_fn *gen_settable_params;              
+    OSSL_FUNC_keymgmt_gen_fn *gen;                                              
+    OSSL_FUNC_keymgmt_gen_cleanup_fn *gen_cleanup;                              
+                                                                                
+    OSSL_FUNC_keymgmt_load_fn *load;                                            
+                                                                                
+    /* Key object checking */                                                   
+    OSSL_FUNC_keymgmt_query_operation_name_fn *query_operation_name;            
+    OSSL_FUNC_keymgmt_has_fn *has;                                              
+    OSSL_FUNC_keymgmt_validate_fn *validate;                                    
+    OSSL_FUNC_keymgmt_match_fn *match;                                          
+                                                                                
+    /* Import and export routines */                                            
+    OSSL_FUNC_keymgmt_import_fn *import;                                        
+    OSSL_FUNC_keymgmt_import_types_fn *import_types;                            
+    OSSL_FUNC_keymgmt_export_fn *export;                                        
+    OSSL_FUNC_keymgmt_export_types_fn *export_types;                            
+    OSSL_FUNC_keymgmt_copy_fn *copy;                                            
+} /* EVP_KEYMGMT */ ;                       
+```
+
 
 ### Engine
 
@@ -3778,3 +3952,92 @@ generation function (MGF). PSS is randomized and will create a different
 signature each time. Is a signature scheme with appendix which means that it
 does not sign the message itself but instead signs a hash of the message. This
 hash is produced by the hash/algorithm/message digest function.
+
+### RSA small messages
+If the messages being sent are smaller that the modulus the modulus operation
+can be avoided as it does not do anything. For example:
+```
+2^1 mod 4 = 2 
+```
+We need to have a  message that is greater than the modulus size. This is where
+various padding schemes come into play with RSA.
+
+### PKCSv1 (Public-Key Cryptography Standard version 1)
+A part of this standard includes RSA encryption, decryption, encoding/padding
+schemes. The padding scheme can be used with RSA to avoid the small messages
+problem discussed above.
+```
+m = 0...10 || r || 0⁸ || m' 
+m' = original message
+r  = random bits |r| ≥ 64
+```
+
+### RSA Optimal Asymmetric Encryption Padding
+An improvement over PKCS#1 with regards to its padding scheme. 
+```
+G: hash function that returns g bits
+H: hash function that returns h bits
+r: random nonce of g bits
+```
+
+### Finite-field cryptography (FFC)
+
+
+### Public-Key Cryptography Standards
+Is not like I thought a standard but a complete set of standards all with the
+same name but with different versions. 
+
+#### PKCS#1
+Is for RSA encryption/decryption, encoding/padding, verifying/signing signatures.
+
+#### PKCS#2
+Was withdrawn
+
+#### PKCS#3
+Diffie-Hellman Key Agreement Standard
+
+#### PKCS#4
+Was withdrawn
+
+#### PKCS#5
+Password-based Encryption Standard like PBKDF1 and PBKDF2.
+
+#### PKCS#6
+Extended-Certificate Syntax Standard, which defines the old v1 X.509 and is now
+obselete by v3.
+
+#### PKCS#7
+Cryptographic Message Syntax Standard which is used to sign and/or encrypt
+messages under a Public Key Infrastructure.
+
+#### PKCS#8
+Private-Key Information Syntax Specifiction which is used to carry private
+certificate keypairs (encrypted/unencrypted).
+Is a standard for storing private key information and the key may be encrypted
+with a passphrase using PKCS#5 above.
+These private keys are typcially exchanged in PEM base-64-encoded format.
+
+
+
+### evp_pkey_downgrade
+What does this function do, as in:
+```c
+EC_KEY *EVP_PKEY_get0_EC_KEY(const EVP_PKEY *pkey)
+{
+    if (!evp_pkey_downgrade((EVP_PKEY *)pkey)) {
+        ERR_raise(ERR_LIB_EVP, EVP_R_INACCESSIBLE_KEY);
+        return NULL;
+    }
+    if (EVP_PKEY_base_id(pkey) != EVP_PKEY_EC) {
+        EVPerr(EVP_F_EVP_PKEY_GET0_EC_KEY, EVP_R_EXPECTING_A_EC_KEY);
+        return NULL;
+    }
+    return pkey->pkey.ec;
+}
+```
+I think this is taking a EVP_PKEY in in the form of a new provider type and
+downgrading it to a legacy type. I was confused about this as I was assuming it
+was taking taking the pkey and downgrading it, to then turn it into a provider
+type.
+
+
