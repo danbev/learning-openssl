@@ -295,7 +295,7 @@ is EVP_PKEY_OP_KEYGEN. Now, if we simply return 1 from this function:
 ```console
 (lldb) thread return 1
 ```
-Then it things will work and we'll be able to create a signature from. Should
+Then if things will work and we'll be able to create a signature from. Should
 the operation be specified as something different in the macro? The idea would
 be that evp_pkey_ctx_state return `EVP_PKEY_STATE_LEGACY`. But another option
 would be to update `legacy_ctrl_to_param` to include a case for
@@ -1239,7 +1239,7 @@ Lets set a break point and print out the value:
 ```
 
 #### OpenSSL investigation/troubleshooting
-In `evp_pkey_downgrade` has the following line of code:
+In `EVP_PKEY_get0_EC_KEY` has the following line of code:
 ```c
 EC_KEY *EVP_PKEY_get0_EC_KEY(const EVP_PKEY *pkey)
 {
@@ -1273,6 +1273,11 @@ int evp_pkey_downgrade(EVP_PKEY *pk)
     if (!CRYPTO_THREAD_write_lock(pk->lock))
         return 0;
 ```
+Downgrade in this case means taking a EVP_PKEY which is in the "provider" format
+and downgrading it to a legacy format. By format I mean different fields of the
+same struct `evp_pkey_st`. This [example](./evp-pkey.c) shows that after calling
+`evp_pkey_downgrade` the pkey is of type legacy.
+
 Notice that a write lock is aquired for `pk->lock`. 
 
 Next we have:
@@ -1426,66 +1431,109 @@ only be adding 1?:
 0x00450af0: 0x0000000000000000 0x0000000000000000
 ```
 
+In Node.js we currently allow (at least in the WebCrypto code) to threads
+to access an EVP_PKEY at the same time without locking. In OpenSSL 3 where
+the downgrade function is called, it will clear all the fields of such an
+instance except for the lock. But this will also mean that keymgmt and keydata
+will also be cleared which other parts of the code base depends upon and will
+either fail to export the key or crash due to a segment fault. This same code
+works with OpenSSL 1.1.1 and I'm guessing this is because there is no downgrade
+in OpenSSL 1.1.1 and the above situation never happens. But this should still
+be fixed with proper locking in Node.js.
+
 ### refcount error
 This error occurs with the same webcrypto test as the previous error
 [test-webcrypto-wrap-unwrap.js](#test-webcrypto-wrap-unwrap.js).
 
 ```console
 $ out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-webcrypto-export-import.js
-0x7f8998025810:   2:EVP_PKEY
-0x7f8998025810:   1:EVP_PKEY
-Thread: 140229063206656 up ref for 0x7f8998026ce0
-0x7f8998026ce0:   2:EVP_PKEY
-0x7f8998026ce0:   1:EVP_PKEY
-0x7f8998025810:   0:EVP_PKEY
-0x7f8998025940:   0:EC_KEY
-Thread: 140229173370816 up ref for 0x7f8998026ce0
-0x7f8998026ce0:   2:EVP_PKEY
-Thread: 140229173370816 up ref for 0x7f8998026ce0
-0x7f8998026ce0:   3:EVP_PKEY
-Thread: 140229173370816 up ref for 0x7f8998026ce0
-0x7f8998026ce0:   4:EVP_PKEY
-Thread: 140229173370816 up ref for 0x7f8998026ce0
-0x7f8998026ce0:   5:EVP_PKEY
-0x7f8998026ce0:   4:EVP_PKEY
-0x7f8998026ce0:   3:EVP_PKEY
+0x7fffe8025810:   2:EVP_PKEY
+0x7fffe8025810:   1:EVP_PKEY
+Thread: 140737300678400 up ref for 0x7fffe8026ce0, this: 0x5904b10
+0x7fffe8026ce0:   2:EVP_PKEY
+0x7fffe8026ce0:   1:EVP_PKEY
+0x7fffe8025810:   0:EVP_PKEY
+0x7fffe8025940:   0:EC_KEY
+Thread: 140737342693312 up ref for 0x7fffe8026ce0, this: 0x7fffffff94e0
+0x7fffe8026ce0:   2:EVP_PKEY
+Thread: 140737342693312 up ref for 0x7fffe8026ce0, this: 0x5a7b7e0
+0x7fffe8026ce0:   3:EVP_PKEY
+Thread: 140737342693312 up ref for 0x7fffe8026ce0, this: 0x7fffffff9500
+0x7fffe8026ce0:   4:EVP_PKEY
+Thread: 140737342693312 up ref for 0x7fffe8026ce0, this: 0x5a828d0
+0x7fffe8026ce0:   5:EVP_PKEY
+0x7fffe8026ce0:   4:EVP_PKEY
+0x7fffe8026ce0:   3:EVP_PKEY
 Now export keys...
-Thread: 140229054813952 PKEY_PKCS8_Export: 
-Thread: 140229054813952 up ref for 0x7f8998026ce0
-0x7f8998026ce0:   4:EVP_PKEY
-0x7f8998026ce0:   2:EVP_PKEY
-Thread: 140229173370816 up ref for 0x7f8998026ce0
-0x7f8998026ce0:   3:EVP_PKEY
-0x7f8998026ce0:   2:EVP_PKEY
-Thread: 140229173370816 up ref for 0x7f8998026ce0
-0x7f8998026ce0:   3:EVP_PKEY
-0x7f8998026ce0:   2:EVP_PKEY
-0x7f8998026ce0:   3:EVP_PKEY
-Thread: 140229054813952 PKEY_PKCS8_Export return
-0x7f8990000b60:   0:BIO
-ExportJKWEcKey errno: 0, error:00000000:lib(0)::reason(0)
-Thread: 140229173370816 ExportJWKEcKey: 0x7f8998026ce0
-0x7f8998026ce0:   2:EVP_PKEY
-0x7f8998026ce0:   1:EVP_PKEY
-0x5b4fd70:   2:EC_KEY
-Thread: 140229173370816 up ref for 0x5b50680
-0x5b50680:   2:EVP_PKEY
-0x5b50680:   1:EVP_PKEY
-0x5b4fd70:   1:EC_KEY
-Thread: 140229173370816 up ref for 0x5b50680
-0x5b50680:   2:EVP_PKEY
-0x5b50680:   1:EVP_PKEY
-Thread: 140229173370816 up ref for 0x5b50680
-0x5b50680:   2:EVP_PKEY
-0x5b50680:   1:EVP_PKEY
-0x5b50680:   0:EVP_PKEY
-0x5b4fd70:   0:EC_KEY
-0x7f8998026ce0:   0:EVP_PKEY
-0x7f899801b350:   0:EC_KEY
-0x7f8990001640:   0:EC_KEY
-0x7f8998026ce0:  -1:EVP_PKEY
-crypto/evp/p_lib.c:1667: OpenSSL internal error: refcount error
-Aborted (core dumped)
+Thread: 140737219917568 PKEY_PKCS8_Export: 
+Thread: 140737219917568 up ref for 0x7fffe8026ce0, this: 0x7fffefffed00
+0x7fffe8026ce0:   4:EVP_PKEY
+0x7fffe8026ce0:   2:EVP_PKEY
+Thread: 140737342693312 up ref for 0x7fffe8026ce0, this: 0x7fffffff8820
+0x7fffe8026ce0:   3:EVP_PKEY
+0x7fffe8026ce0:   2:EVP_PKEY
+Thread: 140737342693312 up ref for 0x7fffe8026ce0, this: 0x7fffffff8780
+0x7fffe8026ce0:   3:EVP_PKEY
+0x7fffe8026ce0:   2:EVP_PKEY
+0x7fffe8026ce0:   3:EVP_PKEY
+Thread: ExportJKWEcKey errno: 0, error:00000000:lib(0)::reason(0)
+Thread: 140737342693312 ExportJWKEcKey: 0x7fffe8026ce0
+140737219917568 PKEY_PKCS8_Export return
+0x7fffe0000b60:   0:BIO
+0x7fffe8026ce0:   2:EVP_PKEY
+0x7fffe8026ce0:   1:EVP_PKEY
+0x5a88b80:   2:EC_KEY
+Thread: 140737342693312 up ref for 0x5a8af80, this: 0x5a86cb0
+0x5a8af80:   2:EVP_PKEY
+0x5a8af80:   1:EVP_PKEY
+0x5a88b80:   1:EC_KEY
+Thread: 140737342693312 up ref for 0x5a8af80, this: 0x7fffffff8790
+0x5a8af80:   2:EVP_PKEY
+0x5a8af80:   1:EVP_PKEY
+Thread: 140737342693312 up ref for 0x5a8af80, this: 0x7fffffff8710
+0x5a8af80:   2:EVP_PKEY
+0x5a8af80:   1:EVP_PKEY
+0x5a8af80:   0:EVP_PKEY
+0x5a88b80:   0:EC_KEY
+0x7fffe8026ce0:   0:EVP_PKEY
+0x7fffe801b350:   0:EC_KEY
+0x7fffe0001640:   0:EC_KEY
+0x7fffe8026ce0:  -1:EVP_PKEY
+```
+Notice that `0x7f8998026ce0` is `-1` and if we look at the backtrace for this
+we can see `0x0000000005a7b7e0`
+```console
+(lldb) bt 
+* thread #1, name = 'node', stop reason = signal SIGABRT
+  * frame #0: 0x00007ffff7553625 libc.so.6`.annobin_raise.c + 325
+    frame #1: 0x00007ffff753c8d9 libc.so.6`.annobin_loadmsgcat.c_end.unlikely + 299
+    frame #2: 0x00007ffff7d642af libcrypto.so.3`OPENSSL_die(message="refcount error", file="crypto/evp/p_lib.c", line=1667) at cryptlib.c:421:5
+    frame #3: 0x00007ffff7d4bced libcrypto.so.3`EVP_PKEY_free(x=0x00007fffe8026ce0) at p_lib.c:1667:5
+    frame #4: 0x00000000011b489c node`node::FunctionDeleter<evp_pkey_st, &(EVP_PKEY_free)>::operator(this=0x0000000005a7b7e8, pointer=0x00007fffe8026ce0)(evp_pkey_st*) const at util.h:627:47
+    frame #5: 0x00000000011b3d8c node`std::unique_ptr<evp_pkey_st, node::FunctionDeleter<evp_pkey_st, &(EVP_PKEY_free)> >::~unique_ptr(this=0x0000000005a7b7e8) at unique_ptr.h:292:17
+    frame #6: 0x00000000011ba34a node`node::crypto::ManagedEVPPKey::~ManagedEVPPKey(this=0x0000000005a7b7e0) at crypto_keys.h:72:7
+    frame #7: 0x00000000011fc7f2 node`node::crypto::KeyObjectData::~KeyObjectData(this=0x0000000005a7b7b0) at crypto_keys.h:130:7
+    frame #8: 0x00000000011fc82a node`node::crypto::KeyObjectData::~KeyObjectData(this=0x0000000005a7b7b0) at crypto_keys.h:130:7
+    frame #9: 0x00000000011fce12 node`std::_Sp_counted_ptr<node::crypto::KeyObjectData*, (__gnu_cxx::_Lock_policy)2>::_M_dispose(this=0x0000000005a73540) at shared_ptr_base.h:377:9
+    frame #10: 0x0000000000ec4228 node`std::_Sp_counted_base<(__gnu_cxx::_Lock_policy)2>::_M_release(this=0x0000000005a73540) at shared_ptr_base.h:155:6
+    frame #11: 0x0000000000ec3a6f node`std::__shared_count<(__gnu_cxx::_Lock_policy)2>::~__shared_count(this=0x0000000005a7b878) at shared_ptr_base.h:730:4
+    frame #12: 0x00000000011aa2e6 node`std::__shared_ptr<node::crypto::KeyObjectData, (__gnu_cxx::_Lock_policy)2>::~__shared_ptr(this=0x0000000005a7b870) at shared_ptr_base.h:1169:7
+    frame #13: 0x00000000011aa328 node`std::shared_ptr<node::crypto::KeyObjectData>::~shared_ptr(this=0x0000000005a7b870) at shared_ptr.h:103:11
+    frame #14: 0x00000000011fcdae node`node::crypto::KeyObjectHandle::~KeyObjectHandle(this=0x0000000005a7b850) at crypto_keys.h:166:7
+    frame #15: 0x00000000011fcdd6 node`node::crypto::KeyObjectHandle::~KeyObjectHandle(this=0x0000000005a7b850) at crypto_keys.h:166:7
+    frame #16: 0x0000000000f4c3d0 node`node::BaseObject::DeleteMe(data=0x0000000005a7b850) at env.cc:1620:10
+    frame #17: 0x0000000000f3d2dd node`node::Environment::RunCleanup(this=0x000000000590a370) at env.cc:668:13
+    frame #18: 0x0000000000ec838d node`node::FreeEnvironment(env=0x000000000590a370) at environment.cc:385:20
+    frame #19: 0x0000000000ec446c node`node::FunctionDeleter<node::Environment, &(node::FreeEnvironment(node::Environment*))>::operator(this=0x00007fffffffce50, pointer=0x000000000590a370)(node::Environment*) const at util.h:627:47
+    frame #20: 0x0000000000ec3e3e node`std::unique_ptr<node::Environment, node::FunctionDeleter<node::Environment, &(node::FreeEnvironment(node::Environment*))> >::~unique_ptr(this=0x00007fffffffce50) at unique_ptr.h:292:17
+    frame #21: 0x0000000001059f23 node`node::NodeMainInstance::Run(this=0x00007fffffffced0, env_info=0x00000000057fc960) at node_main_instance.cc:135:49
+    frame #22: 0x0000000000f98355 node`node::Start(argc=2, argv=0x00007fffffffd138) at node.cc:1123:41
+    frame #23: 0x000000000260fd72 node`main(argc=2, argv=0x00007fffffffd138) at node_main.cc:127:21
+    frame #24: 0x00007ffff753e1a3 libc.so.6`.annobin_libc_start.c + 243
+    frame #25: 0x0000000000ebd01e node`_start + 46
+```
+```console
+(lldb) br s -f p_lib.c -l 1655 -c 'x == 0x7fffe8026ce0'
 ```
 
 __work in progress__
