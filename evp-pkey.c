@@ -8,6 +8,8 @@
 #include <string.h>
 
 #include "../openssl/include/crypto/evp.h"
+#include "../openssl/include/crypto/asn1.h"
+#include "../openssl/crypto/evp/evp_local.h"
 
 EVP_PKEY* create_evp_pkey();
 
@@ -23,20 +25,24 @@ int main(int arc, char *argv[]) {
   printf("EVP_PKEY exploration\n");
   EVP_PKEY* pkey = create_evp_pkey();
 
-  printf("Before downgrade of EVP_PKEY\n");
+  printf("Before downgrade of EVP_PKEY:\n");
   printf("evp_pkey_is_legacy: %s\n", evp_pkey_is_legacy(pkey) ? "true" : "false");
+  printf("evp_pkey->ameth: %p\n", pkey->ameth);
   printf("evp_pkey->keymgmt: %p\n", pkey->keymgmt);
   printf("evp_pkey->keydata: %p\n", pkey->keydata);
-  printf("evp_pkey->ameth: %p\n", pkey->ameth);
+  printf("evp_pkey->keymgmt->prov: %s\n", pkey->keymgmt->prov);
+  printf("evp_pkey->keymgmt->prov name: %s\n", OSSL_PROVIDER_name(pkey->keymgmt->prov));
 
   // This will call evp_pkey_downgrade
   EC_KEY* ec_key = EVP_PKEY_get0_EC_KEY(pkey);
 
-  printf("\nAfter downgrade of EVP_PKEY\n");
+  printf("\nAfter downgrade of EVP_PKEY:\n");
   printf("evp_pkey_is_legacy: %s\n", evp_pkey_is_legacy(pkey) ? "true" : "false");
   printf("evp_pkey->keymgmt: %p\n", pkey->keymgmt);
   printf("evp_pkey->keydata: %p\n", pkey->keydata);
-  printf("evp_pkey->ameth: %p\n", pkey->ameth);
+  printf("evp_pkey->ameth->pkey_id: %d\n", pkey->ameth->pkey_id);
+  printf("evp_pkey->ameth->pem_str: %s\n", pkey->ameth->pem_str);
+  printf("evp_pkey->ameth->info: %s\n", pkey->ameth->info);
 
   EVP_PKEY_free(pkey);
   exit(EXIT_SUCCESS);
