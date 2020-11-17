@@ -1276,7 +1276,14 @@ int evp_pkey_downgrade(EVP_PKEY *pk)
 Downgrade in this case means taking a EVP_PKEY which is in the "provider" format
 and downgrading it to a legacy format. By format I mean different fields of the
 same struct `evp_pkey_st`. This [example](./evp-pkey.c) shows that after calling
-`evp_pkey_downgrade` the pkey is of type legacy.
+`evp_pkey_downgrade` the pkey is of type legacy. So before the call to
+evp_pkey_downgrade the EVP_PKEY will be of the new provider type so it will
+have the fields `keymgmt`, `keydata` etc populated. But after the call those
+fields will be null and instead the legacy fields, `ameth`, `pkey` etc will
+be populated. Now, if other threads try to check fields on this EVP_PKEY instance
+expecting it to be the new type things will go very wrong, checks might return
+that it is of the new type, and the following call to access one of those
+fields will cause a segment fault.
 
 Notice that a write lock is aquired for `pk->lock`. 
 
