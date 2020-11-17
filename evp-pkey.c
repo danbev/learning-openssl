@@ -9,6 +9,8 @@
 
 #include "../openssl/include/crypto/evp.h"
 
+EVP_PKEY* create_evp_pkey();
+
 void error_and_exit(const char* msg) {
   printf("%s\n", msg);
   char buf[256];
@@ -18,8 +20,30 @@ void error_and_exit(const char* msg) {
 }
 
 int main(int arc, char *argv[]) {
+  printf("EVP_PKEY exploration\n");
+  EVP_PKEY* pkey = create_evp_pkey();
+
+  printf("Before downgrade of EVP_PKEY\n");
+  printf("evp_pkey_is_legacy: %s\n", evp_pkey_is_legacy(pkey) ? "true" : "false");
+  printf("evp_pkey->keymgmt: %p\n", pkey->keymgmt);
+  printf("evp_pkey->keydata: %p\n", pkey->keydata);
+  printf("evp_pkey->ameth: %p\n", pkey->ameth);
+
+  // This will call evp_pkey_downgrade
+  EC_KEY* ec_key = EVP_PKEY_get0_EC_KEY(pkey);
+
+  printf("\nAfter downgrade of EVP_PKEY\n");
+  printf("evp_pkey_is_legacy: %s\n", evp_pkey_is_legacy(pkey) ? "true" : "false");
+  printf("evp_pkey->keymgmt: %p\n", pkey->keymgmt);
+  printf("evp_pkey->keydata: %p\n", pkey->keydata);
+  printf("evp_pkey->ameth: %p\n", pkey->ameth);
+
+  EVP_PKEY_free(pkey);
+  exit(EXIT_SUCCESS);
+}
+
+EVP_PKEY* create_evp_pkey() {
   const char* curve_name = "P-384";
-  printf("EVP_PKEY example\n");
   int curve_nid = EC_curve_nist2nid(curve_name);
   if (curve_nid == NID_undef) {
     // try converting the shortname (sn) to nid (numberic id)
@@ -49,17 +73,7 @@ int main(int arc, char *argv[]) {
   if (EVP_PKEY_keygen(key_ctx, &pkey) <= 0) {
     error_and_exit("Could not generate the private key");
   }
-  printf("Created EVP_PKEY\n");
-
-  printf("Is evp_pkey legacy: %s\n", evp_pkey_is_legacy(pkey) ? "true" : "false");
-
-  // This will call evp_pkey_downgrade
-  EC_KEY* ec_key = EVP_PKEY_get0_EC_KEY(pkey);
-
-  printf("Is evp_pkey legacy: %s\n", evp_pkey_is_legacy(pkey) ? "true" : "false");
-
-  EVP_PKEY_free(pkey);
   EVP_PKEY_CTX_free(ctx);
   EVP_PKEY_CTX_free(key_ctx);
-  exit(EXIT_SUCCESS);
+  return pkey;
 }
