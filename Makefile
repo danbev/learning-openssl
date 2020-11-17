@@ -130,6 +130,9 @@ decoder: decoder.c
 keymgmt: keymgmt.c
 	$(CC) $(CFLAGS)
 
+evp-pkey: evp-pkey.c
+	$(CC) $(CFLAGS) -I../openssl/include
+
 
 .PHONY: clean 
 
