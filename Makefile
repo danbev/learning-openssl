@@ -127,6 +127,9 @@ store-info: store-info.c
 decoder: decoder.c
 	$(CC) $(CFLAGS)
 
+keymgmt: keymgmt.c
+	$(CC) $(CFLAGS)
+
 
 .PHONY: clean 
 
