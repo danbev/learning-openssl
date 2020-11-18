@@ -1448,6 +1448,9 @@ works with OpenSSL 1.1.1 and I'm guessing this is because there is no downgrade
 in OpenSSL 1.1.1 and the above situation never happens. But this should still
 be fixed with proper locking in Node.js.
 
+This [issue](https://github.com/openssl/openssl/issues/2165) is related to
+OpenSSL's thread safety and this [blog](https://www.openssl.org/blog/blog/2017/02/21/threads/).
+
 ### refcount error
 This error occurs with the same webcrypto test as the previous error
 [test-webcrypto-wrap-unwrap.js](#test-webcrypto-wrap-unwrap.js).
