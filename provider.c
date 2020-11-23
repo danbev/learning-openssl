@@ -4,15 +4,15 @@
 
 int main(int argc, char** argv) {
  printf("Provider example\n");
-  OSSL_PROVIDER* def;
+  OSSL_PROVIDER* provider;
 
-  def = OSSL_PROVIDER_load(NULL, "default");
-  if (def == NULL) {
+  provider = OSSL_PROVIDER_load(NULL, "default");
+  if (provider == NULL) {
     printf("Failed to load Default provider\n");
     exit(EXIT_FAILURE);
   }
 
-  OSSL_PROVIDER_unload(def);
+  OSSL_PROVIDER_unload(provider);
   exit(EXIT_SUCCESS);
 }
 
