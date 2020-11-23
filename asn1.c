@@ -37,6 +37,7 @@ int main(int argc, char** argv) {
   printf("Decoded something {%d}\n", decoded->age);
 
   ERR_print_errors_fp(stdout);
+  something_free(decoded);
 
   return 0;
 }
