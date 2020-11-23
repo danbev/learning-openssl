@@ -1438,15 +1438,14 @@ only be adding 1?:
 0x00450af0: 0x0000000000000000 0x0000000000000000
 ```
 
-In Node.js we currently allow (at least in the WebCrypto code) to threads
-to access an EVP_PKEY at the same time without locking. In OpenSSL 3 where
-the downgrade function is called, it will clear all the fields of such an
-instance except for the lock. But this will also mean that keymgmt and keydata
-will also be cleared which other parts of the code base depends upon and will
-either fail to export the key or crash due to a segment fault. This same code
-works with OpenSSL 1.1.1 and I'm guessing this is because there is no downgrade
-in OpenSSL 1.1.1 and the above situation never happens. But this should still
-be fixed with proper locking in Node.js.
+In Node.js we currently allow two threads to access an EVP_PKEY at the same time
+without locking. In OpenSSL 3 where the downgrade function is called, it will
+clear all the fields of such an instance except for the lock. But this also
+means that keymgmt and keydata will be cleared which other parts of the code
+base depends upon and will either fail to export the key or crash due to a
+segment fault. This same code works with OpenSSL 1.1.1 and I'm guessing this is
+because there is no downgrade in OpenSSL 1.1.1 and the above situation never
+happens. But this should still be fixed with proper locking in Node.js.
 
 This [issue](https://github.com/openssl/openssl/issues/2165) is related to
 OpenSSL's thread safety and this [blog](https://www.openssl.org/blog/blog/2017/02/21/threads/).
