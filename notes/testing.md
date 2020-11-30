@@ -75,6 +75,16 @@ Running tests with asan:
 $ make _tests
 ```
 
+### Undefined Behaviour Sanitizer (ubsan)
+```console
+$ sudo dnf install libubsan
+```
+
+Configure build:
+```console
+$ ./config --strict-warnings --debug --prefix=/home/danielbevenius/work/security/openssl_build_master linux-x86_64 -fsanitize=address enable-ubsan
+```
+
 #### Adding a test
 Find an appropriate test in the test directory and look for the `setup_tests`
 function. Add the new test using one of the macros in test/testutil.h, for example:
