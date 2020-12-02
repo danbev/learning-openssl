@@ -571,6 +571,12 @@ in 3.x. In 3.x a EVP_PKEY can be downgraded to a legacy key and in the process
 the memory location pointed to by a EVP_PKEY* will be cleared and other threads
 that need to read fields will return early or segfault.
 
+To find all the functions exported that are related to EVP_PKEY one can use
+`nm`:
+```console
+$ nm -C ../openssl_build_master/lib/libcrypto.so.3 | grep EVP_PKEY
+```
+
 
 ### EVP_KEYMGMT
 Is a struct that contains data and functions to enable providers import/export
@@ -627,7 +633,10 @@ struct evp_keymgmt_st {
 
 
 ### Message Digest 
-Is a cryptographic hash function which takes a string of any length as input and produces a fixed length hash value. A message digest is a fixed size numeric representation of the contents of a message
+Is a cryptographic hash function which takes a string of any length as input and
+produces a fixed length hash value. A message digest is a fixed size numeric
+representation of the contents of a message
+
 An example of this can be found in digest.c
 
     md = EVP_get_digestbyname("SHA256");
@@ -798,11 +807,14 @@ Is a message digest that is encrypted. If a symmetric key is used it is know as 
 
 ### Digital signature
 Is a message digest that is encrypted.
-A message can be signed with the private key and sent with the message itself. The receiver then decrypts the signature before comparing it a locally generated digest.
+A message can be signed with the private key and sent with the message itself.
+The receiver then decrypts the signature before comparing it a locally generated digest.
 
     EVP_SignInit_ex(mdctx, md, engine);
 
-Interesting is that this will call `EVP_DigestInit_ex` just like in our message digest walkthrough. This is because this is actually a macro defined in `include/openssl/evp.h`:
+Interesting is that this will call `EVP_DigestInit_ex` just like in our message
+  digest walkthrough. This is because this is actually a macro defined in
+  `include/openssl/evp.h`:
 
     # define EVP_SignInit_ex(a,b,c)          EVP_DigestInit_ex(a,b,c)
     # define EVP_SignInit(a,b)               EVP_DigestInit(a,b)
@@ -816,6 +828,9 @@ But `EVP_SignFinal` is implemented in `crypto/evp/p_sign.c`:
     int EVP_SignFinal(EVP_MD_CTX *ctx, unsigned char *sigret,
                   unsigned int *siglen, EVP_PKEY *pkey) {
     }
+
+### Digital signature Algorithm
+
 
 ### EVP_PKEY
 EVP_PKEY is a general private key reference without any particular algorithm.
@@ -1327,10 +1342,76 @@ it must be sent along with the cypher text.
 ### Block ciphers
 
 ### Advanced Entryption Standard (AES)
-A replacedment for Data Encryption Standard (DES).
-Is a block cypher that handles 128-bit blocks of plaintext at a time.
+A replacement for Data Encryption Standard (DES) choosen by the U.S. goverment.
+Is a symmetric block cipher.
 
+The standard includes three block ciphers AES-128, AES-192, and AES-256.
 
+Is a block cypher that handles 128-bit blocks of plaintext at a time. So each
+cipher can encrypt/decrypt data in blocks of 128-bits using encryption keys
+of 128, 192, 256 bits.
+
+Since this is a symmetric cipher the same key is used for encryption/decryption
+so the sender and reciever must agree on the secret key being used.
+
+AES is often used for data "at rest" like database encryption, storage
+encryption. Compare this with RSA which is often used for encrypting data in
+transit (think TLS). Recall that RSA is a asymmetric encryption
+So this makes sense that using the same key for database encryption as there is
+only one part doing the encryption/decryption. But in a communication channel
+there are two separate endpoints. Also recall that RSA is somewhat slow so
+using RSA in combination with AES to benefit from the performance of AES.
+
+So AES takes a 128 bit message and turns it into a grid:
+```
+16 bytes = 16 * 8 = 128 bits
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+|00|01|02|03|04|05|06|07|08|09|10|11|12|13|14|15|
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+     |
+     | transformed into 4x4 matrix/grid
+     ↓ 
++--+--+--+--+
+|00|04|08|12|
++--+--+--+--+
+|01|05|09|13|
++--+--+--+--+
+|02|06|10|14|
++--+--+--+--+
+|03|07|11|15|
++--+--+--+--+
+```
+
+### Substitution Permutation (SP) networks
+A lot of modern symmetric cryptography uses SP networks.
+
+Old school substitution (think ceasar or enigma) would take a message and
+substitute each character into a different character:
+```
+1  2  3  4  5
+↓  ↓  ↓  ↓  ↓
+c₁ c₂ c₃ c₄ c₅
+```
+This is a one-to-one mapping. We can say that this type of cipher would encrypt
+a block of 1 character into a single crypto character.
+
+A modern block cipher takes a block of characters say 128 bits (16 bytes) out
+outputs a cipher text of 128 bits.
+
+What we want to do is to have a substitution like above but also a permutation
+(operation like xor, swapping/moving characters etc).
+
+```
+      8 4 2 1
+      0 0 0 1         (0000->1111)(0-15)
+      | | | |
+in  +----------+
+    |          |
+    |          |
+out +----------+
+      | | | |
+
+```
 
 ### ca
 This is an application:
@@ -1483,18 +1564,19 @@ N = 2*7 = 14
 ```
 `N` will become our modulus.
 
-What are the values that don't have common factors with 14?
+What are the values that don't have common factors with our modulus (14)?
 ```
 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
 1, x, 3, x, 5, x, x, x, 9,  x, 11,  x, 13,  x
 1, 3, 5, 9, 11, 13
 ```
-So we have 6 values that don't have comman factors with 14.
+So we have 6 values that don't have common factors with 14.
+
 This can also be calculated using:
 ```
-(q - 1) * (p - 1) = 
-(2 - 1) * (7 - 1) = 
-(1) * (6) = 6
+L = (q - 1) * (p - 1)
+L = (2 - 1) * (7 - 1) 
+L = (1) * (6) = 6
 ```
 So `L` will be `6`.
 
@@ -1510,7 +1592,7 @@ our modulus(14). `5` is the only option in our case:
 ```
 (5, 14)
 ```
-This is the public key exponent which we will se later is used as the exponent
+This is the public key exponent which we will see later is used as the exponent
 that we raise the value to be encrypted (m) to:
 ```
 m⁵mod(14) = encrypted value
@@ -1593,7 +1675,6 @@ circle (a times) to get to the point.
 
 So after the exchange here is a secret key that both parties can use to encrypt
 and decrypt messages.
-
 
 ### ECDH
 Now Eliptic Curve Cryptography with Diffie Hellman ECDH is done in a similar way
@@ -3945,6 +4026,33 @@ issue.
 
 __work in progress__
 
+### Key Generation
+First a EVP_PKEY_CTX is created for the type/id of the key we want to have a
+key generated for, in this case we are specifying EVP_PKEY_RSA_PSS.
+```c
+  EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA_PSS, NULL);
+  if (ctx == NULL) {
+    error_and_exit("Could not create a context for RSA_PSS");
+  }
+```
+Lets start with what an `EVP_PKEY_CTX` actually is. We can find its declaration
+in `include/openssl/types.h`:
+```c
+typedef struct evp_pkey_ctx_st EVP_PKEY_CTX;
+```
+And the struct definition in `include/crypto/evp.h`:
+```c
+struct evp_pkey_ctx_st {
+    int operation;
+    OPENSSL_CTX *libctx;
+    const char *propquery;
+    const char *keytype;
+    EVP_KEYMGMT *keymgmt;
+```
+Next there is a union which `op` which will be different depending on the
+operation that is going to be performed, for example key generation,
+key exchange, signature, encryption/decryption, EVP_KEM (what is this?).
+
 ### RSA-PSS
 Is one of the signature schemes in RSA. PSS stands for Probabilistic Signture
 Scheme. PSS requires parameters like the hash function to be used and the mask
@@ -4040,4 +4148,4 @@ downgrading it to a legacy type. I was confused about this as I was assuming it
 was taking taking the pkey and downgrading it, to then turn it into a provider
 type.
 
-
+### How are functions exported in OpenSSL?
