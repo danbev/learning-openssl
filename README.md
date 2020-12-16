@@ -1418,10 +1418,11 @@ This is an application:
 ```console
 $ openssl ca --help
 ```
-It can be used to sign certificate requests and generate CRLs and also maintains a text database of issued 
-certificates and their status.
+It can be used to sign certificate requests and generate CRLs and also maintains
+a text database of issued certificates and their status.
 
-Every certificate as a serial number which is a unique positive integer assigned by the CA.
+Every certificate as a serial number which is a unique positive integer assigned
+by the CA.
 
 ```console
 $ openssl x509 -in agent8-cert.pem -text -noout
@@ -1433,10 +1434,10 @@ Certificate:
     ...
 ```
 
-Each issued certificate must contain a unique serial number assigned by the CA. It must be unique for each 
-certificate given by a given CA. 
-OpenSSL keeps the used serial numbers on a file, by default it has the same name as the CA certificate file 
-with the extension replace by srl
+Each issued certificate must contain a unique serial number assigned by the CA.
+It must be unique for each certificate given by a given CA. 
+OpenSSL keeps the used serial numbers on a file, by default it has the same name
+as the CA certificate file with the extension replace by srl
 
 ### SSL_METHOD
 This struct is defined in `ssl/ssl_locl.h`:
@@ -4148,4 +4149,8 @@ downgrading it to a legacy type. I was confused about this as I was assuming it
 was taking taking the pkey and downgrading it, to then turn it into a provider
 type.
 
-### How are functions exported in OpenSSL?
+### Certificate Revocation List (CRL)
+Is a list of certificates that have been revocted by a CA.
+
+To check the status of a certificate using a CRL, the client reaches out to the
+CA (or CRL issuer) and downloads its certificate revocation list.
