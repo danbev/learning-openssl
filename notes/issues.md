@@ -1889,3 +1889,12 @@ Test Summary Report
 Files=1, Tests=15,  1 wallclock secs ( 0.02 usr  0.00 sys +  0.67 cusr  0.23 csys =  0.92 CPU)
 Result: FAIL
 ```
+
+These test are failing because the files that are being compared don't have
+the additional newline, but the old ones did. The files in question are
+`test/certs/cyrillic.msb` and `test/certs/cyrillic.utf`. In 1.1.1 these files
+did have the extra newline in them. 
+
+I'm not sure what if this really matters or not for backward compability, we
+could just change the expected values in our test and have different ones for
+OpenSSL 3.0 and 1.1.1.
