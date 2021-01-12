@@ -133,6 +133,8 @@ keymgmt: keymgmt.c
 evp-pkey: evp-pkey.c
 	$(CC) $(CFLAGS) -I../openssl/include
 
+x509: x509.c
+	$(CC) $(CFLAGS)
 
 .PHONY: clean 
 
