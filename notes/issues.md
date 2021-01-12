@@ -1548,3 +1548,344 @@ we can see `0x0000000005a7b7e0`
 __work in progress__
 
 
+### test-crypto-x509.js
+The following error is generated:
+```console
+=== debug test-crypto-x509 ===                                                  
+Path: parallel/test-crypto-x509                                                 
+node:assert:119                                                                 
+  throw new AssertionError(obj);                                                
+  ^                                                                             
+                                                                                
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:           
++ actual - expected                                                             
+                                                                                
+  'OCSP - URI:http://ocsp.nodejs.org/\n' +                                      
++   'CA Issuers - URI:http://ca.nodejs.org/ca.cert'                             
+-   'CA Issuers - URI:http://ca.nodejs.org/ca.cert\n'                           
+    at Object.<anonymous> (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-x509.js:94:10)
+    at Module._compile (node:internal/modules/cjs/loader:1108:14)               
+    at Object.Module._extensions..js (node:internal/modules/cjs/loader:1137:10) 
+    at Module.load (node:internal/modules/cjs/loader:973:32)                    
+    at Function.Module._load (node:internal/modules/cjs/loader:813:14)          
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:76:12)
+    at node:internal/main/run_main_module:17:47 {                               
+  generatedMessage: true,                                                       
+  code: 'ERR_ASSERTION',                                                        
+  actual: 'OCSP - URI:http://ocsp.nodejs.org/\n' +                              
+    'CA Issuers - URI:http://ca.nodejs.org/ca.cert',                            
+  expected: 'OCSP - URI:http://ocsp.nodejs.org/\n' +                            
+    'CA Issuers - URI:http://ca.nodejs.org/ca.cert\n',                          
+  operator: 'strictEqual'                                                       
+}                                                                               
+Command: out/Debug/node --expose-internals /home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-x509.js
+```
+Notice that the expected contains a newline character at the end but the
+actual does not.
+
+If we look at the javasscript that is triggering this error:
+```js
+ // Verify that legacy encoding works                                             
+    const legacyObjectCheck = {                                                      
+      subject: 'C=US\n' +                                                            
+        'ST=CA\n' +                                                                  
+        'L=SF\n' +                                                                   
+        'O=Joyent\n' +                                                               
+        'OU=Node.js\n' +                                                             
+        'CN=agent1\n' +                                                              
+        'emailAddress=ry@tinyclouds.org',                                            
+      issuer:                                                                        
+        'C=US\n' +                                                                   
+        'ST=CA\n' +                                                                  
+        'L=SF\n' +                                                                   
+        'O=Joyent\n' +                                                               
+        'OU=Node.js\n' +                                                             
+        'CN=ca1\n' +                                                                 
+        'emailAddress=ry@tinyclouds.org',                                            
+      infoAccess:                                                                    
+        'OCSP - URI:http://ocsp.nodejs.org/\n' +                                     
+        'CA Issuers - URI:http://ca.nodejs.org/ca.cert\n',                           
+      modulus: 'EF5440701637E28ABB038E5641F828D834C342A9D25EDBB86A2BF' +             
+               '6FBD809CB8E037A98B71708E001242E4DEB54C6164885F599DD87' +             
+               'A23215745955BE20417E33C4D0D1B80C9DA3DE419A2607195D2FB' +             
+               '75657B0BBFB5EB7D0BBA5122D1B6964C7B570D50B8EC001EEB68D' +             
+               'FB584437508F3129928D673B30A3E0BF4F50609E6371',                       
+      bits: 1024,                                                                    
+      exponent: '0x10001',                                                           
+      valid_from: 'Nov 16 18:42:21 2018 GMT',                                        
+      valid_to: 'Aug 30 18:42:21 2292 GMT',                                          
+      fingerprint: 'D7:FD:F6:42:92:A8:83:51:8E:80:48:62:66:DA:85:C2:EE:A6:A1:CD', 
+      fingerprint256:                                                                
+        'B0:BE:46:49:B8:29:63:E0:6F:63:C8:8A:57:9C:3F:9B:72:' +                      
+        'C6:F5:89:E3:0D:84:AC:5B:08:9A:20:89:B6:8F:D6',                              
+      serialNumber: 'ECC9B856270DA9A8'                                               
+    };                                                                               
+                                                                                     
+    const legacyObject = x509.toLegacyObject();                                      
+                                                                                     
+    assert.deepStrictEqual(legacyObject.raw, x509.raw);                           
+    assert.strictEqual(legacyObject.subject, legacyObjectCheck.subject);             
+    assert.strictEqual(legacyObject.issuer, legacyObjectCheck.issuer);            
+    assert.strictEqual(legacyObject.infoAccess, legacyObjectCheck.infoAccess);       
+```
+
+`x509.toLegacyObject()` is a native function that we can find in
+src/crypto/crypto_x509.cc:
+```c
+Local<FunctionTemplate> X509Certificate::GetConstructorTemplate(                   
+    Environment* env) {                                                            
+  Local<FunctionTemplate> tmpl = env->x509_constructor_template();                 
+  if (tmpl.IsEmpty()) {                                                            
+    tmpl = FunctionTemplate::New(env->isolate());                                  
+    tmpl->InstanceTemplate()->SetInternalFieldCount(1);                            
+    tmpl->Inherit(BaseObject::GetConstructorTemplate(env));                        
+    tmpl->SetClassName(                                                            
+        FIXED_ONE_BYTE_STRING(env->isolate(), "X509Certificate"));                 
+    env->SetProtoMethod(tmpl, "subject", Subject);                                 
+    env->SetProtoMethod(tmpl, "subjectAltName", SubjectAltName);                   
+    env->SetProtoMethod(tmpl, "infoAccess", InfoAccess);                           
+    env->SetProtoMethod(tmpl, "issuer", Issuer);                                   
+    env->SetProtoMethod(tmpl, "validTo", ValidTo);                                 
+    env->SetProtoMethod(tmpl, "validFrom", ValidFrom);                             
+    env->SetProtoMethod(tmpl, "fingerprint", Fingerprint);                         
+    env->SetProtoMethod(tmpl, "fingerprint256", Fingerprint256);                   
+    env->SetProtoMethod(tmpl, "keyUsage", KeyUsage);                               
+    env->SetProtoMethod(tmpl, "serialNumber", SerialNumber);                       
+    env->SetProtoMethod(tmpl, "pem", Pem);                                         
+    env->SetProtoMethod(tmpl, "raw", Raw);                                         
+    env->SetProtoMethod(tmpl, "publicKey", PublicKey);                             
+    env->SetProtoMethod(tmpl, "checkCA", CheckCA);                                 
+    env->SetProtoMethod(tmpl, "checkHost", CheckHost);                             
+    env->SetProtoMethod(tmpl, "checkEmail", CheckEmail);                           
+    env->SetProtoMethod(tmpl, "checkIP", CheckIP);                                 
+    env->SetProtoMethod(tmpl, "checkIssued", CheckIssued);                         
+    env->SetProtoMethod(tmpl, "checkPrivateKey", CheckPrivateKey);                 
+    env->SetProtoMethod(tmpl, "verify", Verify);                                   
+    env->SetProtoMethod(tmpl, "toLegacy", ToLegacy);                               
+    env->set_x509_constructor_template(tmpl);                                      
+  }                                                                                
+  return tmpl;                                                                     
+}
+
+void X509Certificate::ToLegacy(const FunctionCallbackInfo<Value>& args) {          
+  Environment* env = Environment::GetCurrent(args);                                
+  X509Certificate* cert;                                                           
+  ASSIGN_OR_RETURN_UNWRAP(&cert, args.Holder());                                   
+  Local<Value> ret;                                                                
+  if (X509ToObject(env, cert->get()).ToLocal(&ret))                                
+    args.GetReturnValue().Set(ret);                                                
+}                                                                                  
+
+MaybeLocal<Object> X509ToObject(Environment* env, X509* cert) {                     
+  EscapableHandleScope scope(env->isolate());                                       
+  Local<Context> context = env->context();                                          
+  Local<Object> info = Object::New(env->isolate());                                 
+                                                                                    
+  BIOPointer bio(BIO_new(BIO_s_mem()));
+  if (!Set<Value>(context,                                                          
+                  info,                                                             
+                  env->subject_string(),                                            
+                  GetSubject(env, bio, cert)) ||                                    
+      !Set<Value>(context,                                                          
+                  info,                                                             
+                  env->issuer_string(),                                             
+                  GetIssuerString(env, bio, cert)) ||                               
+      !Set<Value>(context,                                                          
+                  info,                                                             
+                  env->subjectaltname_string(),                                     
+                  GetInfoString<NID_subject_alt_name>(env, bio, cert)) ||           
+      !Set<Value>(context,                                                          
+                  info,                                                             
+                  env->infoaccess_string(),                                         
+                  GetInfoString<NID_info_access>(env, bio, cert))) {                
+    return MaybeLocal<Object>();                                                    
+  }
+  ...
+}
+```
+Se can see that the infoaccess data is retrieved using `GetInfoString`
+```c
+template <int nid>                                                                 
+v8::MaybeLocal<v8::Value> GetInfoString(Environment* env, const BIOPointer& bio, X509* cert) {                                                                  
+  int index = X509_get_ext_by_NID(cert, nid, -1);                                  
+  if (index < 0)                                                                   
+    return Undefined(env->isolate());                                              
+                                                                                   
+  X509_EXTENSION* ext = X509_get_ext(cert, index);                                 
+  CHECK_NOT_NULL(ext);                                                             
+                                                                                   
+  if (!SafeX509ExtPrint(bio, ext) &&                                               
+      X509V3_EXT_print(bio.get(), ext, 0, 0) != 1) {                               
+    USE(BIO_reset(bio.get()));                                                     
+    return v8::Null(env->isolate());                                               
+  }                                                                                
+                                                                                   
+  return ToV8Value(env, bio);                                                      
+}
+```
+Notice that this function is a templated function and the nid is specified
+int the call:
+```c
+                 GetInfoString<NID_info_access>(env, bio, cert))) {                
+```
+
+
+So with OpenSSL 1.1.1 the infoAccess second entry/line contained a newline
+character but with OpenSSL 3.0 it does not. Why is that? And is this a big
+problem?
+
+Lets set a break point in ToLegacy:
+```console
+$ lldb -- out/Debug/node --expose-internals /home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-x509.js
+(lldb) target create "out/Debug/node"
+Current executable set to 'out/Debug/node' (x86_64).
+(lldb) settings set -- target.run-args  "--expose-internals" "/home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-x509.js"
+(lldb) br s -n X509Certificate::ToLegacy
+```
+
+Reproducer: [x509.c](./x509.x)
+
+In crypto/x509/v3_prn.c we have X509V3_EXT_val_prn which is called by
+X509V3_EXT_print:
+```console
+-> 121 	        X509V3_EXT_val_prn(out, nval, indent,
+   122 	                           method->ext_flags & X509V3_EXT_MULTILINE);
+```
+Notice that X509V3_EXT_MULTILINE is being passed in as `ml` below:
+```c
+void X509V3_EXT_val_prn(BIO *out, STACK_OF(CONF_VALUE) *val, int indent, int ml)                                                    
+{                                                                                  
+    int i;                                                                         
+    CONF_VALUE *nval;                                                              
+    if (!val)                                                                      
+        return;                                                                    
+    if (!ml || !sk_CONF_VALUE_num(val)) {                                          
+        BIO_printf(out, "%*s", indent, "");                                        
+        if (!sk_CONF_VALUE_num(val))                                               
+            BIO_puts(out, "<EMPTY>\n");                                            
+    }                                                                              
+    for (i = 0; i < sk_CONF_VALUE_num(val); i++) {                                 
+        if (ml) {                                                                  
+            if (i > 0)                                                             
+                BIO_printf(out, "\n");                                             
+            BIO_printf(out, "%*s", indent, "");                                    
+        }                                                                          
+        else if (i > 0)                                                            
+            BIO_printf(out, ", ");                                                 
+        nval = sk_CONF_VALUE_value(val, i);                                        
+        if (!nval->name)                                                           
+            BIO_puts(out, nval->value);                                            
+        else if (!nval->value)                                                     
+            BIO_puts(out, nval->name);                                             
+#ifndef CHARSET_EBCDIC                                                             
+        else                                                                       
+            BIO_printf(out, "%s:%s", nval->name, nval->value);                     
+#else                                                                              
+        else {                                                                     
+            int len;                                                               
+            char *tmp;                                                             
+            len = strlen(nval->value) + 1;                                         
+            tmp = OPENSSL_malloc(len);                                             
+            if (tmp != NULL) {                                                     
+                ascii2ebcdic(tmp, nval->value, len);                               
+                BIO_printf(out, "%s:%s", nval->name, tmp);                         
+                OPENSSL_free(tmp);                                                 
+            }                                                                      
+        }                                                                          
+#endif                                                                             
+    }                                                                              
+}
+```
+This code above will first print the name and value:
+```
+(lldb) expr nval->value
+(char *) $13 = 0x00000000004177a0 "http://ocsp.nodejs.org/"
+(lldb) expr nval->name
+(char *) $14 = 0x0000000000417590 "OCSP - URI"
+```
+Next iteration it will check if multiline is set and the output a newline
+character, followed by an indent on the following line.
+Then it will process the `CA Issuers - URI` name and value:
+```console
+(lldb) expr nval->name
+(char *) $15 = 0x0000000000417610 "CA Issuers - URI"
+(lldb) expr nval->value
+(char *) $16 = 0x00000000004169f0 "http://ca.nodejs.org/ca.cert"
+```
+And again BIO_printf will be called:
+```c
+            BIO_printf(out, "%s:%s", nval->name, nval->value);                     
+```
+But after this the loop is finished and there will not be another newline
+printed.
+
+In deps/openssl/openssl/crypto/x509v3/v3_prn.c (OpenSSL 1.1.1) the above we
+have the following
+```c
+void X509V3_EXT_val_prn(BIO *out, STACK_OF(CONF_VALUE) *val, int indent,        
+                        int ml)                                                 
+{                                                                               
+    int i;                                                                      
+    CONF_VALUE *nval;                                                           
+    if (!val)                                                                   
+        return;                                                                 
+    if (!ml || !sk_CONF_VALUE_num(val)) {                                       
+        BIO_printf(out, "%*s", indent, "");                                     
+        if (!sk_CONF_VALUE_num(val))                                            
+            BIO_puts(out, "<EMPTY>\n");                                         
+    }                                                                           
+    for (i = 0; i < sk_CONF_VALUE_num(val); i++) {                              
+        if (ml)                                                                 
+            BIO_printf(out, "%*s", indent, "");                                 
+        else if (i > 0)                                                         
+            BIO_printf(out, ", ");                                              
+        nval = sk_CONF_VALUE_value(val, i);                                     
+        if (!nval->name)                                                        
+            BIO_puts(out, nval->value);                                         
+        else if (!nval->value)                                                  
+            BIO_puts(out, nval->name);                                          
+#ifndef CHARSET_EBCDIC                                                          
+        else                                                                    
+            BIO_printf(out, "%s:%s", nval->name, nval->value);                  
+#else                                                                           
+        else {                                                                  
+            int len;                                                            
+            char *tmp;                                                          
+            len = strlen(nval->value) + 1;                                      
+            tmp = OPENSSL_malloc(len);                                          
+            if (tmp != NULL) {                                                  
+                ascii2ebcdic(tmp, nval->value, len);                            
+                BIO_printf(out, "%s:%s", nval->name, tmp);                      
+                OPENSSL_free(tmp);                                              
+            }                                                                   
+        }                                                                       
+#endif                                                                          
+        if (ml)                                                                 
+            BIO_puts(out, "\n");                                                
+    }                                                                           
+}
+```
+Notice the additional if statement if this is multipline which is adding the
+extra new line character.
+Adding this to 3.0 will allow our test to pass but here are tests in OpenSSL
+that will fail with this change. For example:
+```console
+
+$ env VERBOSE=yes make test TESTS=test_x509
+25-test_x509.t .. 1/? 
+not ok 3 - Comparing esc_msb output
+# ------------------------------------------------------------------------------
+not ok 5 - Comparing utf8 output
+# ------------------------------------------------------------------------------
+25-test_x509.t .. Dubious, test returned 2 (wstat 512, 0x200)
+Failed 2/15 subtests 
+	(less 1 skipped subtest: 12 okay)
+
+Test Summary Report
+-------------------
+25-test_x509.t (Wstat: 512 Tests: 15 Failed: 2)
+  Failed tests:  3, 5
+  Non-zero exit status: 2
+Files=1, Tests=15,  1 wallclock secs ( 0.02 usr  0.00 sys +  0.67 cusr  0.23 csys =  0.92 CPU)
+Result: FAIL
+```
