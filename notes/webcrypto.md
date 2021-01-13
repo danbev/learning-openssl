@@ -60,8 +60,7 @@ Has two properties `name` and `length`.
 `name` can be one of `AES-CBC`, `AES-CTR`, `AES-GCM`, or `AES-KW` (Key-Wrap)
 which specifies the mode of operation.
 
-`length` is the number of key to generate (in bits) and can be `128`, `192` or
-`256`.
+`length` is the number of bits to generate and can be `128`, `192` or `256`.
 
 ### RsaHashedKeyGenParams
 Are the parameters used when generating a RSA based key and is used for the
@@ -70,7 +69,7 @@ algoritms `RSASSA-PKCS1-v1_5`, `RSA-PSS`, or `RSA-OAEP`.
 This object has the following properties:
 `name` which is a string and one of `RSASSA-PKCS1-v1_5`, `RSA-PSS`, or `RSA-OAEP`.
 
-`modulusLength` the length of the RSA modulus and should be atleast 2048.
+`modulusLength` the length of the RSA modulus and should be at least 2048.
 
 `publicExponent` is of type Uint8Array. 
 
@@ -137,5 +136,4 @@ Encrypts the plaintext (`data` below) using the specified algorithm and key:
 const result = crypto.subtle.encrypt(algorithm, key, data);
 ```
 The result is a promise what when fulfilled will be an ArrayBuffer.
-
 
