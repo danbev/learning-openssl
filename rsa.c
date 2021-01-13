@@ -92,7 +92,7 @@ int main(int arc, char *argv[]) {
     error_and_exit("EVP_PKEY_decrypt get length failed");
   }
 
-  printf("Determimed plaintext to be of lenght: %d:\n", doutlen);
+  printf("Determimed plaintext to be of length: %d:\n", doutlen);
   dout = OPENSSL_malloc(doutlen);
   if (!dout) {
     error_and_exit("OPENSSL_malloc failed");
