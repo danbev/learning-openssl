@@ -1596,7 +1596,7 @@ our modulus(14). `5` is the only option in our case:
 This is the public key exponent which we will see later is used as the exponent
 that we raise the value to be encrypted (m) to:
 ```
-m⁵mod(14) = encrypted value
+m⁵ mod(14) = encrypted value
 ```
 
 Decryption also uses a tuple with one being the modules as well:
@@ -1623,18 +1623,60 @@ Let choose `11`:
 This values is called the private exponent because in much the same way as
 the public exponent the encrypted value(e) will be raised to this value:
 ```
-e¹¹mod(14) = decrypted value
+y^d mod n = (x^e)^d mod n = x^ed mod n = x
+```
+Where y is the encrypted value, which is the same as the plain text x raised
+to the encryption exponent e mod n. So we can write the decryption as the
+plain text raised to encryption exponent times the decryption exponent mod n.
+
+```
+e¹¹ mod(14) = decrypted value
 ```
 
 Encryption and decryption:
 ```
 message = 2
-m⁵mod(14) = encrypted value
-2⁵mod(14) = 4
+m⁵ mod(14) = encrypted value
+2⁵ mod(14) = 4
 
 encrypted value = 4
-4¹¹mod(14) = 2
+4¹¹ mod(14) = 2
 ```
+And notice that 4 in our case is m⁵, which is 2⁵ mod 14 so we can write this as:
+```
+(m⁵)¹¹ mod (14)
+m⁵*¹¹ mod (14)
+m⁵*¹¹ mod (14) = m⁵⁵ mod (14) = 
+2⁵*¹¹ mod (14) = m⁵⁵ mod (14) = 
+```
+
+Now, there are issues with the what we have done above, first encrypting the
+same plaintext multiple times will produce the same cipher text. There is also
+an issue where if we multiply two ciphertexts with each other mod n we will
+get the plain text?
+```
+y1 × y2 mod n = x1^e × x2^e mod n = (x1 × x2)^e mod n
+```
+
+To avoid this we use padding.
+Optimal Asymmetric Encryption Padding (OAEP or sometimes RSA-OAEP).
+
+In this case we create a bit string as large as the modulus, so a bit string
+of size 14 in our current example. This is padded before encrypion. The bits
+need to be random or otherwise they would just be the same problem as before,
+so there OAEP needs some form of pseudorandom number generator.
+
+I've see the following in books/blogs etc describing padding:
+```
+M = H || 00 . . . 00 || 01 || K
+```
+And I was not sure what `||` meant, but looking at the notation section in
+https://tools.ietf.org/html/rfc3447#section-2 I see it means it's a
+concatenation operator.
+
+
+Parameters/labels are optional bytes that are prepended to the message but
+not encrypted?
 
 ### Diffie Hellman Key Exchange
 
@@ -4154,3 +4196,22 @@ Is a list of certificates that have been revocted by a CA.
 
 To check the status of a certificate using a CRL, the client reaches out to the
 CA (or CRL issuer) and downloads its certificate revocation list.
+
+### x509
+
+#### InfoAccess
+Is part of https://www.ietf.org/rfc/rfc3280.txt and indicates how to access
+CA information and services for the issuer of the certificate.
+
+### Optimal Asymmetric Encryption Padding (OAEP)
+Is a padding scheme used with RSA encryption.
+
+
+### Mask Generation Function (MGF)
+There is one such function specified which is named MGF1. This is similar to
+a cryptographic hash function but the output can be of variable length (not
+fixed as with a hash function).
+
+"A mask generation function takes an octet string of variable length and a
+desired output length as input, and outputs an octet string of the desired
+length."
