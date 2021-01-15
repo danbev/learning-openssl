@@ -18,8 +18,9 @@ void error_and_exit(const char* msg) {
 int main(int arc, char *argv[]) {
   printf("RSA example\n");
 
-  int modulus_bits = 512;
+  //int modulus_bits = 512;
   //int modulus_bits = 4096;
+  int modulus_bits = 2048;
   const uint32_t exponent = 0x10001;
 
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
@@ -74,7 +75,7 @@ int main(int arc, char *argv[]) {
   }
   */
 
-  unsigned char* in = (unsigned char*) "Bajja";
+  unsigned char* in = (unsigned char*) "{'key_ops':['encrypt'],'ext':true,'kty':'RSA','n':'pxk47EU_QTbyNixQ6hfiZUjOuCOp7P3AwCC37YUnLdDyZoDttNB7F3ka01sk5OECC1C6Vm34zf1l5AwjEdYplGDf0ARsZTKRLF1YusA5gLf06YoXb7B6Sevd87Pr4fW_hwZNtURHic2a4gJngKuPuDrUEs4SAE9OkdmnrSreWLs-lGxAQlt37plZPN8sddq03kwEd9XWLzDEJWQVy6IeUld_9Wgg75105nyA4yBbaCVpIRtmzZz4Hfr5cKwBy8eHMXePxrDM7C0nlkpIJSZ9P8sLJYLLjSrGFsfrclECeUyn9BQo0q_wxeZa2f16Z6zExQKNBriI-t6ihNItsnN88w','e':'AQAB','alg':'RSA-OAEP-256'}     ";
   size_t outlen;
   unsigned char* out;
 
