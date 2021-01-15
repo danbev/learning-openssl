@@ -2151,6 +2151,7 @@ int ossl_rsa_padding_add_PKCS1_OAEP_mgf1_ex(OSSL_LIB_CTX *libctx,
 ```
 So `emlen` is the length in octets of an encoded message which in our case
 is set to the modulus (n, rsasize) minus 1. 
+
 ```c
     /* step 2b: check KLen > nLen - 2 HLen - 2 */                                  
     if (flen > emlen - 2 * mdlen - 1) {                                            
@@ -2158,12 +2159,65 @@ is set to the modulus (n, rsasize) minus 1.
         return 0;                                                                  
     }                
 ```
-`flen` is the from length which is the length of our string to be encrypted.
-`emlen` is the length in octets of 
-`HLen` is the length of the output of the hash function `H`.
-`nLen` is the byte length of n (the modulus of rsa which is tlen/rsasize above).
+These are the values used in the code:  
+`flen` is the from length which is the length of our string to be encrypted.  
+`emlen` is the length in octets of the tlen/rsasize, minus the separator 01?   
+`mdlen` is the length of the digest functions, md_size which for sha256 is 32.  
+
+These are the values use din the spec:  
+`KLen` is the byte length of the message to be encrypted.  
+`nLen` is the byte length of n (the modulus of rsa which is tlen/rsasize above).  
+`HLen` is the length of the output of the hash function `H`.  
+
+5 > 64 - (2*20) - 2
+5 > 64 - 40 - 2
+5 > 22
+
+5 > 64 - (2*32) - 2
+5 > 64 - 64 - 2
+5 > -2
+
+K is the keying material which should be a byte string of at most
+nLen - 2HLen - 2 bytes.
+
+nlen is the byte length of n (modulus), HLen is the byte output of the hash
+function H and -2 bytes for the separator 01.
+In our case nLen is the rsa n value which is 64, HLen is the digest function
+output length which for sha256 is 32 and for sha1 is 20.
+
+64 - 2*32 - 2 = -2
+64 - 2*20 - 2 = 22
+
+It just seems very strange that the value for sha256 is negative.
+
+The specification referred to above can be found
+[here](https://csrc.nist.gov/CSRC/media/Publications/sp/800-56b/rev-2/draft/documents/sp800-56Br2-draft.pdf).
 
 Now, I noticed that is I don't set the digest which is our case is SHA-256 it
 will default to SHA-1. SHA-1 used a size of 20 instead of 32 which.
 
-*work in progress**
+Now, it turns out that it is actually the keysize which is not large enough
+even though the error message got my looking elsewhere.
+I've been using a modulus size of 512, and increasing it to 1024 will take care
+of this issue. Perhaps this check in OpenSSL could be moved to come before
+the other check:
+```c
+     if (emlen < 2 * mdlen + 1) {                                                
+         ERR_raise(ERR_LIB_RSA, RSA_R_KEY_SIZE_TOO_SMALL);                       
+         return 0;                                                               
+     }                                                                           
+                                                                                 
+     /* step 2b: check KLen > nLen - 2 HLen - 2 */                               
+      if (flen > emlen - 2 * mdlen - 1) {                                         
+          ERR_raise(ERR_LIB_RSA, RSA_R_DATA_TOO_LARGE_FOR_KEY_SIZE);              
+          return 0;                                                               
+      }
+```
+This would produce the following error instread:
+```console
+$ ./rsa_data_too_large 
+RSA example
+Going to encrypt: Bajja, len: 5
+Determined ciphertext to be of length: 64:
+EVP_PKEY_encrypt failed
+errno: 33554552, error:02000078:rsa routines::key size too small
