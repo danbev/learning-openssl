@@ -2067,6 +2067,103 @@ So we need to know what was used as the value passed to `EVP_get_digestbyname`:
 ```
 With this information it was possible to create a [reproducer](rsa_data_too_large.c).
 
+Looking closer at where this is raised in OpenSSL we first have the call
+to rsa_encrypt:
+```c
+  static int rsa_encrypt(void *vprsactx, unsigned char *out, size_t *outlen,         
+                         size_t outsize, const unsigned char *in, size_t inlen)   
+  {                                                                                  
+      PROV_RSA_CTX *prsactx = (PROV_RSA_CTX *)vprsactx;                              
+      int ret;                                                                       
+                                                                                     
+      if (!ossl_prov_is_running())                                                   
+          return 0;                                                                  
+                                                                                     
+      if (out == NULL) {                                                             
+          size_t len = RSA_size(prsactx->rsa);                                       
+                                                                                     
+          if (len == 0) {                                                            
+              ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_KEY);                           
+              return 0;                                                              
+          }                                                                          
+          *outlen = len;                                                             
+          return 1;                                                                  
+      }                                                                              
+                                                                                     
+      if (prsactx->pad_mode == RSA_PKCS1_OAEP_PADDING) {                             
+          int rsasize = RSA_size(prsactx->rsa);                                      
+          unsigned char *tbuf;                                                       
+                                                                                     
+          if ((tbuf = OPENSSL_malloc(rsasize)) == NULL) {                            
+              ERR_raise(ERR_LIB_PROV, ERR_R_MALLOC_FAILURE);                         
+              return 0;                                                              
+          }                                                                          
+          if (prsactx->oaep_md == NULL) {                                            
+              OPENSSL_free(tbuf);                                                    
+              prsactx->oaep_md = EVP_MD_fetch(prsactx->libctx, "SHA-1", NULL);       
+              ERR_raise(ERR_LIB_PROV, ERR_R_INTERNAL_ERROR);                         
+              return 0;                                                              
+          }                                                                          
+          ret =                                                                      
+              ossl_rsa_padding_add_PKCS1_OAEP_mgf1_ex(prsactx->libctx, tbuf,         
+                                                      rsasize, in, inlen,            
+                                                      prsactx->oaep_label,           
+                                                      prsactx->oaep_labellen,        
+                                                      prsactx->oaep_md,              
+                                                      prsactx->mgf1_md);
+```
+And the error is raised from `ossl_rsa_padding_add_PKCS1_OAEP_mgf1_ex`.
+```c
+int ossl_rsa_padding_add_PKCS1_OAEP_mgf1_ex(OSSL_LIB_CTX *libctx,                  
+                                            unsigned char *to, int tlen,           
+                                            const unsigned char *from, int flen,
+                                            const unsigned char *param,            
+                                            int plen, const EVP_MD *md,            
+                                            const EVP_MD *mgf1md)                  
+{                                                                                  
+    int rv = 0;                                                                    
+    int i, emlen = tlen - 1;                                                       
+    unsigned char *db, *seed;                                                      
+    unsigned char *dbmask = NULL;                                                  
+    unsigned char seedmask[EVP_MAX_MD_SIZE];                                       
+    int mdlen, dbmask_len = 0; 
 
+    mdlen = EVP_MD_size(md);                                                       
+                                                                                   
+    /* step 2b: check KLen > nLen - 2 HLen - 2 */                                  
+    if (flen > emlen - 2 * mdlen - 1) {                                            
+        ERR_raise(ERR_LIB_RSA, RSA_R_DATA_TOO_LARGE_FOR_KEY_SIZE);                 
+        return 0;                                                                  
+    }                
+```
+`tbuf` is allocated with a size of 64, rsasize is 64 g
+```console
+(lldb) expr tlen
+(int) $22 = 64
+(lldb) expr emlen
+(int) $23 = 63
+(lldb) expr mdlen
+(int) $17 = 32
+(lldb) expr from
+(const unsigned char *) $20 = 0x0000000000402184 "Bajja"
+(lldb) expr flen
+(int) $21 = 5
+```
+So `emlen` is the length in octets of an encoded message which in our case
+is set to the modulus (n, rsasize) minus 1. 
+```c
+    /* step 2b: check KLen > nLen - 2 HLen - 2 */                                  
+    if (flen > emlen - 2 * mdlen - 1) {                                            
+        ERR_raise(ERR_LIB_RSA, RSA_R_DATA_TOO_LARGE_FOR_KEY_SIZE);                 
+        return 0;                                                                  
+    }                
+```
+`flen` is the from length which is the length of our string to be encrypted.
+`emlen` is the length in octets of 
+`HLen` is the length of the output of the hash function `H`.
+`nLen` is the byte length of n (the modulus of rsa which is tlen/rsasize above).
 
-**work in progress**
+Now, I noticed that is I don't set the digest which is our case is SHA-256 it
+will default to SHA-1. SHA-1 used a size of 20 instead of 32 which.
+
+*work in progress**
