@@ -19,11 +19,12 @@ int main(int arc, char *argv[]) {
   printf("RSA example\n");
 
   int modulus_bits = 512;
+  //int modulus_bits = 4096;
   const uint32_t exponent = 0x10001;
 
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
   if (ctx == NULL) {
-    error_and_exit("Could not create a context for RSA_PSS");
+    error_and_exit("Could not create a context for RSA");
   }
 
   if (EVP_PKEY_keygen_init(ctx) <= 0) {
@@ -64,19 +65,25 @@ int main(int arc, char *argv[]) {
   }
 
   if (EVP_PKEY_CTX_set_rsa_mgf1_md(enc_ctx, digest) <= 0) {
-    error_and_exit("EVP_PKEY_CTX_set_rsa_mgf1 failed");
+    error_and_exit("EVP_PKEY_CTX_set_rsa_mgf1_md failed");
   }
+
+  /*
+  if (EVP_PKEY_CTX_set0_rsa_oaep_label(enc_ctx, label, label_len) <= ) {
+    error_and_exit("EVP_PKEY_CTX_set_rsa_oaep_label failed");
+  }
+  */
 
   unsigned char* in = (unsigned char*) "Bajja";
   size_t outlen;
   unsigned char* out;
 
-  printf("Going to encrypt: %s\n", in);
+  printf("Going to encrypt: %s, len: %d\n", in, strlen((char*)in));
   // Determine the size of the output
   if (EVP_PKEY_encrypt(enc_ctx, NULL, &outlen, in, strlen ((char*)in)) <= 0) {
     error_and_exit("EVP_PKEY_encrypt failed");
   }
-  printf("Determined ciphertext to be of length: %d) is:\n", outlen);
+  printf("Determined ciphertext to be of length: %d:\n", outlen);
 
   out = OPENSSL_malloc(outlen);
 
@@ -94,6 +101,16 @@ int main(int arc, char *argv[]) {
 
   if (EVP_PKEY_CTX_set_rsa_padding(dec_ctx, RSA_PKCS1_OAEP_PADDING) <= 0) {
     error_and_exit("EVP_PKEY_CTX_set_rsa_padding failed");
+  }
+
+  //const EVP_MD* digest = EVP_get_digestbyname("sha256");
+
+  if (EVP_PKEY_CTX_set_rsa_oaep_md(dec_ctx, digest) <= 0) {
+    error_and_exit("EVP_PKEY_CTX_set_rsa_oaep_md failed");
+  }
+
+  if (EVP_PKEY_CTX_set_rsa_mgf1_md(dec_ctx, digest) <= 0) {
+    error_and_exit("EVP_PKEY_CTX_set_rsa_mgf1_md failed");
   }
 
   unsigned char* dout;
