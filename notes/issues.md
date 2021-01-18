@@ -2161,10 +2161,10 @@ is set to the modulus (n, rsasize) minus 1.
 ```
 These are the values used in the code:  
 `flen` is the from length which is the length of our string to be encrypted.  
-`emlen` is the length in octets of the tlen/rsasize, minus the separator 01?   
-`mdlen` is the length of the digest functions, md_size which for sha256 is 32.  
+`emlen` (encrypted message) is the length in octets of the tlen/rsasize, minus the separator 01?   
+`mdlen` is the length of the hash/digest functions, md_size which for sha256 is 32.  
 
-These are the values use din the spec:  
+These are the values use in the spec:  
 `KLen` is the byte length of the message to be encrypted.  
 `nLen` is the byte length of n (the modulus of rsa which is tlen/rsasize above).  
 `HLen` is the length of the output of the hash function `H`.  
@@ -2188,12 +2188,10 @@ output length which for sha256 is 32 and for sha1 is 20.
 64 - 2*32 - 2 = -2
 64 - 2*20 - 2 = 22
 
-It just seems very strange that the value for sha256 is negative.
-
 The specification referred to above can be found
 [here](https://csrc.nist.gov/CSRC/media/Publications/sp/800-56b/rev-2/draft/documents/sp800-56Br2-draft.pdf).
 
-Now, I noticed that is I don't set the digest which is our case is SHA-256 it
+Now, I noticed that if I don't set the digest which is our case is SHA-256 it
 will default to SHA-1. SHA-1 used a size of 20 instead of 32 which.
 
 Now, it turns out that it is actually the keysize which is not large enough
@@ -2221,3 +2219,77 @@ Going to encrypt: Bajja, len: 5
 Determined ciphertext to be of length: 64:
 EVP_PKEY_encrypt failed
 errno: 33554552, error:02000078:rsa routines::key size too small
+```
+
+This does not fix the issue in the Node.js test. It is like the modulus is not
+being set and it is defaulting to 2048 which is what the modulus seems to be
+set as regardless of its setting in the javascript test.
+
+In `providers/implementations/keymgmt/rsa_kmgmt.c` line 433 we have:
+```c
+static void *gen_init(void *provctx, int selection, int rsa_type)               
+{                                                                               
+      OSSL_LIB_CTX *libctx = PROV_LIBCTX_OF(provctx);                             
+      struct rsa_gen_ctx *gctx = NULL;                                            
+                                                                                  
+      if (!ossl_prov_is_running())                                                
+          return NULL;                                                            
+                                                                                  
+      if ((selection & OSSL_KEYMGMT_SELECT_KEYPAIR) == 0)                         
+          return NULL;                                                            
+                                                                                  
+      if ((gctx = OPENSSL_zalloc(sizeof(*gctx))) != NULL) {                       
+          gctx->libctx = libctx;                                                  
+          if ((gctx->pub_exp = BN_new()) == NULL                                  
+              || !BN_set_word(gctx->pub_exp, RSA_F4)) {                           
+              BN_free(gctx->pub_exp);                                             
+              OPENSSL_free(gctx);                                                 
+              gctx = NULL;                                                        
+          } else {                                                                
+              gctx->nbits = 2048;                                                 
+              gctx->primes = RSA_DEFAULT_PRIME_NUM;                               
+              gctx->rsa_type = rsa_type;                                          
+          }                                                                       
+      }                                                                           
+      return gctx;                                                                
+}
+```
+Notice that the default nbits (modulus bits) is set to 2048. And this is done
+when init is called. Later when the key is generated...
+
+Setting a break point in rsa_keygen we can inspect the bits that was set on
+the context to make sure that we are infact using 4096 as configured:
+```console
+(lldb) br s -f rsa_gen.c -l 431
+```
+Now, in the reproducer this is indeed 4096:
+```console
+(int) $8 = 4096
+```
+But in the Node.js test it is:
+```console
+(lldb) expr bits
+(int) $25 = 2048
+```
+What context is being passed in to EVP_PKEY_keygen?
+```c++
+  static KeyGenJobStatus DoKeyGen(                                              
+      Environment* env,                                                         
+      AdditionalParameters* params) {                                           
+    EVPKeyCtxPointer ctx = KeyPairAlgorithmTraits::Setup(params);               
+    if (!ctx || EVP_PKEY_keygen_init(ctx.get()) <= 0)                           
+      return KeyGenJobStatus::FAILED;                                           
+                                                                                
+    // Generate the key                                                         
+    EVP_PKEY* pkey = nullptr;                                                   
+    if (!EVP_PKEY_keygen(ctx.get(), &pkey))                                     
+      return KeyGenJobStatus::FAILED;                                           
+                                                                                
+    params->key = ManagedEVPPKey(EVPKeyPointer(pkey));                          
+    return KeyGenJobStatus::OK;                                                 
+  }
+```
+Notice that after `Setup` is called, which is what sets the modulus_bits in our
+case, the context is checked to verify that it is not null and if so we
+initialize the context again. This would "reset" the modulus bit to the default
+2048. 
