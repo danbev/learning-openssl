@@ -113,7 +113,7 @@ int main(int arc, char *argv[]) {
     error_and_exit("EVP_PKEY_CTX_set_rsa_padding failed");
   }
 
-  if (EVP_PKEY_CTX_set_signature_md(verify_ctx, EVP_MD_CTX_md(vmdctx)) <= 0) {
+  if (EVP_PKEY_CTX_set_signature_md(verify_ctx, md) <= 0) {
     error_and_exit("EVP_PKEY_CTX_set_signature_md failed");
   }
 
