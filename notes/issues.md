@@ -2293,3 +2293,126 @@ Notice that after `Setup` is called, which is what sets the modulus_bits in our
 case, the context is checked to verify that it is not null and if so we
 initialize the context again. This would "reset" the modulus bit to the default
 2048. 
+
+### test-crypto-keygen.js
+With the update in the previous issue these the following error occurs in
+`test/parallel/test-crypto-keygen.js`:
+```console
+$ out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-keygen.js
+node:assert:399
+    throw err;
+    ^
+
+AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+  assert(okay)
+
+    at testSignVerify (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-keygen.js:62:9)
+    at RsaKeyPairGenJob.<anonymous> (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-keygen.js:298:5)
+    at RsaKeyPairGenJob.<anonymous> (/home/danielbevenius/work/nodejs/openssl/test/common/index.js:345:17)
+    at RsaKeyPairGenJob.<anonymous> (/home/danielbevenius/work/nodejs/openssl/test/common/index.js:380:15)
+    at RsaKeyPairGenJob.job.ondone (node:internal/crypto/keygen:81:5) {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '=='
+}
+```
+Now, this error originates from the following test case in that file:
+```js
+  {                                                                               
+    // Test RSA-PSS.                                                              
+    generateKeyPair('rsa-pss', {                                                  
+      modulusLength: 512,                                                         
+      saltLength: 16,                                                             
+      hash: 'sha256',                                                             
+      mgf1Hash: 'sha256'                                                          
+    }, common.mustSucceed((publicKey, privateKey) => {                            
+      assert.strictEqual(publicKey.type, 'public');                               
+      assert.strictEqual(publicKey.asymmetricKeyType, 'rsa-pss');                 
+                                                                                  
+      assert.strictEqual(privateKey.type, 'private');                             
+      assert.strictEqual(privateKey.asymmetricKeyType, 'rsa-pss');                
+                                                                                  
+      // Unlike RSA, RSA-PSS does not allow encryption.                           
+      assert.throws(() => {                                                       
+        testEncryptDecrypt(publicKey, privateKey);                                
+      }, /operation not supported for this keytype/);                             
+                                                                                  
+      // RSA-PSS also does not permit signing with PKCS1 padding.                 
+      assert.throws(() => {                                                       
+        testSignVerify({                                                          
+          key: publicKey,                                                         
+          padding: constants.RSA_PKCS1_PADDING                                    
+        }, {                                                                      
+          key: privateKey,                                                        
+          padding: constants.RSA_PKCS1_PADDING                                    
+        });                                                                       
+      }, /illegal or unsupported padding mode/);                                  
+                                                                                      
+      // The padding should correctly default to RSA_PKCS1_PSS_PADDING now.       
+      testSignVerify(publicKey, privateKey);                                      
+    }));                                                                          
+  } 
+```
+The last `testSignVerify` is what is causing this. Notice the comment about
+padding and that the digest/hash functions used are sha256.
+```js
+ // Tests that a key pair can be used for signing / verification.                
+  function testSignVerify(publicKey, privateKey) {                                
+    const message = Buffer.from('Hello Node.js world!');                          
+                                                                                  
+    function oldSign(algo, data, key) {                                           
+      return createSign(algo).update(data).sign(key);                             
+    }                                                                             
+                                                                                  
+    function oldVerify(algo, data, key, signature) {                              
+      return createVerify(algo).update(data).verify(key, signature);              
+    }                                                                             
+                                                                                  
+    for (const signFn of [sign, oldSign]) {                                       
+      const signature = signFn('SHA256', message, privateKey);                    
+      for (const verifyFn of [verify, oldVerify]) {                               
+        for (const key of [publicKey, privateKey]) {                              
+          const okay = verifyFn('SHA256', message, key, signature);               
+          assert(okay);                                                           
+        }                                                                         
+      }                                                                           
+    }                                                                             
+  }
+```
+Now, while looking into this I found that using `SHA1` instead of `SHA256`
+allows the test to pass, why?
+
+So this issue only came about after removing the additional EVP_PKEY_keygen_init
+in DoKeyGen:
+```c++
+  static KeyGenJobStatus DoKeyGen(                                              
+      Environment* env,                                                         
+      AdditionalParameters* params) {                                           
+    EVPKeyCtxPointer ctx = KeyPairAlgorithmTraits::Setup(params);               
+    //if (!ctx || EVP_PKEY_keygen_init(ctx.get()) <= 0)                           
+    if (!ctx)                           
+      return KeyGenJobStatus::FAILED;                                           
+                                                                                
+    // Generate the key                                                         
+    EVP_PKEY* pkey = nullptr;                                                   
+    if (!EVP_PKEY_keygen(ctx.get(), &pkey))                                     
+      return KeyGenJobStatus::FAILED;                                           
+                                                                                
+    params->key = ManagedEVPPKey(EVPKeyPointer(pkey));                          
+    return KeyGenJobStatus::OK;                                                 
+  }
+```
+The publicKey and the privateKey are both created using digests of sha256.
+
+After Verify::VerifyFinal is called the following error is on the OpenSSL
+error stack:
+```console
+(lldb) expr ERR_peek_error()
+(unsigned long) $31 = 478150830
+(lldb) expr ERR_reason_error_string(ERR_peek_error())
+(const char *) $32 = 0x00007ffff7eec7a7 "digest not allowed"
+```
+__Work in progress__
