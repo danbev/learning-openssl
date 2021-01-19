@@ -2,6 +2,7 @@
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -61,8 +62,8 @@ int main(int arc, char *argv[]) {
   }
 
   unsigned char* in = (unsigned char*) "Hello Node.js world!";
-  size_t outlen;
-  unsigned char* out;
+  unsigned char* sig;
+  size_t siglen;
 
   printf("Going to sign: %s, len: %d\n", in, strlen((char*)in));
   EVP_PKEY_CTX* sign_ctx = NULL;
@@ -76,21 +77,59 @@ int main(int arc, char *argv[]) {
     error_and_exit("EVP_PKEY_CTX_set_rsa_padding failed");
   }
 
-  // Get the output lenght into outlen
-  if (EVP_DigestSign(mdctx, NULL, &outlen, in, strlen((char*)in)) <= 0) {
+  // Get the output length into siglen
+  if (EVP_DigestSign(mdctx, NULL, &siglen, in, strlen((char*)in)) <= 0) {
     error_and_exit("EVP_DigestSign get length failed");
   }
-  printf("Determined signature to be of length: %d:\n", outlen);
+  printf("Determined signature to be of length: %d:\n", siglen);
 
-  out = OPENSSL_malloc(outlen);
+  sig = OPENSSL_malloc(siglen);
 
-  if (EVP_DigestSign(mdctx, out, &outlen, in, strlen((char*)in)) <= 0) {
+  // Now sign using the retrievied length
+  if (EVP_DigestSign(mdctx, sig, &siglen, in, strlen((char*)in)) <= 0) {
     error_and_exit("EVP_DigestSign failed");
   }
 
-  printf("Signature (len:%d) is:\n", outlen);
-  BIO_dump_fp(stdout, (const char*) out, outlen);
+  printf("Signature (len:%d) is:\n", siglen);
+  BIO_dump_fp(stdout, (const char*) sig, siglen);
 
+  // Now verify the signature.
+  const EVP_MD* verify_md = EVP_get_digestbyname("SHA256");
+  EVP_MD_CTX* vmdctx = EVP_MD_CTX_new();
+
+  if (EVP_DigestInit_ex(vmdctx, verify_md, NULL) <= 0) {
+    error_and_exit("EVP_DigestInit_ex failed");
+  }
+
+  if (EVP_DigestUpdate(vmdctx, in, strlen((char*)in)) <= 0) {
+    error_and_exit("EVP_DigestUpdate failed");
+  }
+
+  unsigned char m[EVP_MAX_MD_SIZE];
+  unsigned int m_len;
+
+  if (EVP_DigestFinal_ex(vmdctx, m, &m_len) <= 0) {
+    error_and_exit("EVP_DigestFinal_ex failed");
+  }
+
+  EVP_PKEY_CTX* verify_ctx = EVP_PKEY_CTX_new(pkey, NULL);
+  if (EVP_PKEY_verify_init(verify_ctx) <= 0) {
+    error_and_exit("EVP_PKEY_verify_init failed");
+  }
+
+  if (EVP_PKEY_CTX_set_rsa_padding(verify_ctx, RSA_PKCS1_PSS_PADDING) <= 0) {
+    error_and_exit("EVP_PKEY_CTX_set_rsa_padding failed");
+  }
+
+  if (EVP_PKEY_CTX_set_signature_md(verify_ctx, EVP_MD_CTX_md(vmdctx)) <= 0) {
+    error_and_exit("EVP_PKEY_CTX_set_signature_md failed");
+  }
+
+  int verified = EVP_PKEY_verify(verify_ctx, sig , siglen, m, m_len);
+  printf("verified signature: %s\n", verified == 1 ? "true" : "false");
+  if (verified != 1) {
+    error_and_exit("EVP_PKEY_verify failed");
+  }
 
   EVP_PKEY_CTX_free(ctx);
   exit(EXIT_SUCCESS);
