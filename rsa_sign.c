@@ -21,7 +21,7 @@ int main(int arc, char *argv[]) {
 
   int modulus_bits = 512;
 
-  EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+  EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA_PSS, NULL);
   if (ctx == NULL) {
     error_and_exit("Could not create a context for RSA");
   }
@@ -34,33 +34,25 @@ int main(int arc, char *argv[]) {
     error_and_exit("EVP_PKEY_CTX_set_rsa_keygen_bits failed");
   }
 
+  const EVP_MD* md = EVP_get_digestbyname("sha256");
+  if (EVP_PKEY_CTX_set_rsa_pss_keygen_md(ctx, md) <= 0) {
+    error_and_exit("EVP_PKEY_CTX_set_rsa_pss_keygen_md failed");
+  }
+
+  if (EVP_PKEY_CTX_set_rsa_pss_keygen_mgf1_md(ctx, md) <= 0) {
+    error_and_exit("EVP_PKEY_CTX_set_rsa_pss_keygen_mgf1_md failed");
+  }
+
+  if (EVP_PKEY_CTX_set_rsa_pss_keygen_saltlen(ctx, 16) <= 0) {
+    error_and_exit("EVP_PKEY_CTX_set_rsa_pss_keygen_saltlen failed");
+  }
+
   EVP_PKEY* pkey = NULL;
   if (EVP_PKEY_keygen(ctx, &pkey) != 1) {
     error_and_exit("EVP_PKEY_keygen failed");
   }
 
-  // So we have our key generated. We can now use it to encrypt
-
-  // Create and initialize a new context for encryption.
-  EVP_PKEY_CTX* enc_ctx = EVP_PKEY_CTX_new(pkey, NULL);
-  if (EVP_PKEY_encrypt_init(enc_ctx) <= 0) {
-    error_and_exit("EVP_PKEY_encrypt_init failed");
-  }
-
-  if (EVP_PKEY_CTX_set_rsa_padding(enc_ctx, RSA_PKCS1_OAEP_PADDING) <= 0) {
-    error_and_exit("EVP_PKEY_CTX_set_rsa_padding failed");
-  }
-
-  const EVP_MD* md = EVP_get_digestbyname("sha256");
-
-  if (EVP_PKEY_CTX_set_rsa_oaep_md(enc_ctx, md) <= 0) {
-    error_and_exit("EVP_PKEY_CTX_set_rsa_oaep_md failed");
-  }
-
-  if (EVP_PKEY_CTX_set_rsa_mgf1_md(enc_ctx, md) <= 0) {
-    error_and_exit("EVP_PKEY_CTX_set_rsa_mgf1_md failed");
-  }
-
+  // So we have our key generated. We can now use it to sign
   unsigned char* in = (unsigned char*) "Hello Node.js world!";
   unsigned char* sig;
   size_t siglen;
