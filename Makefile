@@ -103,6 +103,9 @@ rsa_pss: rsa_pss.c
 rsa_data_too_large: rsa_data_too_large.c
 	$(CC) $(CFLAGS)
 
+rsa_sign: rsa_sign.c
+	$(CC) $(CFLAGS)
+
 dsa: dsa.c
 	$(CC) $(CFLAGS)
 
