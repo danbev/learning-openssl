@@ -106,7 +106,6 @@ Remember we have two hash functions, therefore the *2. The -2 is for the 01
 separator but I don't understand why this would be two and not one. There is
 only one 01 separator as far as I can tell. What am I missing?
 
-
 And I was not sure what `||` meant, but looking at the notation section in
 https://tools.ietf.org/html/rfc3447#section-2 I see it means it's a
 concatenation operator. This section is also useful if you come accross variable
@@ -115,6 +114,23 @@ Notice the 01 which is used as a separator above that is appended above which
 is why we have to subtract two from M. I think this is due to M first having
 a 01 separator before the message K, and also that P will have 00 prepended to
 it.
+
+
+### Probabilistic Signature Scheme (PSS)
+Is similar to what OEAP provides for RSA encryption, PSS provides for RSA
+Signatures. The goals is to make message signing more secure.
+
+```
++---------+    +-------------------+    +---+    +-----------+    +---+
+| Hash(M) |--->| Padding Algorithm |--->| P |--->| RSA(n, d) |--->| S |
++---------+    +-------------------+    +---+    +-----------+    +---+
+```
+So we take the message that we want to sign and create a hash of it as the first
+step. This allows us to sign a message of any length as the hash will output
+the same length message regardless. Using SHA-256 the length would be 256 bits.
+
+Like OAEP PSS also requires a PRNG and two hash functions. 
+
 
 
 
