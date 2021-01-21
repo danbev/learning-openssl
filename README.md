@@ -1672,11 +1672,27 @@ M = H || 00 . . . 00 || 01 || K
 ```
 And I was not sure what `||` meant, but looking at the notation section in
 https://tools.ietf.org/html/rfc3447#section-2 I see it means it's a
-concatenation operator.
+concatenation operator. This section is also useful if you come accross variable
+names that might not be obvious at first in OpenSSL. 
+Notice the 01 which is used as a separator above that is appended above which
+is why we have to subtract two from M. TODO: explain and verify this.
+
+Length of an octet is 8 so we are talking about byte length.
+
 
 
 Parameters/labels are optional bytes that are prepended to the message but
 not encrypted?
+
+
+#### PKCS1 Padding
+It's goal is to address the issue of small messages (smaller that the modulus)
+in RSA.
+This is done by padding the message with random bytes:
+```
+00 02 [a number of none-zero random bytes] 00 [message]
+```
+
 
 ### Diffie Hellman Key Exchange
 
@@ -4215,3 +4231,432 @@ fixed as with a hash function).
 "A mask generation function takes an octet string of variable length and a
 desired output length as input, and outputs an octet string of the desired
 length."
+
+### OSSL_PARAM
+This struct is defined in crypto/evp/pmeth_lib.c
+```c
+typedef struct ossl_param_st OSSL_PARAM; 
+```
+And ossl_param_st can be found in crypto/evp/pmeth_lib.c:
+```c
+/*                                                                                 
+ * Type to pass object data in a uniform way, without exposing the object          
+ * structure.                                                                      
+ *                                                                                 
+ * An array of these is always terminated by key == NULL                           
+ */                                                                                
+struct ossl_param_st {                                                             
+    const char *key;             /* the name of the parameter */                
+    unsigned int data_type;      /* declare what kind of content is in buffer */
+    void *data;                  /* value being passed in or out */             
+    size_t data_size;            /* data size */                                
+    size_t return_size;          /* returned content size */                    
+};
+```
+An example of usage could be when calling EVP_PKEY_CTX_set_signature_md
+```c
+int EVP_PKEY_CTX_set_signature_md(EVP_PKEY_CTX *ctx, const EVP_MD *md)              
+{                                                                                   
+    return evp_pkey_ctx_set_md(ctx,
+                               md,
+                               ctx->op.sig.sigprovctx == NULL,         
+                               OSSL_SIGNATURE_PARAM_DIGEST,                     
+                               EVP_PKEY_OP_TYPE_SIG,
+                               EVP_PKEY_CTRL_MD);         
+
+static int evp_pkey_ctx_set_md(EVP_PKEY_CTX *ctx,
+                               const EVP_MD *md,                 
+                               int fallback,
+                               const char *param,
+                               int op,             
+                               int ctrl)                                            
+{                                                                                   
+
+```
+OSSL_SIGNATURE_PARAM_DIGEST can be found in include/openssl/core_names.h:
+```c
+#define OSSL_SIGNATURE_PARAM_DIGEST         OSSL_PKEY_PARAM_DIGEST
+#define OSSL_PKEY_PARAM_DIGEST              OSSL_ALG_PARAM_DIGEST 
+#define OSSL_ALG_PARAM_DIGEST               "digest"
+```
+So this is only passing the string `digest` as the `const char*` param argument.
+Notice that the first line has the following:
+```c
+    OSSL_PARAM md_params[2], *p = md_params; 
+```
+So there are two variables defined here, one array of OSSL_PARAM and one is
+a pointer to an OSSL_PARAM which is also initialized to point to the first 
+varialbe (the array):
+```console
+(lldb) expr p
+(OSSL_PARAM *) $4 = 0x00007fffffffcf90
+(lldb) expr &md_params
+(OSSL_PARAM (*)[2]) $5 = 0x00007fffffffcf90
+```
+At this point there is nothing in the array apart from potentially values
+that are in those memory locations at the moment.
+
+There is no fallback passed in this case so I'll skip to the following code:
+```c
+    if (md == NULL) {                                                               
+        name = "";                                                                  
+    } else {                                                                        
+        name = EVP_MD_name(md);                                                     
+    }
+```
+`EVP_MD_name` can be found in crypto/evp/evp_lib.c:
+```c
+const char *EVP_MD_name(const EVP_MD *md)                                       
+{                                                                               
+    if (md->prov != NULL)                                                       
+        return evp_first_name(md->prov, md->name_id);                           
+#ifndef FIPS_MODULE                                                             
+    return OBJ_nid2sn(EVP_MD_nid(md));                                          
+#else                                                                           
+    return NULL;                                                                
+#endif                                                                          
+}
+```
+Now, in this case md->prov is null so OBJ_nid2sn will be called.
+```console
+(lldb) expr name
+(const char *) $12 = 0x00007ffff7ed0de7 "SHA256"
+```
+Next we have the following line:
+```c
+    *p++ = OSSL_PARAM_construct_utf8_string(param, (char *)name, 0);                   
+    *p = OSSL_PARAM_construct_end();                                            
+                                                                                
+    return EVP_PKEY_CTX_set_params(ctx, md_params);     
+
+```
+crypto/params.c 
+```c
+OSSL_PARAM OSSL_PARAM_construct_utf8_string(const char *key, char *buf,         
+                                            size_t bsize)                       
+{                                                                               
+    if (buf != NULL && bsize == 0)                                              
+        bsize = strlen(buf) + 1;                                                
+    return ossl_param_construct(key, OSSL_PARAM_UTF8_STRING, buf, bsize);       
+}
+
+static OSSL_PARAM ossl_param_construct(const char *key, unsigned int data_type, 
+                                       void *data, size_t data_size)            
+{                                                                               
+    OSSL_PARAM res;                                                             
+    res.key = key;                                                              
+    res.data_type = data_type;                                                  
+    res.data = data;                                                            
+    res.data_size = data_size;                                                  
+    res.return_size = OSSL_PARAM_UNMODIFIED;                                    
+    return res;                                                                 
+```
+So this is just returning an instance of the OSSL_PARAM struct that gets
+populated:
+```console
+(lldb) expr md_params[0]
+(OSSL_PARAM) $19 = (key = "digest", data_type = 4, data = 0x00007ffff7ed0de7, data_size = 7, return_size = 18446744073709551615)
+```
+Next OSSL_PARAM_construct_end() will be called which just sets the second entry
+to null values:
+```c
+# define OSSL_PARAM_END \                                                       
+    { NULL, 0, NULL, 0, 0 } 
+```
+After this we call EVP_PKEY_CTX_set_params passing in the context and the
+OSSL_PARAM array.
+
+```c
+int EVP_PKEY_CTX_set_params(EVP_PKEY_CTX *ctx, OSSL_PARAM *params)              
+{
+    ...
+    if (EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx)                                       
+            && ctx->op.sig.sigprovctx != NULL                                   
+            && ctx->op.sig.signature != NULL                                    
+            && ctx->op.sig.signature->set_ctx_params != NULL)                   
+        return ctx->op.sig.signature->set_ctx_params(ctx->op.sig.sigprovctx, params);
+    ...
+}
+```
+After checking the fields of the operation entry set_ctx_params will be called:
+```console
+(lldb) expr ctx->op.sig.signature->set_ctx_params
+(OSSL_FUNC_signature_set_ctx_params_fn *) $26 = 0x00007ffff7e901d3 (libcrypto.so.3`rsa_set_ctx_params at rsa.c:1011:1)
+```
+```c
+static int rsa_set_ctx_params(void *vprsactx, const OSSL_PARAM params[])            
+{                                                                                   
+    PROV_RSA_CTX *prsactx = (PROV_RSA_CTX *)vprsactx;                               
+    const OSSL_PARAM *p;
+```
+Upon entering this function `prsactx` holds the following values:
+```console
+(lldb) expr *prsactx
+(PROV_RSA_CTX) $28 = {
+  libctx = 0x00007ffff7fc57c0
+  propq = 0x0000000000000000
+  rsa = 0x000000000044ee90
+  operation = 64
+  flag_allow_md = 1
+  aid_buf = ""
+\x05" = 0x0000000000467880 "0\v\x06\t*\x86H\x86�
+  aid_len = 13
+  md = 0x0000000000464260
+  mdctx = 0x0000000000000000
+  mdnid = 64
+  mdname = "SHA1"
+  pad_mode = 6
+  mgf1_md = 0x0000000000464260
+  mgf1_mdname = "SHA1"
+  saltlen = 16
+  min_saltlen = 16
+  tbuf = 0x0000000000000000
+}
+```
+Next we have a call to OSSL_PARAM_locate_const:
+```c
+    p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_DIGEST);
+```
+Which can be found in params.c:
+```c
+const OSSL_PARAM *OSSL_PARAM_locate_const(const OSSL_PARAM *p, const char *key) 
+{                                                                               
+    return OSSL_PARAM_locate((OSSL_PARAM *)p, key);                             
+} 
+
+OSSL_PARAM *OSSL_PARAM_locate(OSSL_PARAM *p, const char *key)                   
+{                                                                               
+    if (p != NULL && key != NULL)                                               
+        for (; p->key != NULL; p++)                                             
+            if (strcmp(key, p->key) == 0)                                       
+                return p;                                                       
+    return NULL;                                                                
+}  
+```
+What this is doing is just iterating over all the entries in the OSSL_PARAM
+array and if it find an entry that matches the passed in key, that entry will
+be returned. So we have the entry and now we return to rsa_set_ctx_params:
+```c
+if (p != NULL) {                                                            
+      char mdname[OSSL_MAX_NAME_SIZE] = "", *pmdname = mdname;                
+      char mdprops[OSSL_MAX_PROPQUERY_SIZE] = "", *pmdprops = mdprops;        
+      const OSSL_PARAM *propsp =                                              
+          OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_PROPERTIES);
+```
+OSSL_MAX_NAME_SIZE and OSSL_MAX_PROPQUERY_SIZE can be found in
+include/internal/sizes.h:
+```c
+# define OSSL_MAX_NAME_SIZE           50 /* Algorithm name */                    
+# define OSSL_MAX_PROPQUERY_SIZE     256 /* Property query strings */ 
+```
+Notice that there two varialbes per line here so we have `char* pmdname`, and
+also `char* pmpprops` which are set to the first variables. But both are
+initialized to empty strings.
+Next, we have the call OSSL_PARAM_locate_const which we saw just before, but
+this time the OSSL_PARAM passed in is:
+```c
+#define OSSL_SIGNATURE_PARAM_PROPERTIES     OSSL_PKEY_PARAM_PROPERTIES
+#define OSSL_PKEY_PARAM_PROPERTIES          OSSL_ALG_PARAM_PROPERTIES
+#define OSSL_ALG_PARAM_PROPERTIES           "properties"
+```
+We know that we only have one entry, the 'digest' in params.
+Next the following will 
+```c
+const OSSL_PARAM *p;
+...
+p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_DIGEST); 
+...
+if (!OSSL_PARAM_get_utf8_string(p, &pmdname, sizeof(mdname)))           
+    return 0;                                            
+```
+So we are passing in the entry for our `digest`, the variable that we won't it
+to be stored/copied into, and the length of mdname which we know if 50
+(OSSL_MAX_NAME_SIZE):
+```c
+int OSSL_PARAM_get_utf8_string(const OSSL_PARAM *p, char **val, size_t max_len) 
+{                                                                               
+    return get_string_internal(p, (void **)val, max_len, NULL,                  
+                               OSSL_PARAM_UTF8_STRING);                         
+} 
+
+
+static int get_string_internal(const OSSL_PARAM *p, void **val, size_t max_len,  
+                               size_t *used_len, unsigned int type)              
+{
+    ...
+    memcpy(*val, p->data, sz);                                                  
+    return 1;       
+}
+```
+So in our case this is just a memcpy of the name of the message digest:
+```console
+(lldb) expr (char*)p->data
+(char *) $42 = 0x00007ffff7ed0de7 "SHA256"
+```
+Next, we have:
+```c
+         if (rsa_pss_restricted(prsactx)) {                                      
+              /* TODO(3.0) figure out what to do for prsactx->md == NULL */       
+              if (prsactx->md == NULL || EVP_MD_is_a(prsactx->md, mdname))        
+                  return 1;                                                       
+              ERR_raise(ERR_LIB_PROV, PROV_R_DIGEST_NOT_ALLOWED);                 
+              return 0;                                                           
+          }                 
+
+/* True if PSS parameters are restricted */                                     
+#define rsa_pss_restricted(prsactx) (prsactx->min_saltlen != -1)
+```
+We can inspect and verify that this if block will be entered:
+```console
+(lldb) expr prsactx->min_saltlen
+(int) $44 = 16
+(lldb) expr prsactx->min_saltlen != -1
+(bool) $45 = true
+```
+Now, prsactx (property rsa context?) md is not null so EVP_MD_is_a will be
+called with the following arguments:
+```console
+(lldb) expr *prsactx->md
+(EVP_MD) $47 = {
+  type = 64
+  pkey_type = 0
+  md_size = 20
+  flags = 8
+  init = 0x0000000000000000
+  update = 0x0000000000000000
+  final = 0x0000000000000000
+  copy = 0x0000000000000000
+  cleanup = 0x0000000000000000
+  block_size = 64
+  ctx_size = 0
+  md_ctrl = 0x0000000000000000
+  name_id = 153
+  prov = 0x000000000041d8c0
+  refcnt = 4
+  lock = 0x000000000041db70
+  newctx = 0x00007ffff7e50e1c (libcrypto.so.3`sha1_newctx at sha2_prov.c:55:1)
+  dinit = 0x00007ffff7e50f43 (libcrypto.so.3`sha1_internal_init at sha2_prov.c:55:1)
+  dupdate = 0x00007ffff7dc1ebe (libcrypto.so.3`SHA1_Update at md32_common.h:129:1)
+  dfinal = 0x00007ffff7e50f6d (libcrypto.so.3`sha1_internal_final at sha2_prov.c:55:1)
+  digest = 0x0000000000000000
+  freectx = 0x00007ffff7e50e58 (libcrypto.so.3`sha1_freectx at sha2_prov.c:55:1)
+  dupctx = 0x00007ffff7e50e8c (libcrypto.so.3`sha1_dupctx at sha2_prov.c:55:1)
+  get_params = 0x00007ffff7e50fc5 (libcrypto.so.3`sha1_get_params at sha2_prov.c:55:1)
+  set_ctx_params = 0x00007ffff7e50d9b (libcrypto.so.3`sha1_set_ctx_params at sha2_prov.c:41:1)
+  get_ctx_params = 0x0000000000000000
+  gettable_params = 0x00007ffff7e80ff2 (libcrypto.so.3`digest_default_gettable_params at digestcommon.c:44:1)
+  settable_ctx_params = 0x00007ffff7e50d8a (libcrypto.so.3`sha1_settable_ctx_params at sha2_prov.c:35:1)
+  gettable_ctx_params = 0x0000000000000000
+}
+(lldb) expr mdname
+(char [50]) $48 = "SHA256"
+```
+EVP_MD_is_a  can be found in evp_lib.c:
+```c
+int EVP_MD_is_a(const EVP_MD *md, const char *name)                              
+{                                                                                
+    if (md->prov != NULL)                                                        
+        return evp_is_a(md->prov, md->name_id, NULL, name);                      
+    return evp_is_a(NULL, 0, EVP_MD_name(md), name);                             
+}  
+```
+And we can see that md->prov is not null so the first evp_is_a will be called
+which can be found in crypto/evp/evp_fetch.c:
+```c
+int evp_is_a(OSSL_PROVIDER *prov, int number,                                    
+             const char *legacy_name, const char *name)                          
+{                                                                                
+    /*                                                                           
+     * For a |prov| that is NULL, the library context will be NULL               
+     */                                                                          
+    OSSL_LIB_CTX *libctx = ossl_provider_libctx(prov);                           
+    OSSL_NAMEMAP *namemap = ossl_namemap_stored(libctx);                        
+                                                                                
+    if (prov == NULL)                                                           
+        number = ossl_namemap_name2num(namemap, legacy_name);                   
+    return ossl_namemap_name2num(namemap, name) == number;                      
+} 
+```
+Notice that this function takes as number and the values is md->name_id from
+the calling function:
+```console
+(lldb) expr md->name_id
+(const int) $55 = 153
+```
+In our case the last line will be called (in crypto/core_namemap.c):
+```c
+int ossl_namemap_name2num(const OSSL_NAMEMAP *namemap, const char *name)        
+{                                                                               
+    if (name == NULL)                                                           
+        return 0;                                                               
+                                                                                
+    return ossl_namemap_name2num_n(namemap, name, strlen(name));                
+}   
+
+int ossl_namemap_name2num_n(const OSSL_NAMEMAP *namemap,                           
+                            const char *name, size_t name_len)                     
+{
+    int number;
+    ....
+
+    CRYPTO_THREAD_read_lock(namemap->lock);
+    number = namemap_name2num_n(namemap, name, name_len);
+    CRYPTO_THREAD_unlock(namemap->lock);
+
+    return number;
+}
+
+static int namemap_name2num_n(const OSSL_NAMEMAP *namemap,                      
+                              const char *name, size_t name_len)                
+{                                                                               
+    NAMENUM_ENTRY *namenum_entry, namenum_tmpl;                                    
+                                                                                   
+    if ((namenum_tmpl.name = OPENSSL_strndup(name, name_len)) == NULL)             
+        return 0;                                                                  
+
+    namenum_tmpl.number = 0;                                                       
+    namenum_entry = lh_NAMENUM_ENTRY_retrieve(namemap->namenum, &namenum_tmpl);                
+    OPENSSL_free(namenum_tmpl.name);                                               
+    return namenum_entry != NULL ? namenum_entry->number : 0;                      
+}  
+
+typedef struct {                                                                
+    char *name;                                                                 
+    int number;                                                                 
+} NAMENUM_ENTRY;
+
+DEFINE_LHASH_OF(NAMENUM_ENTRY);
+```
+To get a refresher on hash tables in OpenSSL take a look at [hash.c](../hash.c).
+
+So we are going to look up using namenum_tmpl which looks like this:
+```console
+(lldb) expr namenum_tmpl
+(NAMENUM_ENTRY) $66 = (name = "SHA256", number = 0)
+```
+And the comparator function for uses the name:
+```c
+static int namenum_cmp(const NAMENUM_ENTRY *a, const NAMENUM_ENTRY *b)          
+{                                                                               
+    return strcasecmp(a->name, b->name);                                        
+} 
+```
+And in our case the returned entry will be:
+```console
+(lldb) expr *namenum_entry
+(NAMENUM_ENTRY) $65 = (name = "SHA256", number = 141)
+(lldb) expr namenum_entry->number
+(int) $67 = 141
+```
+This will return back out into `evp_is_a` which will compare 141 with 153.
+And this will cause an error to be raised in
+```
+	if (rsa_pss_restricted(prsactx)) {                                      
+              /* TODO(3.0) figure out what to do for prsactx->md == NULL */       
+              if (prsactx->md == NULL || EVP_MD_is_a(prsactx->md, mdname))        
+                  return 1;                                                       
+              ERR_raise(ERR_LIB_PROV, PROV_R_DIGEST_NOT_ALLOWED);                 
+              return 0;                                                           
+          }       
+```
+
