@@ -2295,7 +2295,7 @@ initialize the context again. This would "reset" the modulus bit to the default
 2048. 
 
 ### test-crypto-keygen.js
-Reproducer can be found in [rsa_sign.c](./rsa_sign.c).
+Reproducer can be found in [rsa_sign.c](../rsa_sign.c).
 
 With the update in the previous issue these the following error occurs in
 `test/parallel/test-crypto-keygen.js`:
