@@ -2295,6 +2295,8 @@ initialize the context again. This would "reset" the modulus bit to the default
 2048. 
 
 ### test-crypto-keygen.js
+Reproducer can be found in [rsa_sign.c](./rsa_sign.c).
+
 With the update in the previous issue these the following error occurs in
 `test/parallel/test-crypto-keygen.js`:
 ```console
@@ -2415,4 +2417,48 @@ error stack:
 (lldb) expr ERR_reason_error_string(ERR_peek_error())
 (const char *) $32 = 0x00007ffff7eec7a7 "digest not allowed"
 ```
-__Work in progress__
+
+In the reproducer this error will happen with the following call:
+```c
+  const EVP_MD* vmd = EVP_MD_CTX_md(vmdctx);
+  if (EVP_PKEY_CTX_set_signature_md(verify_ctx, vmd) <= 0) {
+    error_and_exit("EVP_PKEY_CTX_set_signature_md failed");
+  }
+```
+In providers/implementations/signature/rsa.c we find the following:
+```c
+
+/* True if PSS parameters are restricted */                                     
+#define rsa_pss_restricted(prsactx) (prsactx->min_saltlen != -1)
+
+static int rsa_set_ctx_params(void *vprsactx, const OSSL_PARAM params[])        
+{  
+    ...
+        if (rsa_pss_restricted(prsactx)) {                                      
+              /* TODO(3.0) figure out what to do for prsactx->md == NULL */           
+              if (prsactx->md == NULL || EVP_MD_is_a(prsactx->md, mdname))        
+                  return 1;                                                       
+              ERR_raise(ERR_LIB_PROV, PROV_R_DIGEST_NOT_ALLOWED);                 
+              return 0;                                                           
+          }
+}
+```
+This can be seen by setting the following breakpoint:
+```console
+(lldb) br s -f rsa.c -l 1038
+```
+```c
+int evp_is_a(OSSL_PROVIDER *prov, int number, const char *legacy_name, const char *name)
+{
+  ...
+  return ossl_namemap_name2num(namemap, name) == number
+}
+```
+```console
+(lldb) expr ossl_namemap_name2num(namemap, name)
+(int) $0 = 141
+(lldb) expr number
+(int) $1 = 153
+```
+Notice that rsa_set_ctx_restricted is true and the check EVP_MD_is_a is failing.
+**WIP**
