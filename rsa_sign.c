@@ -49,7 +49,8 @@ int main(int arc, char *argv[]) {
   }
 
   // If the following block in uncommented the setting of the message
-  // digest later will succeed. But won't this reset all the settings above?
+  // digest later will succeed. This was actually done in Node.js's code base
+  // but has now been removed, which surfaced this issue.
   /*
   if (EVP_PKEY_keygen_init(ctx) <= 0) {
     error_and_exit("Could not initialize the RSA context");
