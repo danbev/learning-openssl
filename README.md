@@ -4660,3 +4660,102 @@ And this will cause an error to be raised in
           }       
 ```
 
+
+### OPENSSL_init_crypto
+Lets take a look at this function which can be found in crypto/init.c:
+```c
+int OPENSSL_init_crypto(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings)   
+{ 
+  ...
+  if ((opts & OPENSSL_INIT_ADD_ALL_DIGESTS)                                   
+            && !RUN_ONCE(&add_all_digests, ossl_init_add_all_digests))          
+        return 0;                           
+}
+```
+The opts can be found in include/openssl/crypto.h:
+```c
+/* Standard initialisation options */                                              
+# define OPENSSL_INIT_NO_LOAD_CRYPTO_STRINGS 0x00000001L                           
+# define OPENSSL_INIT_LOAD_CRYPTO_STRINGS    0x00000002L                           
+# define OPENSSL_INIT_ADD_ALL_CIPHERS        0x00000004L                           
+# define OPENSSL_INIT_ADD_ALL_DIGESTS        0x00000008L 
+...
+```
+An example of calling this function can be found names.c:
+```c
+   if (!OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_DIGESTS, NULL))                  
+        return NULL;
+```
+RUN_ONCE is a macro and the above usage will be expanded by the preprocessor
+into:
+```console
+$ gcc -E -I. -I./include crypto/init.c 
+```
+```c
+static int ossl_init_add_all_digests(void);
+static int ossl_init_add_all_digests_ossl_ret_ = 0;
+static void ossl_init_add_all_digests_ossl_(void) {
+  ossl_init_add_all_digests_ossl_ret_ = ossl_init_add_all_digests();
+}
+static int ossl_init_add_all_digests(void)
+{                                                                               
+   do {
+     BIO *trc_out = ((void *)0);
+     if (0)
+       BIO_printf(trc_out, "%s", "openssl_add_all_digests()\n"); 
+   while(0);
+   openssl_add_all_digests_int();                                              
+   return 1;                                                                   
+}               
+```
+And we can find openssl_add_all_digests_int in crypto/evp/c_alld.c:
+```console
+void openssl_add_all_digests_int(void)                                          
+{                                                                               
+#ifndef OPENSSL_NO_MD4                                                          
+    EVP_add_digest(EVP_md4());                                                  
+#endif                                                                          
+#ifndef OPENSSL_NO_MD5                                                          
+    EVP_add_digest(EVP_md5());                                                  
+    EVP_add_digest_alias(SN_md5, "ssl3-md5");                                   
+    EVP_add_digest(EVP_md5_sha1());                                             
+#endif                                                                          
+    EVP_add_digest(EVP_sha1());                                                 
+    EVP_add_digest_alias(SN_sha1, "ssl3-sha1");                                 
+    EVP_add_digest_alias(SN_sha1WithRSAEncryption, SN_sha1WithRSA);             
+#if !defined(OPENSSL_NO_MDC2) && !defined(OPENSSL_NO_DES)                       
+    EVP_add_digest(EVP_mdc2());                                                 
+#endif                                                                          
+#ifndef OPENSSL_NO_RMD160                                                       
+    EVP_add_digest(EVP_ripemd160());                                            
+    EVP_add_digest_alias(SN_ripemd160, "ripemd");                               
+    EVP_add_digest_alias(SN_ripemd160, "rmd160");                               
+#endif                                                                          
+    EVP_add_digest(EVP_sha224());                                               
+    EVP_add_digest(EVP_sha256());                                               
+    EVP_add_digest(EVP_sha384());                                               
+    EVP_add_digest(EVP_sha512());                                               
+    EVP_add_digest(EVP_sha512_224());                                           
+    EVP_add_digest(EVP_sha512_256());                                           
+#ifndef OPENSSL_NO_WHIRLPOOL                                                    
+    EVP_add_digest(EVP_whirlpool());                                            
+#endif                                                                          
+#ifndef OPENSSL_NO_SM3                                                          
+    EVP_add_digest(EVP_sm3());                                                  
+#endif                                                                          
+#ifndef OPENSSL_NO_BLAKE2                                                       
+    EVP_add_digest(EVP_blake2b512());                                           
+    EVP_add_digest(EVP_blake2s256());                                           
+#endif                                                                          
+    EVP_add_digest(EVP_sha3_224());                                             
+    EVP_add_digest(EVP_sha3_256());                                             
+    EVP_add_digest(EVP_sha3_384());                                             
+    EVP_add_digest(EVP_sha3_512());                                             
+    EVP_add_digest(EVP_shake128());                                             
+    EVP_add_digest(EVP_shake256());                                             
+} 
+```
+So in this case we can see that the above digests will be added when this
+call to OPENSSL_init_crypto is called.
+
+
