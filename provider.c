@@ -12,6 +12,15 @@ void error_and_exit(const char* msg) {
   exit(EXIT_FAILURE);
 }
 
+/*
+ * To run this example OpenSSL need to be able to find the shared library
+ * libcprovider.so which is created in the current directory when running
+ * $ make provider
+ *
+ * Setting OPENSSL_MODULES to the current directory will allow for this example
+ * to be run:
+ * $ env OPENSSL_MODULES=$PWD ./provider
+ */
 int main(int argc, char** argv) {
  printf("Provider example\n");
   OSSL_PROVIDER* provider;
