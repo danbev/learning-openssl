@@ -12,6 +12,8 @@ int main(int argc, char** argv) {
     exit(EXIT_FAILURE);
   }
 
+  printf("Provider name: %s\n", OSSL_PROVIDER_name(provider));
+
   OSSL_PROVIDER_unload(provider);
   exit(EXIT_SUCCESS);
 }
