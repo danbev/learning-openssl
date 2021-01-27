@@ -1,6 +1,16 @@
 #include <openssl/provider.h>
+#include <openssl/err.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+void error_and_exit(const char* msg) {
+  printf("%s\n", msg);
+  char buf[256];
+  int err = ERR_get_error();
+  ERR_error_string_n(err, buf, sizeof(buf));
+  printf("errno: %d, %s\n", err, buf);
+  exit(EXIT_FAILURE);
+}
 
 int main(int argc, char** argv) {
  printf("Provider example\n");
@@ -11,8 +21,14 @@ int main(int argc, char** argv) {
     printf("Failed to load Default provider\n");
     exit(EXIT_FAILURE);
   }
+  printf("Default Provider name: %s\n", OSSL_PROVIDER_name(provider));
 
-  printf("Provider name: %s\n", OSSL_PROVIDER_name(provider));
+  OSSL_PROVIDER* custom_provider = OSSL_PROVIDER_load(NULL, "libcprovider");
+  if (custom_provider == NULL)
+    error_and_exit("Could not create custom provider");
+
+
+  printf("Custom Provider name: %s\n", OSSL_PROVIDER_name(custom_provider));
 
   OSSL_PROVIDER_unload(provider);
   exit(EXIT_SUCCESS);

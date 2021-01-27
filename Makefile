@@ -109,8 +109,6 @@ rsa_sign: rsa_sign.c
 dsa: dsa.c
 	$(CC) $(CFLAGS)
 
-provider: provider.c
-	$(CC) $(CFLAGS)
 
 fips-provider: fips-provider.c
 	$(CC) $(CFLAGS)
@@ -142,6 +140,18 @@ evp-pkey: evp-pkey.c
 x509: x509.c
 	$(CC) $(CFLAGS)
 
+provider: provider.c libcprovider.so
+	$(CC) $(CFLAGS) 
+
+libcprovider.so: cprovider.o
+	${CC} -g -O0 -I$(OPENSSL_INCLUDE_DIR) -L$(OPENSSL_LIB_DIR) \
+              -L$(OPENSSL_LIB_DIR)/ossl-modules -lcrypto \
+              -lpthread -lssl --shared -o $@ $<
+
+cprovider.o: cprovider.c
+	${CC} -g -O0 -I$(OPENSSL_INCLUDE_DIR) -I. -L$(OPENSSL_LIB_DIR) \
+              -L$(OPENSSL_LIB_DIR)/ossl-modules -lcrypto \
+              -lpthread -lssl -fPIC -o $@ -c cprovider.c -I.
 .PHONY: clean 
 
 clean: 

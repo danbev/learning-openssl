@@ -36,3 +36,6 @@ evp-pkey
 x509
 rsa_data_too_large
 rsa_sign
+provider.o
+cprovider.o
+libcprovider.so
