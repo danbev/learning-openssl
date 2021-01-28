@@ -20,6 +20,10 @@ int main(int arc, char *argv[]) {
   printf("RSA Sign example\n");
 
   const EVP_MD* md = EVP_get_digestbyname("SHA256");
+  int md_type = EVP_MD_type(md);
+  int md_size = EVP_MD_size(md);
+  printf("md_type: %d, size: %d\n", md_type, md_size);
+
   int modulus_bits = 512;
 
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA_PSS, NULL);
