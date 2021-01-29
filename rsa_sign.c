@@ -16,17 +16,13 @@ void error_and_exit(const char* msg) {
   exit(EXIT_FAILURE);
 }
 
-int main(int arc, char *argv[]) {
-  printf("RSA Sign example\n");
-
-  const EVP_MD* md = EVP_get_digestbyname("SHA256");
+EVP_PKEY* create_pkey(EVP_PKEY_CTX* ctx, const EVP_MD* md) {
   int md_type = EVP_MD_type(md);
   int md_size = EVP_MD_size(md);
   printf("md_type: %d, size: %d\n", md_type, md_size);
 
   int modulus_bits = 512;
 
-  EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA_PSS, NULL);
   if (ctx == NULL) {
     error_and_exit("Could not create a context for RSA");
   }
@@ -43,7 +39,6 @@ int main(int arc, char *argv[]) {
     error_and_exit("EVP_PKEY_CTX_set_rsa_pss_keygen_md failed");
   }
 
-  //const EVP_MD* mgf1md = EVP_get_digestbyname("SHA256");
   if (EVP_PKEY_CTX_set_rsa_pss_keygen_mgf1_md(ctx, md) <= 0) {
     error_and_exit("EVP_PKEY_CTX_set_rsa_pss_keygen_mgf1_md failed");
   }
@@ -66,13 +61,13 @@ int main(int arc, char *argv[]) {
     error_and_exit("EVP_PKEY_keygen failed");
   }
 
-  // So we have our key generated. We can now use it to sign
+  return pkey;
+}
+
+void sign(unsigned char* sig, size_t siglen, EVP_PKEY* pkey, const EVP_MD* md) {
   unsigned char* message = (unsigned char*) "Hello Node.js world!";
   int message_len = strlen((char*) message);
   printf("Going to sign: %s, len: %d\n", message, message_len);
-
-  unsigned char* sig;
-  size_t siglen;
 
   EVP_PKEY_CTX* sign_ctx = NULL;
   EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
@@ -80,6 +75,8 @@ int main(int arc, char *argv[]) {
   if (EVP_DigestSignInit(mdctx, &sign_ctx, md, NULL, pkey) <= 0) {
     error_and_exit("EVP_DigestSignInit failed");
   }
+
+  printf("MD type for mdctx (sign): %d\n", EVP_MD_type(EVP_MD_CTX_md(mdctx)));
 
   if (EVP_PKEY_CTX_set_rsa_padding(sign_ctx, RSA_PKCS1_PSS_PADDING) <= 0) {
     error_and_exit("EVP_PKEY_CTX_set_rsa_padding failed");
@@ -100,43 +97,71 @@ int main(int arc, char *argv[]) {
 
   printf("Signature (len:%d) is:\n", siglen);
   BIO_dump_fp(stdout, (const char*) sig, siglen);
+}
 
-  // Now verify the signature.
-  EVP_MD_CTX* vmdctx = EVP_MD_CTX_new();
+void verify(unsigned char* sig, size_t siglen, EVP_PKEY* pkey, const EVP_MD* md) {
+  EVP_MD_CTX* ver_md_ctx = EVP_MD_CTX_new();
 
-  if (EVP_DigestInit_ex(vmdctx, md, NULL) <= 0) {
+  if (EVP_DigestInit_ex(ver_md_ctx, md, NULL) <= 0) {
     error_and_exit("EVP_DigestInit_ex failed");
   }
 
-  if (EVP_DigestUpdate(vmdctx, message, message_len) <= 0) {
+  unsigned char* message = (unsigned char*) "Hello Node.js world!";
+  int message_len = strlen((char*) message);
+  if (EVP_DigestUpdate(ver_md_ctx, message, message_len) <= 0) {
     error_and_exit("EVP_DigestUpdate failed");
   }
 
   unsigned char m[EVP_MAX_MD_SIZE];
   unsigned int m_len;
 
-  if (EVP_DigestFinal_ex(vmdctx, m, &m_len) <= 0) {
+  if (EVP_DigestFinal_ex(ver_md_ctx, m, &m_len) <= 0) {
     error_and_exit("EVP_DigestFinal_ex failed");
   }
 
-  EVP_PKEY_CTX* verify_ctx = EVP_PKEY_CTX_new(pkey, NULL);
-  if (EVP_PKEY_verify_init(verify_ctx) <= 0) {
+  EVP_PKEY_CTX* verify_pkey_ctx = EVP_PKEY_CTX_new(pkey, NULL);
+
+  if (EVP_PKEY_verify_init(verify_pkey_ctx) <= 0) {
     error_and_exit("EVP_PKEY_verify_init failed");
   }
 
-  if (EVP_PKEY_CTX_set_rsa_padding(verify_ctx, RSA_PKCS1_PSS_PADDING) <= 0) {
+  printf("MD type for ver_md_ctx (ver): %d\n", EVP_MD_type(EVP_MD_CTX_md(ver_md_ctx)));
+
+  if (EVP_PKEY_CTX_set_rsa_padding(verify_pkey_ctx, RSA_PKCS1_PSS_PADDING) <= 0) {
     error_and_exit("EVP_PKEY_CTX_set_rsa_padding failed");
   }
 
-  if (EVP_PKEY_CTX_set_signature_md(verify_ctx, EVP_MD_CTX_md(vmdctx)) <= 0) {
+  printf("md_type: %d\n", EVP_MD_type(EVP_MD_CTX_md(ver_md_ctx)));
+  /*
+   * The following call will currently fail with the following error:
+   * errno: 478150830, error:1C8000AE:Provider routines::digest not allowed
+   */
+  if (EVP_PKEY_CTX_set_signature_md(verify_pkey_ctx, EVP_MD_CTX_md(ver_md_ctx)) <= 0) {
     error_and_exit("EVP_PKEY_CTX_set_signature_md failed");
   }
 
-  int verified = EVP_PKEY_verify(verify_ctx, sig, siglen, m, m_len);
+  int verified = EVP_PKEY_verify(verify_pkey_ctx, sig, siglen, m, m_len);
   printf("verified signature: %s\n", verified == 1 ? "true" : "false");
   if (verified != 1) {
     error_and_exit("EVP_PKEY_verify failed");
   }
+}
+
+int main(int arc, char *argv[]) {
+  printf("RSA Sign example\n");
+
+  EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA_PSS, NULL);
+  const EVP_MD* md = EVP_get_digestbyname("SHA256");
+
+  EVP_PKEY* pkey = create_pkey(ctx, md);
+
+  // So we have our key generated. We can now use it to sign
+  unsigned char* sig;
+  size_t siglen;
+  sign(sig, siglen, pkey, md);
+
+  // Now verify the signature.
+  verify(sig, siglen, pkey, md);
 
   EVP_PKEY_CTX_free(ctx);
   exit(EXIT_SUCCESS);
