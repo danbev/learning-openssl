@@ -43,8 +43,8 @@ inline struct lhash_st_SOMETHING* lh_SOMETHING_new(
   return (struct lhash_st_SOMETHING*)
     OPENSSL_LH_new((OPENSSL_LH_HASHFUNC)hfn, (OPENSSL_LH_COMPFUNC)cfn);
 }
-// Notice that the return type if struct lhash_st_SOMETHING* which then
-// used to call the other functions below:
+// Notice that the return type if struct lhash_st_SOMETHING* which can then
+// be used to call the other functions below:
 
 // So to insert we pass our hash table that we created above and a pointer
 // to struct somthing_st (SOMETHING) to insert.
