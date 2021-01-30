@@ -2,7 +2,7 @@
 This document contains notes about padding used in crypto.
 
 ### RSA padding
-Just to recap about RSA and the it will split the message into blocks of
+Just to recap about RSA and that it will split the message into blocks of
 plaintext. For example this could be 16 byte blocks (so 128 bits in total).
 But the input message might not be an even multiple of this size so padding is
 added to ensure this.
@@ -18,9 +18,9 @@ Two bytes:
 Block size 8: DD OF 0F CB F1 AA 97
 Padding     : DD OF 0F CB F1 AA 02 02
 ```
-And if more are needed they wil be 03, 04 and so on. One situation that is
+And if more are needed they will be 03, 04 and so on. One situation that is
 possible is that we have a valid 01 as the last character in which case a
-complete passing byte is appended to the message:
+complete padding byte is appended to the message:
 ```
               7  6  5  4  3  2  1  0  7  6  5  4  3  2  1  0
 Block size 8: DD OF 0F CB F1 AA 97 01
