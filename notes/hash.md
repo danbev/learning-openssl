@@ -180,17 +180,17 @@ w_j -> |        Round j           |
 ```
 The 4 round functions are:
 ```
-f0(B, C, D) = 
-f1(B, C, D) = 
-f2(B, C, D) = 
-f3(B, C, D) = 
+f0(B, C, D) = (B & C) | (!B & D) 
+f1(B, C, D) = B ^ C ^ D
+f2(B, C, D) = (B & C) | (B & D) | (C & D)
+f3(B, C, D) = B ^ C ^ D
 ```
 And the 4 round constats are:
 ```
-c0 = 
-c1 = 
-c2 = 
-c3 = 
+c0 = 5A827999
+c1 = 6ED9EBA1
+c2 = 8F1BBCDC
+c3 = CA62C1D6
 ```
 And finally we have the message scheduler values:
 ```
@@ -214,4 +214,62 @@ This can be compared to block ciphers and how they work:
                            +----------+
   
 ```
+
+### SHA-3
+November 2007 NIST issues a call for algorithms.
+October 2008 deadline and they recieved 64 submissions.
+December 2010 5 algorithms were left in the competition.
+October 2012 Keccak was selected as SHA-3.
+
+```
+           +-----------------------------------+
+           |          Message M                |   (any lenght)
+           +-----------------------------------+
+                            |
+                            ↓
+           +-----------------------------------+
+           \                                   /
+            \     SHA-3 Hash function H(M)    /
+             \                               /
+              -------------------------------
+                            |
+                            ↓
+                   +-----------------+
+	           |   Hash value    |              fixed lengts:
+                   +-----------------+               224/256/384/512
+```
+Notice the fixed lengths (4) of them. 
+```
+224          2¹¹²     3DES key length
+256          2¹²⁸     AES key length
+384          2¹⁹²     AES key length
+512          2²⁵⁶     AES key length
+```
+Recall that 2¹¹² are the steps an attacker needs to produce to create a
+collision.
+
+#### Kerrak
+Can be used for other things and not just sha3.
+
+Sponge construction:
+1. Absorbing phase, input (like when you release a sponge it will such up fluid)
+   x₁ is read and processed.
+2. Squeezing phase, ouput (like when you squeeze the spong fluid will go out)
+
+Parameters:
+state which is like the internal bus length of Kerrac which can be configured
+with a length (l) of `b = 25 * 2&l, where l={0,1,2,3,4,5,6}` which gives
+`b ∈ { 25, 50, 100, 200, 400, 800, 1600 }`.
+For SHA3 `l` must be 6 so b will be 1600.
+
+rounds: n_r = 12 + 2l, which for SHA-3 becomes n_r = 12 + 2*6 = 24
+
+output lengths:
+```
+output length      bus width     block size (r)  capacity (c)
+224                1600          1152            1600-1152=448 
+256                1600          1080            1600-1080=512
+384                1600          832             1600-832=768
+512                1600          576             1600-576=1024
+224          
 
