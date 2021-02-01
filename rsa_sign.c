@@ -17,9 +17,7 @@ void error_and_exit(const char* msg) {
 }
 
 EVP_PKEY* create_pkey(EVP_PKEY_CTX* ctx, const EVP_MD* md) {
-  int md_type = EVP_MD_type(md);
-  int md_size = EVP_MD_size(md);
-  printf("md_type: %d, size: %d\n", md_type, md_size);
+  printf("md_type: %d, size: %d\n", EVP_MD_type(md), EVP_MD_size(md));
 
   int modulus_bits = 512;
 
