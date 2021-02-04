@@ -902,14 +902,6 @@ Notice that the ref count is updated. There are then two getters:
 Where `EVP_PKEY_get1_RSA` will call EVP_PKEY_get0_RSA and then increment the ref
 count. 
 
-
-### BIGNUM (BN)
-Is needed for cryptographic functions that require arithmetic on large numbers without loss of preciesion. A BN can hold an arbitary sized integer and implements all operators.
-
-    BIGNUM* three = BN_new();
-    BN_set_word(three, 3);
-    BN_free(three);
-
 ### TicketKey
 Is a way to offload a TLS server when session re-joining is in use. Instead of the server having to keep track of a session id and the associated info the server generates this info and sends it back to the client with stores it.
 The client indicates that it supports this mechanism by including a SessionTicket TLS extension in the ClientHello message.
@@ -1898,27 +1890,6 @@ against replay attacs.
 The current [derive](derive.c) example only performs the second stage.
 
 ### OpenSSL 3.x
-
-#### Providers
-There are different providers for different algorithm implementations. These
-can be configured programatically or via a configuration file.
-There are currently 4 provider implementations:
-* Default
-
-* Legacy
-Algorithms in the legacy provider include MD2, MD4, MDC2, RMD160, CAST5,
-BF (Blowfish), IDEA, SEED, RC2, RC4, RC5 and DES (but not 3DES).
-
-* FIPS
-
-* null
-Contains nothing and can be used to the default provider is not automatically
-loaded.
-
-Example of loading a provider:
-```c
-OSSL_PROVIDER_load(NULL, "default");
-```
 
 ### Decoders
 Decoding is about transforming data or one type into another type in OpenSSL.
