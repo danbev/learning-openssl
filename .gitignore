@@ -39,3 +39,4 @@ rsa_sign
 provider.o
 cprovider.o
 libcprovider.so
+bignum

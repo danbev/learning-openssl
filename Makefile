@@ -109,6 +109,8 @@ rsa_sign: rsa_sign.c
 dsa: dsa.c
 	$(CC) $(CFLAGS)
 
+bignum: bignum.c
+	$(CC) $(CFLAGS)
 
 fips-provider: fips-provider.c
 	$(CC) $(CFLAGS)
