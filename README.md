@@ -8,7 +8,7 @@ The sole purpose of this project is to learn OpenSSL's libcryto library
 To configure and install to a build directory:
 ```console
     $ ./Configure --debug --prefix=/Users/danielbevenius/work/security/build_master darwin64-x86_64-cc
-    $ make 
+    $ make
 ```
 
 #### Building on linux
@@ -70,7 +70,7 @@ Listing tests:
 
 ### Debugging
 
-    $ lldb basic 
+    $ lldb basic
     (lldb) breakpoint set  -f basic.c -l 21
 
 ### ctags
@@ -121,7 +121,7 @@ Let's take a closer look at that last call. It will end up in ssl_lib.c:
 
 Which will delegate to x509_d2.c:
 
-    int X509_STORE_load_locations(X509_STORE *ctx, 
+    int X509_STORE_load_locations(X509_STORE *ctx,
                                   const char *file,
                                   const char *path) {
 
@@ -144,10 +144,10 @@ In our case this call will end up in x509_d2.c:
         lookup = X509_STORE_add_lookup(ctx, X509_LOOKUP_file());
 
 So what is a X509_LOOKUP?
-This is a struct used to store the lookup method, it has state to see if it has been 
+This is a struct used to store the lookup method, it has state to see if it has been
 initialized, an owning X509_STORE.
 The actual look up is done in x509/x509_lu.c which takes a pointer to a X509_STORE and
-a X509_LOOKUP_METHOD. 
+a X509_LOOKUP_METHOD.
 
 Remember that I said I'm not using a X509_STORE, but apperently I am
 because the SSL_CTX will have a cert_store:
@@ -203,13 +203,13 @@ So the above will loop through all the certificates found in `TrustStore.pem` wh
   }
 
 Which we can verify that there are 13 in that file.
-Notice that we are adding them using X509_STORE_add_cert. So what does a cert look like 
-in code: 
+Notice that we are adding them using X509_STORE_add_cert. So what does a cert look like
+in code:
 
     X509_OBJECT *obj;
     obj = (X509_OBJECT *)OPENSSL_malloc(sizeof(X509_OBJECT));
- 
-Every X509_OBJECT has a reference count. 
+
+Every X509_OBJECT has a reference count.
 
 ### BIO
 A BIO is an I/O stream abstraction; essentially OpenSSL's answer to the C
@@ -231,7 +231,7 @@ BIO is a typedef declared in `include/openssl/ossl_typ.h`:
     typedef struct bio_method_st BIO_METHOD;
 ```
 
-`bio_method_st' is defined in include/internal/bio.h: 
+`bio_method_st' is defined in include/internal/bio.h:
 
     struct bio_method_st {
       int type;
@@ -246,7 +246,7 @@ BIO is a typedef declared in `include/openssl/ossl_typ.h`:
       int (*create) (BIO *);
       int (*destroy) (BIO *);
       long (*callback_ctrl) (BIO *, int, bio_info_cb *);
-    };  
+    };
 
 Lets take a look at a concrete method struct, for example ssl/bio_ssl.c:
 ```c
@@ -268,7 +268,7 @@ Lets take a look at a concrete method struct, for example ssl/bio_ssl.c:
 ```
 
 Now the docs for [BIO](https://wiki.openssl.org/index.php/BIO) say "BIOs come
-in two flavors: source/sink, or filter." The types can be found in 
+in two flavors: source/sink, or filter." The types can be found in
 include/openssl/bio.h The rest are the name and functions that of this method
 type.
 
@@ -327,7 +327,7 @@ returning.  There is some error handling and then:
     }
 ```
 
-`next_bio` and `prev_bio` are used by filter BIOs.  
+`next_bio` and `prev_bio` are used by filter BIOs.
 `callback` is a function pointer that will be called for the following calls:
 ```c
     # define BIO_CB_FREE     0x01
@@ -343,9 +343,9 @@ More details of callback can be found
 
 `ptr` might be a FILE* for example.
 
-When is `shutdown` used?   
+When is `shutdown` used?
 This is set to 1 by default in `crypto/bio/bio_lib.c`:
-```c 
+```c
     bio->shutdown = 1;
 ```
 
@@ -398,7 +398,7 @@ Returns the current file position of a file related BIO.
 
 
 ### BIO_METHOD ctrl
-What is this used for?  
+What is this used for?
 As you might have guessed this if for performing control operations.
 ```c
     long (*ctrl) (BIO *, int, long, void *);
@@ -492,10 +492,10 @@ struct evp_pkey_st {
 So, an instance of `evp_pkey_st` can hold legacy (pre 3.0) data, for example
 this is what `evp_pkey_st` looks like in 1.1.1:
 ```c
-struct evp_pkey_st {                                                            
-    int type;                                                                   
-    int save_type;                                                              
-    CRYPTO_REF_COUNT references;                                                
+struct evp_pkey_st {
+    int type;
+    int save_type;
+    CRYPTO_REF_COUNT references;
     const EVP_PKEY_ASN1_METHOD *ameth; /* algoritm methods? */
     ENGINE *engine;
     ENGINE *pmeth_engine; /* If not NULL public key ENGINE to use */
@@ -537,15 +537,15 @@ also contains additional data:
         int security_bits;
         int size;
     } cache;
-} 
+}
 ```
 And the following fields are shared between them both:
 ```
-    CRYPTO_REF_COUNT references;                                                
-    CRYPTO_RWLOCK *lock;                                                        
-    STACK_OF(X509_ATTRIBUTE) *attributes; /* [ 0 ] */                           
-    int save_parameters;                                                        
-    CRYPTO_EX_DATA ex_data;                                                     
+    CRYPTO_REF_COUNT references;
+    CRYPTO_RWLOCK *lock;
+    STACK_OF(X509_ATTRIBUTE) *attributes; /* [ 0 ] */
+    int save_parameters;
+    CRYPTO_EX_DATA ex_data;
 ```
 
 All public keys instances of this struct have type. For example when we want
@@ -583,44 +583,44 @@ Is a struct that contains data and functions to enable providers import/export
 key material.
 
 ```c
-struct evp_keymgmt_st {                                                         
+struct evp_keymgmt_st {
     int id;
-    int name_id;                                                                
-    OSSL_PROVIDER *prov;                                                        
-    CRYPTO_REF_COUNT refcnt;                                                    
-    CRYPTO_RWLOCK *lock;                                                        
-                                                                                
-    /* Constructor(s), destructor, information */                               
-    OSSL_FUNC_keymgmt_new_fn *new;                                              
-    OSSL_FUNC_keymgmt_free_fn *free;                                            
-    OSSL_FUNC_keymgmt_get_params_fn *get_params;                                
-    OSSL_FUNC_keymgmt_gettable_params_fn *gettable_params;                      
-    OSSL_FUNC_keymgmt_set_params_fn *set_params;                                
-    OSSL_FUNC_keymgmt_settable_params_fn *settable_params;                      
-                                                                                
-    /* Generation, a complex constructor */                                     
-    OSSL_FUNC_keymgmt_gen_init_fn *gen_init;                                    
-    OSSL_FUNC_keymgmt_gen_set_template_fn *gen_set_template;                    
-    OSSL_FUNC_keymgmt_gen_set_params_fn *gen_set_params;                        
-    OSSL_FUNC_keymgmt_gen_settable_params_fn *gen_settable_params;              
-    OSSL_FUNC_keymgmt_gen_fn *gen;                                              
-    OSSL_FUNC_keymgmt_gen_cleanup_fn *gen_cleanup;                              
-                                                                                
-    OSSL_FUNC_keymgmt_load_fn *load;                                            
-                                                                                
-    /* Key object checking */                                                   
-    OSSL_FUNC_keymgmt_query_operation_name_fn *query_operation_name;            
-    OSSL_FUNC_keymgmt_has_fn *has;                                              
-    OSSL_FUNC_keymgmt_validate_fn *validate;                                    
-    OSSL_FUNC_keymgmt_match_fn *match;                                          
-                                                                                
-    /* Import and export routines */                                            
-    OSSL_FUNC_keymgmt_import_fn *import;                                        
-    OSSL_FUNC_keymgmt_import_types_fn *import_types;                            
-    OSSL_FUNC_keymgmt_export_fn *export;                                        
-    OSSL_FUNC_keymgmt_export_types_fn *export_types;                            
-    OSSL_FUNC_keymgmt_copy_fn *copy;                                            
-} /* EVP_KEYMGMT */ ;                       
+    int name_id;
+    OSSL_PROVIDER *prov;
+    CRYPTO_REF_COUNT refcnt;
+    CRYPTO_RWLOCK *lock;
+
+    /* Constructor(s), destructor, information */
+    OSSL_FUNC_keymgmt_new_fn *new;
+    OSSL_FUNC_keymgmt_free_fn *free;
+    OSSL_FUNC_keymgmt_get_params_fn *get_params;
+    OSSL_FUNC_keymgmt_gettable_params_fn *gettable_params;
+    OSSL_FUNC_keymgmt_set_params_fn *set_params;
+    OSSL_FUNC_keymgmt_settable_params_fn *settable_params;
+
+    /* Generation, a complex constructor */
+    OSSL_FUNC_keymgmt_gen_init_fn *gen_init;
+    OSSL_FUNC_keymgmt_gen_set_template_fn *gen_set_template;
+    OSSL_FUNC_keymgmt_gen_set_params_fn *gen_set_params;
+    OSSL_FUNC_keymgmt_gen_settable_params_fn *gen_settable_params;
+    OSSL_FUNC_keymgmt_gen_fn *gen;
+    OSSL_FUNC_keymgmt_gen_cleanup_fn *gen_cleanup;
+
+    OSSL_FUNC_keymgmt_load_fn *load;
+
+    /* Key object checking */
+    OSSL_FUNC_keymgmt_query_operation_name_fn *query_operation_name;
+    OSSL_FUNC_keymgmt_has_fn *has;
+    OSSL_FUNC_keymgmt_validate_fn *validate;
+    OSSL_FUNC_keymgmt_match_fn *match;
+
+    /* Import and export routines */
+    OSSL_FUNC_keymgmt_import_fn *import;
+    OSSL_FUNC_keymgmt_import_types_fn *import_types;
+    OSSL_FUNC_keymgmt_export_fn *export;
+    OSSL_FUNC_keymgmt_export_types_fn *export_types;
+    OSSL_FUNC_keymgmt_copy_fn *copy;
+} /* EVP_KEYMGMT */ ;
 ```
 
 
@@ -632,7 +632,7 @@ struct evp_keymgmt_st {
      [ available ]
 
 
-### Message Digest 
+### Message Digest
 Is a cryptographic hash function which takes a string of any length as input and
 produces a fixed length hash value. A message digest is a fixed size numeric
 representation of the contents of a message
@@ -641,13 +641,13 @@ An example of this can be found in digest.c
 
     md = EVP_get_digestbyname("SHA256");
 
-An EVP_MD abstracts the details of a specific hash function allowing code to 
-deal with the concept of a "hash function" without needing to know exactly 
+An EVP_MD abstracts the details of a specific hash function allowing code to
+deal with the concept of a "hash function" without needing to know exactly
 which hash function it is.
 The implementation of this can be found in openssl/crypto/evp/names.c:
 
     const EVP_MD *cp;
-    ... 
+    ...
     cp = (const EVP_MD *)OBJ_NAME_get(name, OBJ_NAME_TYPE_MD_METH);
     return (cp);
 
@@ -715,7 +715,7 @@ Next, lets take a look at:
 
     EVP_DigestInit_ex(mdctx, md, engine);
 
-We are passing in our pointer to the newly allocated EVP_MD_CTX struct, and a pointer to a 
+We are passing in our pointer to the newly allocated EVP_MD_CTX struct, and a pointer to a
 Message Digest EVP_MD.
 The impl can be found in `crypto/evp/digest.c':
 
@@ -745,7 +745,7 @@ So it calls reset on the EVP_MD_CTX_reset which in our case is not required as w
 
 Just to clarify this, `ctx` is a pointer to EVP_MD_CTX and `type` is a const pointer to EVP_MD.
 `update` of the EVP_MD_CTX is set to the EVP_MD's update so I guess either one can be used after this.
-`ctx->md_data` is allocated for the EVP_MD_CTX member `md_data` and the size used is the size for the type of EVP_MD being used. 
+`ctx->md_data` is allocated for the EVP_MD_CTX member `md_data` and the size used is the size for the type of EVP_MD being used.
 
      return ctx->digest->init(ctx);
 
@@ -820,7 +820,7 @@ Interesting is that this will call `EVP_DigestInit_ex` just like in our message
     # define EVP_SignInit(a,b)               EVP_DigestInit(a,b)
     # define EVP_SignUpdate(a,b,c)           EVP_DigestUpdate(a,b,c)
 
-So we already know what `EVP_SignInit_ex` and `EVP_SignUpdate` do. 
+So we already know what `EVP_SignInit_ex` and `EVP_SignUpdate` do.
 But `EVP_SignFinal` is implemented in `crypto/evp/p_sign.c`:
 
     EVP_SignFinal(mdctx, sig, &sig_len, pkey);
@@ -880,7 +880,7 @@ To set the private key on of the following functions is used:
     int EVP_PKEY_set1_EC_KEY(EVP_PKEY *pkey, EC_KEY *key);
 ```
 
-Why are these called `set1_`?  
+Why are these called `set1_`?
 "In accordance with the OpenSSL naming convention the key obtained from or
 assigned to the pkey using the 1 functions must be freed as well as pkey."
 
@@ -900,7 +900,7 @@ Notice that the ref count is updated. There are then two getters:
     RSA *EVP_PKEY_get1_RSA(EVP_PKEY *pkey)
 ```
 Where `EVP_PKEY_get1_RSA` will call EVP_PKEY_get0_RSA and then increment the ref
-count. 
+count.
 
 ### TicketKey
 Is a way to offload a TLS server when session re-joining is in use. Instead of the server having to keep track of a session id and the associated info the server generates this info and sends it back to the client with stores it.
@@ -969,17 +969,17 @@ Abstract Syntax Notation One (ASN.1) is a set of rules for defining,
 transporting and exchanging complex data structures and objects.
 
 ### DER
-Distiguished Encoding Rules (DER), is a subset of Basic Encoding Rules (BER)). 
+Distiguished Encoding Rules (DER), is a subset of Basic Encoding Rules (BER)).
 
 ### PEM
 Privacy-Enhanced Main (PEM) is an ASCII endocing of DER using base64 encoding.
 
 #### Fields
-Version:  
+Version:
 0 = Version 1, 1 = Version 2, and 2 = Version 3
 Version 3 supports extensions
 
-Serial Number: 
+Serial Number:
 Originally used to uniquely identify a certificate issued by a given CA.
 
 Signature Algorithm:
@@ -1003,13 +1003,13 @@ For a self-signed cert the Subject and Issuer will match.
 
 
 #### Chains
-Just an end cerificate is not enough, instead each server must provide a chain of certificates that lead to a 
+Just an end cerificate is not enough, instead each server must provide a chain of certificates that lead to a
 trusted root certificate.
 
 
 ### SSL_get_peer_cert_chain
 SSL_get_peer_cert_chain() returns a pointer to STACK_OF(X509) certificates forming the certificate chain sent by the peer.
-If called on the client side, the stack also contains the peer's certificate; if called on the server side, the peer's 
+If called on the client side, the stack also contains the peer's certificate; if called on the server side, the peer's
 certificate must be obtained separately using SSL_get_peer_certificate.
 
     X509* cert = w->is_server() ? SSL_get_peer_certificate(w->ssl_) : nullptr;
@@ -1054,11 +1054,11 @@ Example (taken from [bio_ssl.c](./bio_ssl.c):
 
 Now, `SSLv23_client_method` is a macro which will expand to TLS_client_method()
 
-So what is a SSL_CTX?  
+So what is a SSL_CTX?
 This struct has a SSL_METHOD* as its first member. A stack of SSL_CIPHERs, a pointer
 to a x509_store_st cert_store.
 A cache (LHASH_OF(SSL_SESSION)* sesssion)) sessions? Callbacks for when a new session is
-added to the cache. 
+added to the cache.
 
 
 ### ssl_session_st
@@ -1066,7 +1066,7 @@ Represents an ssl session with information about the ssl_version the keys.
 
 
 ### BIO retry
-BIO_read will try to read a certain nr of bytes. This function will return the nr of 
+BIO_read will try to read a certain nr of bytes. This function will return the nr of
 bytes read, or 0, or -1.
 
 If the read operation is done on a blocking resource then 0 indicates that the resouces
@@ -1102,12 +1102,12 @@ run the following command::
 
 ### Authenticated encryption with associated data (AEAD)
 You want to authenticate and transmit data in addition to an encrypted message.
-If a cipher processes a network packet composed of a header followed by a payload, you might choose to encrypt the 
-payload to hide the actual data transmitted, but not encrypt the header since it contains information required to 
-deliver the packet to its final recipient. At the same time, you might still like to authenticate the header’s 
+If a cipher processes a network packet composed of a header followed by a payload, you might choose to encrypt the
+payload to hide the actual data transmitted, but not encrypt the header since it contains information required to
+deliver the packet to its final recipient. At the same time, you might still like to authenticate the header’s
 data to make sure that it is received from the expected sender.
 ```
-       Encryption        Authentication   
+       Encryption        Authentication
       +--------------++---------------------------+
 mgs ->| Encrypted msg||Message Authentication Code|
       +--------------++---------------------------+
@@ -1126,15 +1126,15 @@ GCM
 EAX
 
 ### GCM (Galois Counter Mode)
-This algorithm produces both a cipher text and an authentication tag (think MAC). 
-Once the ciphertext and authentication tag have been generated, the sender transmits both to the 
+This algorithm produces both a cipher text and an authentication tag (think MAC).
+Once the ciphertext and authentication tag have been generated, the sender transmits both to the
 intended recipient.
 
 
 ### Additional Authentication Data (AAD)
 GCM, CCM allow for the input of additional data (header data in CCM) which will accompany the cipher text
 but does not have to be encrypted but must be authenticated.
-AE(K, P) = (C, T). The term AE stands for authenticated encryption, K is the key, P the plaintext and 
+AE(K, P) = (C, T). The term AE stands for authenticated encryption, K is the key, P the plaintext and
 C the cipher text, and finally T is the authentication tag.
 
 Authenticated cipher decryption is represented by AD(K, C, T) = P
@@ -1177,7 +1177,7 @@ use Config;
 ```
 I think this is the CPAN [Config](http://perldoc.perl.org/Config.html) module. It gives access to information that was available to the Configure program at Perl build time.
 
-Version information will be colleded into the Config object by parsing 
+Version information will be colleded into the Config object by parsing
 `include/openssl/opensslv.h`.
 After this the following can be found:
 ```perl
@@ -1240,7 +1240,7 @@ unix-Makefile.tmpl
 Makefile.tmpl
 ```
 `Makefile.tmpl` is also mentioned in Configurations/README.md` and there is a
-link to such a file but it does not exist. 
+link to such a file but it does not exist.
 
 A little further down in Configure we have:
 ```perl
@@ -1254,7 +1254,7 @@ in the if statement is true. In this case `-f` is checking that the file
 is a plain file.
 
 Running Configure will
-generate a `Makefile` and also an `opensslconf.h` file. 
+generate a `Makefile` and also an `opensslconf.h` file.
 
 ### Running tests
 ```console
@@ -1290,7 +1290,7 @@ Lets take a look at the buildinfo.h file in `openssl/crypto`. The first line loo
 {- use File::Spec::Functions qw/catdir catfile/; -}
 ```
 So the build.info is not itself a perl script but a template which can have
-perl "embedded" in it. For example, the above will use the 
+perl "embedded" in it. For example, the above will use the
 qw is a function that to specify multiple single quoted words. From this I guess
 this is importing 'catdir' and 'catfile' from the File::Spec::Functions module.
 But I cannot find any usage of `catdir` or `catfile` in crypto/build.info. This
@@ -1303,9 +1303,9 @@ LIBS=../libcrypto
 
 
 ### perlasm
-Assemblers usually have macros and other high-level features that make 
+Assemblers usually have macros and other high-level features that make
 assembly-language programming convenient. However, some assemblers do not have
-such features, and the ones that do all have different syntaxes. 
+such features, and the ones that do all have different syntaxes.
 OpenSSL has its own assembly language macro framework called `perlasm` to deal
 with this. Every OpenSSL assembly language source file is actually a Perl program
 that generates the assembly language file. The result is several large files of
@@ -1324,7 +1324,7 @@ $ openssl x509 -in certificate.crt -text -noout
 ```
 
 ### Initialization Vector
-Is a vector/array of random bytes. This is all it is. Someone seeing those bytes cannot 
+Is a vector/array of random bytes. This is all it is. Someone seeing those bytes cannot
 deduce anything about the key or the encrypted message. But they need it for decryption so
 it must be sent along with the cypher text.
 
@@ -1362,7 +1362,7 @@ So AES takes a 128 bit message and turns it into a grid:
 +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
      |
      | transformed into 4x4 matrix/grid
-     ↓ 
+     ↓
 +--+--+--+--+
 |00|04|08|12|
 +--+--+--+--+
@@ -1427,7 +1427,7 @@ Certificate:
 ```
 
 Each issued certificate must contain a unique serial number assigned by the CA.
-It must be unique for each certificate given by a given CA. 
+It must be unique for each certificate given by a given CA.
 OpenSSL keeps the used serial numbers on a file, by default it has the same name
 as the CA certificate file with the extension replace by srl
 
@@ -1534,8 +1534,8 @@ So if you need to find the type
 int type = EVP_PKEY_base_id(pkey.get())
 DSA* dsa = EVP_PKEY_get0_DSA(pkey.get());
 ```
-The api functions can be found in `crypto/evp/p_lib.c`. 
-Where are the functions for the DSA type? 
+The api functions can be found in `crypto/evp/p_lib.c`.
+Where are the functions for the DSA type?
 These can be found in `/crypto/dsa/dsa_lib.c`
 
 ### Rivest Shamir and Aldeman (RSA)
@@ -1568,7 +1568,7 @@ So we have 6 values that don't have common factors with 14.
 This can also be calculated using:
 ```
 L = (q - 1) * (p - 1)
-L = (2 - 1) * (7 - 1) 
+L = (2 - 1) * (7 - 1)
 L = (1) * (6) = 6
 ```
 So `L` will be `6`.
@@ -1638,8 +1638,8 @@ And notice that 4 in our case is m⁵, which is 2⁵ mod 14 so we can write this
 ```
 (m⁵)¹¹ mod (14)
 m⁵*¹¹ mod (14)
-m⁵*¹¹ mod (14) = m⁵⁵ mod (14) = 
-2⁵*¹¹ mod (14) = m⁵⁵ mod (14) = 
+m⁵*¹¹ mod (14) = m⁵⁵ mod (14) =
+2⁵*¹¹ mod (14) = m⁵⁵ mod (14) =
 ```
 
 Now, there are issues with the what we have done above, first encrypting the
@@ -1665,7 +1665,7 @@ M = H || 00 . . . 00 || 01 || K
 And I was not sure what `||` meant, but looking at the notation section in
 https://tools.ietf.org/html/rfc3447#section-2 I see it means it's a
 concatenation operator. This section is also useful if you come accross variable
-names that might not be obvious at first in OpenSSL. 
+names that might not be obvious at first in OpenSSL.
 Notice the 01 which is used as a separator above that is appended above which
 is why we have to subtract two from M. TODO: explain and verify this.
 
@@ -1693,7 +1693,7 @@ Alice                 Public                        Bob
 a (number < n)        g (generator, small prime)    b (number < n)
                       n (big prime number)
 
-g^a mod n ------------> a₁             b₁ <--------- g^b mod n 
+g^a mod n ------------> a₁             b₁ <--------- g^b mod n
 
 (b₁)^a mod n                                         (a₁)^b mod n
 is same as:                                          is the same as:
@@ -1719,7 +1719,7 @@ Notice that `g` for generator is like the starting point on the circle and n is
 the max size of the circle after which is will wrap over.
 Visualize this as a circle (like a clock and 12 is the number n). So we take
 our private key (a) and raise g to that, and then mod it to the circle, so this
-will be a point some where on the circle. Bob does the same and his value will 
+will be a point some where on the circle. Bob does the same and his value will
 also be somewhere on the circle. The can now share this publicly as just knowing
 the point on the cicle is not enough, only alice knows how many times around the
 circle (a times) to get to the point.
@@ -1765,7 +1765,7 @@ Alice                 Public                         Bob
 a (number < n)        g (point on the curve)         b (number < n)
 
 a*g    ------------>  a₁             b₁ <---------   b*g
-b¹*g =                                               a²*g= 
+b¹*g =                                               a²*g=
 
 ```
 
@@ -1816,11 +1816,11 @@ Extends the Ecludian alg to also tell us what `s` and `t` are.
 gcd(13, 7) = 1
 
 
-The example elliptic curve domain parameters over 𝔽2m have been given nicknames 
-to enable them to be easily identified. The nicknames were chosen as follows. 
-Each name begins with `sec` to denote ‘Standards for Efficient Cryptography’, 
-followed by a `t` to denote parameters over 𝔽2m , followed by a number denoting 
-the field size `m`, followed by a `k` to denote parameters associated with a Koblitz 
+The example elliptic curve domain parameters over 𝔽2m have been given nicknames
+to enable them to be easily identified. The nicknames were chosen as follows.
+Each name begins with `sec` to denote ‘Standards for Efficient Cryptography’,
+followed by a `t` to denote parameters over 𝔽2m , followed by a number denoting
+the field size `m`, followed by a `k` to denote parameters associated with a Koblitz
 curve or an `r` to denote verifiably random parameters, followed by a sequence number.
 
 So `secp192k1` would mean:
@@ -1832,15 +1832,15 @@ k|r = k is for a Kobiltz curve and r to denote verifiably random parameters.
 #   = a sequence number
 ```
 
-Dual Elliptic Curve Deterministic Random Bit Generator (Dual_EC_DRBG). This is a 
-random number generator standardized by the National Institute of Standards and 
-Technology (NIST) and promoted by the NSA. Dual_EC_DRBG generates random-looking 
-numbers using the mathematics of elliptic curves. The algorithm itself involves 
-taking points on a curve and repeatedly performing an elliptic curve "dot" operation. 
+Dual Elliptic Curve Deterministic Random Bit Generator (Dual_EC_DRBG). This is a
+random number generator standardized by the National Institute of Standards and
+Technology (NIST) and promoted by the NSA. Dual_EC_DRBG generates random-looking
+numbers using the mathematics of elliptic curves. The algorithm itself involves
+taking points on a curve and repeatedly performing an elliptic curve "dot" operation.
 
-There has been progress in developing curves with efficient arithmetic outside 
-of NIST, including curve 25519 created by Daniel Bernstein (djb) and more 
-recently computed curves by Paulo Baretto and collaborators. But widespread adoption 
+There has been progress in developing curves with efficient arithmetic outside
+of NIST, including curve 25519 created by Daniel Bernstein (djb) and more
+recently computed curves by Paulo Baretto and collaborators. But widespread adoption
 of these curves is several years away.
 
 
@@ -1857,7 +1857,7 @@ logically consists of two modules.
 
 So we first want to extract from a source key (sk), which could be created by a hardware
 random number generator or a key exchange protocol, and then create additional
-keys derived from that. 
+keys derived from that.
 
 For example in TLS 1.3 there are multiple keys need to for different things.
 ```
@@ -1869,7 +1869,7 @@ Key Derivation Function (KDF)
 
 
 In TLS the browser has a key for sending to the server and a key for receiving
-from the server. 
+from the server.
 ```
 +--------+
 |Client  |
@@ -1951,7 +1951,7 @@ if (fips == NULL) {
 The fips provider is implemented in `providers/fips/fipsprov.c`.
 
 There is an example of loading the fips provider in [fips-provider](./fips-provider.c).
-If you just compile this using 
+If you just compile this using
 ```console
 $ ./fips-provider
 FIPS Provider example
@@ -2045,7 +2045,7 @@ error:01400000:unknown library::unknown library
 Public Key Infrastructure of the X509.v3 certificate standard (PKIX).
 
 #### Certificate encoding
-These are certificates used in X.509 
+These are certificates used in X.509
 
 ### DER encoded certificate
 A `.der` extension indicates a binary encoding.
@@ -2111,7 +2111,7 @@ Generator (uncompressed):
     f8:17:98:48:3a:da:77:26:a3:c4:65:5d:a4:fb:fc:
     0e:11:08:a8:fd:17:b4:48:a6:85:54:19:9c:47:d0:
     8f:fb:10:d4:b8
-Order: 
+Order:
     00:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:
     ff:fe:ba:ae:dc:e6:af:48:a0:3b:bf:d2:5e:8c:d0:
     36:41:41
@@ -2200,30 +2200,30 @@ EVPKeyCtxPointer::Setup has is the following call:
 ```
 `EVP_PKEY_CTX_set_ec_param_enc` is a macro which looks like this:
 ```c
-#  define EVP_PKEY_CTX_set_ec_param_enc(ctx, flag) \                                
-        EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_EC, \                                       
-                          EVP_PKEY_OP_PARAMGEN|EVP_PKEY_OP_KEYGEN, \                
+#  define EVP_PKEY_CTX_set_ec_param_enc(ctx, flag) \
+        EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_EC, \
+                          EVP_PKEY_OP_PARAMGEN|EVP_PKEY_OP_KEYGEN, \
                           EVP_PKEY_CTRL_EC_PARAM_ENC, flag, NULL)
 ```
 And `EVP_PKEY_CTX_ctrl` is defined as (`crypto/evp/pmeth_lib.c`):
 ```c
-int EVP_PKEY_CTX_ctrl(EVP_PKEY_CTX *ctx, int keytype, int optype,               
-                      int cmd, int p1, void *p2)                                
+int EVP_PKEY_CTX_ctrl(EVP_PKEY_CTX *ctx, int keytype, int optype,
+                      int cmd, int p1, void *p2)
   ...
-  if ((EVP_PKEY_CTX_IS_DERIVE_OP(ctx) && ctx->op.kex.exchprovctx != NULL)         
-            || (EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx)                               
-                && ctx->op.sig.sigprovctx != NULL)                              
-            || (EVP_PKEY_CTX_IS_ASYM_CIPHER_OP(ctx)                             
-                && ctx->op.ciph.ciphprovctx != NULL)                            
-            || (EVP_PKEY_CTX_IS_GEN_OP(ctx)                                     
-                && ctx->op.keymgmt.genctx != NULL))                             
-        return legacy_ctrl_to_param(ctx, keytype, optype, cmd, p1, p2);         
+  if ((EVP_PKEY_CTX_IS_DERIVE_OP(ctx) && ctx->op.kex.exchprovctx != NULL)
+            || (EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx)
+                && ctx->op.sig.sigprovctx != NULL)
+            || (EVP_PKEY_CTX_IS_ASYM_CIPHER_OP(ctx)
+                && ctx->op.ciph.ciphprovctx != NULL)
+            || (EVP_PKEY_CTX_IS_GEN_OP(ctx)
+                && ctx->op.keymgmt.genctx != NULL))
+        return legacy_ctrl_to_param(ctx, keytype, optype, cmd, p1, p2);
 ```
 In this case `legacy_ctrl_to_param` will be called.
 ```c
-static int legacy_ctrl_to_param(EVP_PKEY_CTX *ctx, int keytype, int optype,         
-                                int cmd, int p1, void *p2)                      
-{ 
+static int legacy_ctrl_to_param(EVP_PKEY_CTX *ctx, int keytype, int optype,
+                                int cmd, int p1, void *p2)
+{
 # ifndef OPENSSL_NO_EC
     if (keytype == EVP_PKEY_EC) {
         switch (cmd) {
@@ -2266,8 +2266,8 @@ the preprocessor:
 $ gcc -I./include -E crypto/evp/pmeth_lib.c | grep -C 100 'int legacy_ctrl_to_param'
 ```
 
-This is causing a failure in Node.js as this will cause false to be returned. 
-What does this do function do in Node upstream?  
+This is causing a failure in Node.js as this will cause false to be returned.
+What does this do function do in Node upstream?
 ```c
 int EVP_PKEY_CTX_ctrl(EVP_PKEY_CTX *ctx, int keytype, int optype,
                       int cmd, int p1, void *p2) {
@@ -2280,7 +2280,7 @@ int EVP_PKEY_CTX_ctrl(EVP_PKEY_CTX *ctx, int keytype, int optype,
     return ret;
 }
 ```
-The main difference is that in OpenSSL 3.x this if statement has been added 
+The main difference is that in OpenSSL 3.x this if statement has been added
 which is the path that will be taken:
 ```c
     if ((EVP_PKEY_CTX_IS_DERIVE_OP(ctx) && ctx->op.kex.exchprovctx != NULL) ||
@@ -2316,9 +2316,9 @@ In our case this will be false, as our operation type is `EVP_PKEY_OP_PARAMGEN`
 lldb) expr 1<<1
 (int) $34 = 2
 ```
-Since this is false the right hand side of the `&&` will not be executed, So 
+Since this is false the right hand side of the `&&` will not be executed, So
 this is not causing us to enter the if statement block.
-Next, we have 
+Next, we have
 ```c
   (EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx) && ctx->op.sig.sigprovctx != NULL) ||
 ```
@@ -2462,7 +2462,7 @@ const {
     hash: 'sha256',
     mgf1Hash: 'sha256'
 ```
-`generateKeyPair` can be found in `internal/crypto/keygen.js` and 
+`generateKeyPair` can be found in `internal/crypto/keygen.js` and
 ```js
 const {
   generateKeyPairRSA,
@@ -2471,7 +2471,7 @@ const {
 } = internalBinding('crypto');
 
 function generateKeyPair(type, options, callback) {
-  ... 
+  ...
   const impl = check(type, options);
 ```
 `check` actually does more than checking options and the type, it also returns
@@ -2653,7 +2653,7 @@ typedef struct evp_pkey_method_st EVP_PKEY_METHOD;
 ```
 And the definition is in `include/crypto/evp.h`
 Now this struct contains information and function related to the a public key
-type, like `init`, `paramgen_init`, `paramgen`, `keygen_init`, `keygen`, 
+type, like `init`, `paramgen_init`, `paramgen`, `keygen_init`, `keygen`,
 `sign_init`, `sign`, `verify_init`, `verify`, `encrypt_init`, `encrypt`,
 `decrypt_init`, `decrypt`, etc.
 The ec specific method can be found in crypto/ec/ec_pmeth.c:
@@ -2745,12 +2745,12 @@ In `keymgmt_meth.c` we have:
 ```c
 OSSL_METHOD_STORE *store = get_evp_method_store(libctx);
 ```
-`get_evp_method_store` is also a function in `evp_fetch.c` 
+`get_evp_method_store` is also a function in `evp_fetch.c`
 
 ### RAND_status in OpenSSl 3.0.0
 In Node.js I ran into an issue when upgrading and specifically when using
 alpha 4. When building the mksnapshot task would just hang and no further
-output produced when trying to create the snapshot. 
+output produced when trying to create the snapshot.
 
 This issue was in `src/node_crypto.cc` and the `CheckEntropy` function:
 ```
@@ -2780,7 +2780,7 @@ And Node.js also build successfully when linking against the latest upstream.
 
 ### Random
 
-#### Random Number Generator (RNG) 
+#### Random Number Generator (RNG)
 Are hardware devices or software programs which take as input which is
 non-deterministic like some physical measurment and generate unpredictable
 numbers as output. The physical measurement can be things like mouse momement,
@@ -2793,7 +2793,7 @@ These generators can use small amount of true random numbers (inital entropy)
 to generate a large amount of artificial random numbers.
 
 It maintains a large memory buffer called the entropy pool where the bytes from
-a RNG are stored. 
+a RNG are stored.
 To generate random bits a deterministic random bit generator (DRBG) is used which
 always produces the same output for the same input. But if the input is different
 each time the output will be as well.
@@ -2805,7 +2805,7 @@ $ head -10 /dev/urandom > random
 /dev/random will block if there is not enough entropy available while /dev/urandom
 will no block.
 
-The number of bits of randomness can be found in 
+The number of bits of randomness can be found in
 ```console
 $ cat /proc/sys/kernel/random/entropy_avail
 3872
@@ -3064,7 +3064,7 @@ ACCEPT
 ```
 And then the client:
 ```console
-$ openssl s_client -key rsa_private.pem -cert rsa_cert.crt -tls1 -port 7777 
+$ openssl s_client -key rsa_private.pem -cert rsa_cert.crt -tls1 -port 7777
 CONNECTED(00000003)
 409147A22A7F0000:error::SSL routines::tlsv1 alert internal error:ssl/record/rec_layer_s3.c:1614:SSL alert number 80
 ---
@@ -3083,9 +3083,9 @@ No ALPN negotiated
 SSL-Session:
     Protocol  : TLSv1
     Cipher    : 0000
-    Session-ID: 
-    Session-ID-ctx: 
-    Master-Key: 
+    Session-ID:
+    Session-ID-ctx:
+    Master-Key:
     PSK identity: None
     PSK identity hint: None
     SRP username: None
@@ -3210,8 +3210,8 @@ OSSL_STORE_CTX *OSSL_STORE_attach(BIO *bp, const char *scheme,
                                   void *post_process_data)
 {
   ...
-  #ifndef OPENSSL_NO_DEPRECATED_3_0                                                  
-    if ((loader = ossl_store_get0_loader_int(scheme)) != NULL)                     
+  #ifndef OPENSSL_NO_DEPRECATED_3_0
+    if ((loader = ossl_store_get0_loader_int(scheme)) != NULL)
 ```
 `ossl_store_get0_loader_int` can be found in crypto/store/store_register.c:
 ```c
@@ -3242,7 +3242,7 @@ example help me understand this better and can be found in [hash.c](./hash.c).
 To inspect what the preprocessor will generate the following command can be
 used:
 ```
-$ gcc -I./include/ -E crypto/store/store_register.c 
+$ gcc -I./include/ -E crypto/store/store_register.c
 ```
 
 This issue can be reproduced by [store](./store.c):
@@ -3271,10 +3271,10 @@ const OSSL_STORE_LOADER *ossl_store_get0_loader_int(const char *scheme) {
   template.open_with_libctx = NULL;
 
   ...
-  if (!ossl_store_register_init())                                               
-        ERR_raise(ERR_LIB_OSSL_STORE, ERR_R_INTERNAL_ERROR);                    
-  else if ((loader = lh_OSSL_STORE_LOADER_retrieve(loader_register,           
-                                                   &template)) == NULL) 
+  if (!ossl_store_register_init())
+        ERR_raise(ERR_LIB_OSSL_STORE, ERR_R_INTERNAL_ERROR);
+  else if ((loader = lh_OSSL_STORE_LOADER_retrieve(loader_register,
+                                                   &template)) == NULL)
 }
 ```
 And `ossl_store_register_init` will create the hash table:
@@ -3318,7 +3318,7 @@ if (loader == NULL
          const OSSL_PROVIDER *provider = OSSL_STORE_LOADER_provider(fetched_loader);
 ```
 Perhaps the error just needs to be reset as we now found the loader for the
-scheme in question?  
+scheme in question?
 Just trying that out, adding ERR_clear_error() if the fetched_loader was found
 will work. I'm just not sure if this is a safe thing to do. Perhaps we should
 only remove single error. The better solution is to use ERR_set_mark before
@@ -3358,7 +3358,7 @@ This will break in node_crypto.cc SecureContext::SetKey:
 ```c++
 void SecureContext::SetKey(const FunctionCallbackInfo<Value>& args) {
   ...
-  BIOPointer bio(LoadBIO(env, args[0]));  
+  BIOPointer bio(LoadBIO(env, args[0]));
 
   EVPKeyPointer key(
       PEM_read_bio_PrivateKey(bio.get(),
@@ -3438,7 +3438,7 @@ Lets set a break point in store_lib:
    390 	                                             ossl_pw_passphrase_callback_dec,
 ```
 `p_load` will land us in providers/implementations/storemgmt/file_store.c
-line 810: 
+line 810:
 ```c
 static int file_load(void *loaderctx,
                      OSSL_CALLBACK *object_cb, void *object_cbarg,
@@ -3475,12 +3475,12 @@ static int file_load_file(struct file_ctx_st *ctx,
 Lets take a closer look at `file_setup_decoders` (providers/implementations/storemgmt/file_store.c):
 ```c
 if (!ossl_decoder_ctx_setup_for_EVP_PKEY(ctx->_.file.decoderctx, &dummy,
-                                                 libctx, ctx->_.file.propq)     
-            || !OSSL_DECODER_CTX_add_extra(ctx->_.file.decoderctx,              
-                                           libctx, ctx->_.file.propq)) {        
-            ERR_raise(ERR_LIB_PROV, ERR_R_OSSL_DECODER_LIB);                    
-            goto err;                                                           
-    }            
+                                                 libctx, ctx->_.file.propq)
+            || !OSSL_DECODER_CTX_add_extra(ctx->_.file.decoderctx,
+                                           libctx, ctx->_.file.propq)) {
+            ERR_raise(ERR_LIB_PROV, ERR_R_OSSL_DECODER_LIB);
+            goto err;
+    }
 
 ```
 In `ossl_decoder_ctx_setup_for_EVP_PKEY` (crypto/encode_decode/decoder_pkey.c)
@@ -3512,16 +3512,16 @@ keymgmt name: SM2, nr: 183
 The for every element in the above list, which were added to
 `data->process_data->keymgmts`, we collect the names of them:
 ```c
-end_i = sk_EVP_KEYMGMT_num(data->process_data->keymgmts);                   
-    for (i = 0; i < end_i; i++) {                                               
-        EVP_KEYMGMT *keymgmt =                                                  
-            sk_EVP_KEYMGMT_value(data->process_data->keymgmts, i);              
-                                                                                
-        EVP_KEYMGMT_names_do_all(keymgmt, collect_name, data);                  
-                                                                                
-        if (data->error_occured)                                                
-            goto err;                                                           
-    }             
+end_i = sk_EVP_KEYMGMT_num(data->process_data->keymgmts);
+    for (i = 0; i < end_i; i++) {
+        EVP_KEYMGMT *keymgmt =
+            sk_EVP_KEYMGMT_value(data->process_data->keymgmts, i);
+
+        EVP_KEYMGMT_names_do_all(keymgmt, collect_name, data);
+
+        if (data->error_occured)
+            goto err;
+    }
 ```
 Notice that this is a call to "do all", so each keymgmt can have multiple names.
 For example, "rsaEncryption" has id 169 as does "RSA":
@@ -3599,7 +3599,7 @@ Next, for all the decoders that are available, check if the names collected
 in the previous set match the decoder (I think it is actually the ids that are
 compared), and if so add the decoder:
 ```c
-  OSSL_DECODER_do_all_provided(libctx, collect_decoder, data); 
+  OSSL_DECODER_do_all_provided(libctx, collect_decoder, data);
 ```
 Below are the values for id 169 only:
 ```console
@@ -3620,11 +3620,11 @@ type. When reading a BIO from a file, there will be a peek of the file to
 see if it is of type PEM (providers/implementations/storemgmt/file_store.c):
 ```c
 void *file_attach(void *provctx, OSSL_CORE_BIO *cin)
-{ 
+{
   ...
-  peekbuf[sizeof(peekbuf) - 1] = '\0';                                    
-  if (strstr(peekbuf, "-----BEGIN ") != NULL)                             
-    input_type = INPUT_TYPE_PEM;  
+  peekbuf[sizeof(peekbuf) - 1] = '\0';
+  if (strstr(peekbuf, "-----BEGIN ") != NULL)
+    input_type = INPUT_TYPE_PEM;
   ...
   if (BIO_tell(new_bio) != loc) {
     /* In this case, anything goes */
@@ -3874,12 +3874,12 @@ static int decoder_process(const OSSL_PARAM params[], void *arg)
 ```
 decode_pem2der.c (providers/implementations/encode_decode/decode_pem2der.c):
 ```c
-static int pem2der_decode(void *vctx, OSSL_CORE_BIO *cin,                          
-                          OSSL_CALLBACK *data_cb, void *data_cbarg,                
-                          OSSL_PASSPHRASE_CALLBACK *pw_cb, void *pw_cbarg)         
+static int pem2der_decode(void *vctx, OSSL_CORE_BIO *cin,
+                          OSSL_CALLBACK *data_cb, void *data_cbarg,
+                          OSSL_PASSPHRASE_CALLBACK *pw_cb, void *pw_cbarg)
 {
   ...
-  
+
 ```
 
 There is a reproducer in [wrong-tag.c](./wrong-tag.c) which produces the
@@ -3924,7 +3924,7 @@ Process 3260145 stopped
    188 	        derp = der;
 -> 189 	        pkey = d2i_PUBKEY_ex(NULL, &derp, der_len, libctx, NULL);
    190 	    }
-   191 	
+   191
    192 	    if (pkey == NULL) {
 ```
 If we step into d2i_PUBKEY_ex we will hit the error.
@@ -4095,7 +4095,7 @@ hash is produced by the hash/algorithm/message digest function.
 If the messages being sent are smaller that the modulus the modulus operation
 can be avoided as it does not do anything. For example:
 ```
-2^1 mod 4 = 2 
+2^1 mod 4 = 2
 ```
 We need to have a  message that is greater than the modulus size. This is where
 various padding schemes come into play with RSA.
@@ -4105,13 +4105,13 @@ A part of this standard includes RSA encryption, decryption, encoding/padding
 schemes. The padding scheme can be used with RSA to avoid the small messages
 problem discussed above.
 ```
-m = 0...10 || r || 0⁸ || m' 
+m = 0...10 || r || 0⁸ || m'
 m' = original message
 r  = random bits |r| ≥ 64
 ```
 
 ### RSA Optimal Asymmetric Encryption Padding
-An improvement over PKCS#1 with regards to its padding scheme. 
+An improvement over PKCS#1 with regards to its padding scheme.
 ```
 G: hash function that returns g bits
 H: hash function that returns h bits
@@ -4123,7 +4123,7 @@ r: random nonce of g bits
 
 ### Public-Key Cryptography Standards
 Is not like I thought a standard but a complete set of standards all with the
-same name but with different versions. 
+same name but with different versions.
 
 #### PKCS#1
 Is for RSA encryption/decryption, encoding/padding, verifying/signing signatures.
@@ -4206,57 +4206,57 @@ length."
 ### OSSL_PARAM
 This struct is defined in crypto/evp/pmeth_lib.c
 ```c
-typedef struct ossl_param_st OSSL_PARAM; 
+typedef struct ossl_param_st OSSL_PARAM;
 ```
 And ossl_param_st can be found in crypto/evp/pmeth_lib.c:
 ```c
-/*                                                                                 
- * Type to pass object data in a uniform way, without exposing the object          
- * structure.                                                                      
- *                                                                                 
- * An array of these is always terminated by key == NULL                           
- */                                                                                
-struct ossl_param_st {                                                             
-    const char *key;             /* the name of the parameter */                
+/*
+ * Type to pass object data in a uniform way, without exposing the object
+ * structure.
+ *
+ * An array of these is always terminated by key == NULL
+ */
+struct ossl_param_st {
+    const char *key;             /* the name of the parameter */
     unsigned int data_type;      /* declare what kind of content is in buffer */
-    void *data;                  /* value being passed in or out */             
-    size_t data_size;            /* data size */                                
-    size_t return_size;          /* returned content size */                    
+    void *data;                  /* value being passed in or out */
+    size_t data_size;            /* data size */
+    size_t return_size;          /* returned content size */
 };
 ```
 An example of usage could be when calling EVP_PKEY_CTX_set_signature_md
 ```c
-int EVP_PKEY_CTX_set_signature_md(EVP_PKEY_CTX *ctx, const EVP_MD *md)              
-{                                                                                   
+int EVP_PKEY_CTX_set_signature_md(EVP_PKEY_CTX *ctx, const EVP_MD *md)
+{
     return evp_pkey_ctx_set_md(ctx,
                                md,
-                               ctx->op.sig.sigprovctx == NULL,         
-                               OSSL_SIGNATURE_PARAM_DIGEST,                     
+                               ctx->op.sig.sigprovctx == NULL,
+                               OSSL_SIGNATURE_PARAM_DIGEST,
                                EVP_PKEY_OP_TYPE_SIG,
-                               EVP_PKEY_CTRL_MD);         
+                               EVP_PKEY_CTRL_MD);
 
 static int evp_pkey_ctx_set_md(EVP_PKEY_CTX *ctx,
-                               const EVP_MD *md,                 
+                               const EVP_MD *md,
                                int fallback,
                                const char *param,
-                               int op,             
-                               int ctrl)                                            
-{                                                                                   
+                               int op,
+                               int ctrl)
+{
 
 ```
 OSSL_SIGNATURE_PARAM_DIGEST can be found in include/openssl/core_names.h:
 ```c
 #define OSSL_SIGNATURE_PARAM_DIGEST         OSSL_PKEY_PARAM_DIGEST
-#define OSSL_PKEY_PARAM_DIGEST              OSSL_ALG_PARAM_DIGEST 
+#define OSSL_PKEY_PARAM_DIGEST              OSSL_ALG_PARAM_DIGEST
 #define OSSL_ALG_PARAM_DIGEST               "digest"
 ```
 So this is only passing the string `digest` as the `const char*` param argument.
 Notice that the first line has the following:
 ```c
-    OSSL_PARAM md_params[2], *p = md_params; 
+    OSSL_PARAM md_params[2], *p = md_params;
 ```
 So there are two variables defined here, one array of OSSL_PARAM and one is
-a pointer to an OSSL_PARAM which is also initialized to point to the first 
+a pointer to an OSSL_PARAM which is also initialized to point to the first
 varialbe (the array):
 ```console
 (lldb) expr p
@@ -4269,23 +4269,23 @@ that are in those memory locations at the moment.
 
 There is no fallback passed in this case so I'll skip to the following code:
 ```c
-    if (md == NULL) {                                                               
-        name = "";                                                                  
-    } else {                                                                        
-        name = EVP_MD_name(md);                                                     
+    if (md == NULL) {
+        name = "";
+    } else {
+        name = EVP_MD_name(md);
     }
 ```
 `EVP_MD_name` can be found in crypto/evp/evp_lib.c:
 ```c
-const char *EVP_MD_name(const EVP_MD *md)                                       
-{                                                                               
-    if (md->prov != NULL)                                                       
-        return evp_first_name(md->prov, md->name_id);                           
-#ifndef FIPS_MODULE                                                             
-    return OBJ_nid2sn(EVP_MD_nid(md));                                          
-#else                                                                           
-    return NULL;                                                                
-#endif                                                                          
+const char *EVP_MD_name(const EVP_MD *md)
+{
+    if (md->prov != NULL)
+        return evp_first_name(md->prov, md->name_id);
+#ifndef FIPS_MODULE
+    return OBJ_nid2sn(EVP_MD_nid(md));
+#else
+    return NULL;
+#endif
 }
 ```
 Now, in this case md->prov is null so OBJ_nid2sn will be called.
@@ -4295,32 +4295,32 @@ Now, in this case md->prov is null so OBJ_nid2sn will be called.
 ```
 Next we have the following line:
 ```c
-    *p++ = OSSL_PARAM_construct_utf8_string(param, (char *)name, 0);                   
-    *p = OSSL_PARAM_construct_end();                                            
-                                                                                
-    return EVP_PKEY_CTX_set_params(ctx, md_params);     
+    *p++ = OSSL_PARAM_construct_utf8_string(param, (char *)name, 0);
+    *p = OSSL_PARAM_construct_end();
+
+    return EVP_PKEY_CTX_set_params(ctx, md_params);
 
 ```
-crypto/params.c 
+crypto/params.c
 ```c
-OSSL_PARAM OSSL_PARAM_construct_utf8_string(const char *key, char *buf,         
-                                            size_t bsize)                       
-{                                                                               
-    if (buf != NULL && bsize == 0)                                              
-        bsize = strlen(buf) + 1;                                                
-    return ossl_param_construct(key, OSSL_PARAM_UTF8_STRING, buf, bsize);       
+OSSL_PARAM OSSL_PARAM_construct_utf8_string(const char *key, char *buf,
+                                            size_t bsize)
+{
+    if (buf != NULL && bsize == 0)
+        bsize = strlen(buf) + 1;
+    return ossl_param_construct(key, OSSL_PARAM_UTF8_STRING, buf, bsize);
 }
 
-static OSSL_PARAM ossl_param_construct(const char *key, unsigned int data_type, 
-                                       void *data, size_t data_size)            
-{                                                                               
-    OSSL_PARAM res;                                                             
-    res.key = key;                                                              
-    res.data_type = data_type;                                                  
-    res.data = data;                                                            
-    res.data_size = data_size;                                                  
-    res.return_size = OSSL_PARAM_UNMODIFIED;                                    
-    return res;                                                                 
+static OSSL_PARAM ossl_param_construct(const char *key, unsigned int data_type,
+                                       void *data, size_t data_size)
+{
+    OSSL_PARAM res;
+    res.key = key;
+    res.data_type = data_type;
+    res.data = data;
+    res.data_size = data_size;
+    res.return_size = OSSL_PARAM_UNMODIFIED;
+    return res;
 ```
 So this is just returning an instance of the OSSL_PARAM struct that gets
 populated:
@@ -4331,20 +4331,20 @@ populated:
 Next OSSL_PARAM_construct_end() will be called which just sets the second entry
 to null values:
 ```c
-# define OSSL_PARAM_END \                                                       
-    { NULL, 0, NULL, 0, 0 } 
+# define OSSL_PARAM_END \
+    { NULL, 0, NULL, 0, 0 }
 ```
 After this we call EVP_PKEY_CTX_set_params passing in the context and the
 OSSL_PARAM array.
 
 ```c
-int EVP_PKEY_CTX_set_params(EVP_PKEY_CTX *ctx, OSSL_PARAM *params)              
+int EVP_PKEY_CTX_set_params(EVP_PKEY_CTX *ctx, OSSL_PARAM *params)
 {
     ...
-    if (EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx)                                       
-            && ctx->op.sig.sigprovctx != NULL                                   
-            && ctx->op.sig.signature != NULL                                    
-            && ctx->op.sig.signature->set_ctx_params != NULL)                   
+    if (EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx)
+            && ctx->op.sig.sigprovctx != NULL
+            && ctx->op.sig.signature != NULL
+            && ctx->op.sig.signature->set_ctx_params != NULL)
         return ctx->op.sig.signature->set_ctx_params(ctx->op.sig.sigprovctx, params);
     ...
 }
@@ -4355,9 +4355,9 @@ After checking the fields of the operation entry set_ctx_params will be called:
 (OSSL_FUNC_signature_set_ctx_params_fn *) $26 = 0x00007ffff7e901d3 (libcrypto.so.3`rsa_set_ctx_params at rsa.c:1011:1)
 ```
 ```c
-static int rsa_set_ctx_params(void *vprsactx, const OSSL_PARAM params[])            
-{                                                                                   
-    PROV_RSA_CTX *prsactx = (PROV_RSA_CTX *)vprsactx;                               
+static int rsa_set_ctx_params(void *vprsactx, const OSSL_PARAM params[])
+{
+    PROV_RSA_CTX *prsactx = (PROV_RSA_CTX *)vprsactx;
     const OSSL_PARAM *p;
 ```
 Upon entering this function `prsactx` holds the following values:
@@ -4390,35 +4390,35 @@ Next we have a call to OSSL_PARAM_locate_const:
 ```
 Which can be found in params.c:
 ```c
-const OSSL_PARAM *OSSL_PARAM_locate_const(const OSSL_PARAM *p, const char *key) 
-{                                                                               
-    return OSSL_PARAM_locate((OSSL_PARAM *)p, key);                             
-} 
+const OSSL_PARAM *OSSL_PARAM_locate_const(const OSSL_PARAM *p, const char *key)
+{
+    return OSSL_PARAM_locate((OSSL_PARAM *)p, key);
+}
 
-OSSL_PARAM *OSSL_PARAM_locate(OSSL_PARAM *p, const char *key)                   
-{                                                                               
-    if (p != NULL && key != NULL)                                               
-        for (; p->key != NULL; p++)                                             
-            if (strcmp(key, p->key) == 0)                                       
-                return p;                                                       
-    return NULL;                                                                
-}  
+OSSL_PARAM *OSSL_PARAM_locate(OSSL_PARAM *p, const char *key)
+{
+    if (p != NULL && key != NULL)
+        for (; p->key != NULL; p++)
+            if (strcmp(key, p->key) == 0)
+                return p;
+    return NULL;
+}
 ```
 What this is doing is just iterating over all the entries in the OSSL_PARAM
 array and if it find an entry that matches the passed in key, that entry will
 be returned. So we have the entry and now we return to rsa_set_ctx_params:
 ```c
-if (p != NULL) {                                                            
-      char mdname[OSSL_MAX_NAME_SIZE] = "", *pmdname = mdname;                
-      char mdprops[OSSL_MAX_PROPQUERY_SIZE] = "", *pmdprops = mdprops;        
-      const OSSL_PARAM *propsp =                                              
+if (p != NULL) {
+      char mdname[OSSL_MAX_NAME_SIZE] = "", *pmdname = mdname;
+      char mdprops[OSSL_MAX_PROPQUERY_SIZE] = "", *pmdprops = mdprops;
+      const OSSL_PARAM *propsp =
           OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_PROPERTIES);
 ```
 OSSL_MAX_NAME_SIZE and OSSL_MAX_PROPQUERY_SIZE can be found in
 include/internal/sizes.h:
 ```c
-# define OSSL_MAX_NAME_SIZE           50 /* Algorithm name */                    
-# define OSSL_MAX_PROPQUERY_SIZE     256 /* Property query strings */ 
+# define OSSL_MAX_NAME_SIZE           50 /* Algorithm name */
+# define OSSL_MAX_PROPQUERY_SIZE     256 /* Property query strings */
 ```
 Notice that there two varialbes per line here so we have `char* pmdname`, and
 also `char* pmpprops` which are set to the first variables. But both are
@@ -4431,32 +4431,32 @@ this time the OSSL_PARAM passed in is:
 #define OSSL_ALG_PARAM_PROPERTIES           "properties"
 ```
 We know that we only have one entry, the 'digest' in params.
-Next the following will 
+Next the following will
 ```c
 const OSSL_PARAM *p;
 ...
-p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_DIGEST); 
+p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_DIGEST);
 ...
-if (!OSSL_PARAM_get_utf8_string(p, &pmdname, sizeof(mdname)))           
-    return 0;                                            
+if (!OSSL_PARAM_get_utf8_string(p, &pmdname, sizeof(mdname)))
+    return 0;
 ```
 So we are passing in the entry for our `digest`, the variable that we won't it
 to be stored/copied into, and the length of mdname which we know if 50
 (OSSL_MAX_NAME_SIZE):
 ```c
-int OSSL_PARAM_get_utf8_string(const OSSL_PARAM *p, char **val, size_t max_len) 
-{                                                                               
-    return get_string_internal(p, (void **)val, max_len, NULL,                  
-                               OSSL_PARAM_UTF8_STRING);                         
-} 
+int OSSL_PARAM_get_utf8_string(const OSSL_PARAM *p, char **val, size_t max_len)
+{
+    return get_string_internal(p, (void **)val, max_len, NULL,
+                               OSSL_PARAM_UTF8_STRING);
+}
 
 
-static int get_string_internal(const OSSL_PARAM *p, void **val, size_t max_len,  
-                               size_t *used_len, unsigned int type)              
+static int get_string_internal(const OSSL_PARAM *p, void **val, size_t max_len,
+                               size_t *used_len, unsigned int type)
 {
     ...
-    memcpy(*val, p->data, sz);                                                  
-    return 1;       
+    memcpy(*val, p->data, sz);
+    return 1;
 }
 ```
 So in our case this is just a memcpy of the name of the message digest:
@@ -4466,15 +4466,15 @@ So in our case this is just a memcpy of the name of the message digest:
 ```
 Next, we have:
 ```c
-         if (rsa_pss_restricted(prsactx)) {                                      
-              /* TODO(3.0) figure out what to do for prsactx->md == NULL */       
-              if (prsactx->md == NULL || EVP_MD_is_a(prsactx->md, mdname))        
-                  return 1;                                                       
-              ERR_raise(ERR_LIB_PROV, PROV_R_DIGEST_NOT_ALLOWED);                 
-              return 0;                                                           
-          }                 
+         if (rsa_pss_restricted(prsactx)) {
+              /* TODO(3.0) figure out what to do for prsactx->md == NULL */
+              if (prsactx->md == NULL || EVP_MD_is_a(prsactx->md, mdname))
+                  return 1;
+              ERR_raise(ERR_LIB_PROV, PROV_R_DIGEST_NOT_ALLOWED);
+              return 0;
+          }
 
-/* True if PSS parameters are restricted */                                     
+/* True if PSS parameters are restricted */
 #define rsa_pss_restricted(prsactx) (prsactx->min_saltlen != -1)
 ```
 We can inspect and verify that this if block will be entered:
@@ -4524,29 +4524,29 @@ called with the following arguments:
 ```
 EVP_MD_is_a  can be found in evp_lib.c:
 ```c
-int EVP_MD_is_a(const EVP_MD *md, const char *name)                              
-{                                                                                
-    if (md->prov != NULL)                                                        
-        return evp_is_a(md->prov, md->name_id, NULL, name);                      
-    return evp_is_a(NULL, 0, EVP_MD_name(md), name);                             
-}  
+int EVP_MD_is_a(const EVP_MD *md, const char *name)
+{
+    if (md->prov != NULL)
+        return evp_is_a(md->prov, md->name_id, NULL, name);
+    return evp_is_a(NULL, 0, EVP_MD_name(md), name);
+}
 ```
 And we can see that md->prov is not null so the first evp_is_a will be called
 which can be found in crypto/evp/evp_fetch.c:
 ```c
-int evp_is_a(OSSL_PROVIDER *prov, int number,                                    
-             const char *legacy_name, const char *name)                          
-{                                                                                
-    /*                                                                           
-     * For a |prov| that is NULL, the library context will be NULL               
-     */                                                                          
-    OSSL_LIB_CTX *libctx = ossl_provider_libctx(prov);                           
-    OSSL_NAMEMAP *namemap = ossl_namemap_stored(libctx);                        
-                                                                                
-    if (prov == NULL)                                                           
-        number = ossl_namemap_name2num(namemap, legacy_name);                   
-    return ossl_namemap_name2num(namemap, name) == number;                      
-} 
+int evp_is_a(OSSL_PROVIDER *prov, int number,
+             const char *legacy_name, const char *name)
+{
+    /*
+     * For a |prov| that is NULL, the library context will be NULL
+     */
+    OSSL_LIB_CTX *libctx = ossl_provider_libctx(prov);
+    OSSL_NAMEMAP *namemap = ossl_namemap_stored(libctx);
+
+    if (prov == NULL)
+        number = ossl_namemap_name2num(namemap, legacy_name);
+    return ossl_namemap_name2num(namemap, name) == number;
+}
 ```
 Notice that this function takes as number and the values is md->name_id from
 the calling function:
@@ -4556,16 +4556,16 @@ the calling function:
 ```
 In our case the last line will be called (in crypto/core_namemap.c):
 ```c
-int ossl_namemap_name2num(const OSSL_NAMEMAP *namemap, const char *name)        
-{                                                                               
-    if (name == NULL)                                                           
-        return 0;                                                               
-                                                                                
-    return ossl_namemap_name2num_n(namemap, name, strlen(name));                
-}   
+int ossl_namemap_name2num(const OSSL_NAMEMAP *namemap, const char *name)
+{
+    if (name == NULL)
+        return 0;
 
-int ossl_namemap_name2num_n(const OSSL_NAMEMAP *namemap,                           
-                            const char *name, size_t name_len)                     
+    return ossl_namemap_name2num_n(namemap, name, strlen(name));
+}
+
+int ossl_namemap_name2num_n(const OSSL_NAMEMAP *namemap,
+                            const char *name, size_t name_len)
 {
     int number;
     ....
@@ -4577,23 +4577,23 @@ int ossl_namemap_name2num_n(const OSSL_NAMEMAP *namemap,
     return number;
 }
 
-static int namemap_name2num_n(const OSSL_NAMEMAP *namemap,                      
-                              const char *name, size_t name_len)                
-{                                                                               
-    NAMENUM_ENTRY *namenum_entry, namenum_tmpl;                                    
-                                                                                   
-    if ((namenum_tmpl.name = OPENSSL_strndup(name, name_len)) == NULL)             
-        return 0;                                                                  
+static int namemap_name2num_n(const OSSL_NAMEMAP *namemap,
+                              const char *name, size_t name_len)
+{
+    NAMENUM_ENTRY *namenum_entry, namenum_tmpl;
 
-    namenum_tmpl.number = 0;                                                       
-    namenum_entry = lh_NAMENUM_ENTRY_retrieve(namemap->namenum, &namenum_tmpl);                
-    OPENSSL_free(namenum_tmpl.name);                                               
-    return namenum_entry != NULL ? namenum_entry->number : 0;                      
-}  
+    if ((namenum_tmpl.name = OPENSSL_strndup(name, name_len)) == NULL)
+        return 0;
 
-typedef struct {                                                                
-    char *name;                                                                 
-    int number;                                                                 
+    namenum_tmpl.number = 0;
+    namenum_entry = lh_NAMENUM_ENTRY_retrieve(namemap->namenum, &namenum_tmpl);
+    OPENSSL_free(namenum_tmpl.name);
+    return namenum_entry != NULL ? namenum_entry->number : 0;
+}
+
+typedef struct {
+    char *name;
+    int number;
 } NAMENUM_ENTRY;
 
 DEFINE_LHASH_OF(NAMENUM_ENTRY);
@@ -4607,10 +4607,10 @@ So we are going to look up using namenum_tmpl which looks like this:
 ```
 And the comparator function for uses the name:
 ```c
-static int namenum_cmp(const NAMENUM_ENTRY *a, const NAMENUM_ENTRY *b)          
-{                                                                               
-    return strcasecmp(a->name, b->name);                                        
-} 
+static int namenum_cmp(const NAMENUM_ENTRY *a, const NAMENUM_ENTRY *b)
+{
+    return strcasecmp(a->name, b->name);
+}
 ```
 And in our case the returned entry will be:
 ```console
@@ -4622,45 +4622,45 @@ And in our case the returned entry will be:
 This will return back out into `evp_is_a` which will compare 141 with 153.
 And this will cause an error to be raised in
 ```
-	if (rsa_pss_restricted(prsactx)) {                                      
-              /* TODO(3.0) figure out what to do for prsactx->md == NULL */       
-              if (prsactx->md == NULL || EVP_MD_is_a(prsactx->md, mdname))        
-                  return 1;                                                       
-              ERR_raise(ERR_LIB_PROV, PROV_R_DIGEST_NOT_ALLOWED);                 
-              return 0;                                                           
-          }       
+	if (rsa_pss_restricted(prsactx)) {
+              /* TODO(3.0) figure out what to do for prsactx->md == NULL */
+              if (prsactx->md == NULL || EVP_MD_is_a(prsactx->md, mdname))
+                  return 1;
+              ERR_raise(ERR_LIB_PROV, PROV_R_DIGEST_NOT_ALLOWED);
+              return 0;
+          }
 ```
 
 
 ### OPENSSL_init_crypto
 Lets take a look at this function which can be found in crypto/init.c:
 ```c
-int OPENSSL_init_crypto(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings)   
-{ 
+int OPENSSL_init_crypto(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings)
+{
   ...
-  if ((opts & OPENSSL_INIT_ADD_ALL_DIGESTS)                                   
-            && !RUN_ONCE(&add_all_digests, ossl_init_add_all_digests))          
-        return 0;                           
+  if ((opts & OPENSSL_INIT_ADD_ALL_DIGESTS)
+            && !RUN_ONCE(&add_all_digests, ossl_init_add_all_digests))
+        return 0;
 }
 ```
 The opts can be found in include/openssl/crypto.h:
 ```c
-/* Standard initialisation options */                                              
-# define OPENSSL_INIT_NO_LOAD_CRYPTO_STRINGS 0x00000001L                           
-# define OPENSSL_INIT_LOAD_CRYPTO_STRINGS    0x00000002L                           
-# define OPENSSL_INIT_ADD_ALL_CIPHERS        0x00000004L                           
-# define OPENSSL_INIT_ADD_ALL_DIGESTS        0x00000008L 
+/* Standard initialisation options */
+# define OPENSSL_INIT_NO_LOAD_CRYPTO_STRINGS 0x00000001L
+# define OPENSSL_INIT_LOAD_CRYPTO_STRINGS    0x00000002L
+# define OPENSSL_INIT_ADD_ALL_CIPHERS        0x00000004L
+# define OPENSSL_INIT_ADD_ALL_DIGESTS        0x00000008L
 ...
 ```
 An example of calling this function can be found names.c:
 ```c
-   if (!OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_DIGESTS, NULL))                  
+   if (!OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_DIGESTS, NULL))
         return NULL;
 ```
 RUN_ONCE is a macro and the above usage will be expanded by the preprocessor
 into:
 ```console
-$ gcc -E -I. -I./include crypto/init.c 
+$ gcc -E -I. -I./include crypto/init.c
 ```
 ```c
 static int ossl_init_add_all_digests(void);
@@ -4669,62 +4669,62 @@ static void ossl_init_add_all_digests_ossl_(void) {
   ossl_init_add_all_digests_ossl_ret_ = ossl_init_add_all_digests();
 }
 static int ossl_init_add_all_digests(void)
-{                                                                               
+{
    do {
      BIO *trc_out = ((void *)0);
      if (0)
-       BIO_printf(trc_out, "%s", "openssl_add_all_digests()\n"); 
+       BIO_printf(trc_out, "%s", "openssl_add_all_digests()\n");
    while(0);
-   openssl_add_all_digests_int();                                              
-   return 1;                                                                   
-}               
+   openssl_add_all_digests_int();
+   return 1;
+}
 ```
 And we can find openssl_add_all_digests_int in crypto/evp/c_alld.c:
 ```console
-void openssl_add_all_digests_int(void)                                          
-{                                                                               
-#ifndef OPENSSL_NO_MD4                                                          
-    EVP_add_digest(EVP_md4());                                                  
-#endif                                                                          
-#ifndef OPENSSL_NO_MD5                                                          
-    EVP_add_digest(EVP_md5());                                                  
-    EVP_add_digest_alias(SN_md5, "ssl3-md5");                                   
-    EVP_add_digest(EVP_md5_sha1());                                             
-#endif                                                                          
-    EVP_add_digest(EVP_sha1());                                                 
-    EVP_add_digest_alias(SN_sha1, "ssl3-sha1");                                 
-    EVP_add_digest_alias(SN_sha1WithRSAEncryption, SN_sha1WithRSA);             
-#if !defined(OPENSSL_NO_MDC2) && !defined(OPENSSL_NO_DES)                       
-    EVP_add_digest(EVP_mdc2());                                                 
-#endif                                                                          
-#ifndef OPENSSL_NO_RMD160                                                       
-    EVP_add_digest(EVP_ripemd160());                                            
-    EVP_add_digest_alias(SN_ripemd160, "ripemd");                               
-    EVP_add_digest_alias(SN_ripemd160, "rmd160");                               
-#endif                                                                          
-    EVP_add_digest(EVP_sha224());                                               
-    EVP_add_digest(EVP_sha256());                                               
-    EVP_add_digest(EVP_sha384());                                               
-    EVP_add_digest(EVP_sha512());                                               
-    EVP_add_digest(EVP_sha512_224());                                           
-    EVP_add_digest(EVP_sha512_256());                                           
-#ifndef OPENSSL_NO_WHIRLPOOL                                                    
-    EVP_add_digest(EVP_whirlpool());                                            
-#endif                                                                          
-#ifndef OPENSSL_NO_SM3                                                          
-    EVP_add_digest(EVP_sm3());                                                  
-#endif                                                                          
-#ifndef OPENSSL_NO_BLAKE2                                                       
-    EVP_add_digest(EVP_blake2b512());                                           
-    EVP_add_digest(EVP_blake2s256());                                           
-#endif                                                                          
-    EVP_add_digest(EVP_sha3_224());                                             
-    EVP_add_digest(EVP_sha3_256());                                             
-    EVP_add_digest(EVP_sha3_384());                                             
-    EVP_add_digest(EVP_sha3_512());                                             
-    EVP_add_digest(EVP_shake128());                                             
-    EVP_add_digest(EVP_shake256());                                             
-} 
+void openssl_add_all_digests_int(void)
+{
+#ifndef OPENSSL_NO_MD4
+    EVP_add_digest(EVP_md4());
+#endif
+#ifndef OPENSSL_NO_MD5
+    EVP_add_digest(EVP_md5());
+    EVP_add_digest_alias(SN_md5, "ssl3-md5");
+    EVP_add_digest(EVP_md5_sha1());
+#endif
+    EVP_add_digest(EVP_sha1());
+    EVP_add_digest_alias(SN_sha1, "ssl3-sha1");
+    EVP_add_digest_alias(SN_sha1WithRSAEncryption, SN_sha1WithRSA);
+#if !defined(OPENSSL_NO_MDC2) && !defined(OPENSSL_NO_DES)
+    EVP_add_digest(EVP_mdc2());
+#endif
+#ifndef OPENSSL_NO_RMD160
+    EVP_add_digest(EVP_ripemd160());
+    EVP_add_digest_alias(SN_ripemd160, "ripemd");
+    EVP_add_digest_alias(SN_ripemd160, "rmd160");
+#endif
+    EVP_add_digest(EVP_sha224());
+    EVP_add_digest(EVP_sha256());
+    EVP_add_digest(EVP_sha384());
+    EVP_add_digest(EVP_sha512());
+    EVP_add_digest(EVP_sha512_224());
+    EVP_add_digest(EVP_sha512_256());
+#ifndef OPENSSL_NO_WHIRLPOOL
+    EVP_add_digest(EVP_whirlpool());
+#endif
+#ifndef OPENSSL_NO_SM3
+    EVP_add_digest(EVP_sm3());
+#endif
+#ifndef OPENSSL_NO_BLAKE2
+    EVP_add_digest(EVP_blake2b512());
+    EVP_add_digest(EVP_blake2s256());
+#endif
+    EVP_add_digest(EVP_sha3_224());
+    EVP_add_digest(EVP_sha3_256());
+    EVP_add_digest(EVP_sha3_384());
+    EVP_add_digest(EVP_sha3_512());
+    EVP_add_digest(EVP_shake128());
+    EVP_add_digest(EVP_shake256());
+}
 ```
 So in this case we can see that the above digests will be added when this
 call to OPENSSL_init_crypto is called.
