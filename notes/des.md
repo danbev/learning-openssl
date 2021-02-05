@@ -73,16 +73,16 @@ Combining confusion/diffusion multiple times can build a strong block cipher:
 Fiestel Network
 Below we are showing the first round:
 ```
-   63                                0     55                           0
+   63                                0     64                           0
    +---------------------------------+     +----------------------------+
    |           Plaintext             |     |          Key               |
    +---------------------------------+     +----------------------------+
                    ↓                                    ↓
    +---------------------------------+     +----------------------------+
-   |   Initial Permuation IP(x)      |     |          PC-1              |
+   |   Initial Permuation IP(x)      |     |    Permuted Choice (PC-1)  |
    +---------------------------------+     +----------------------------+
                    ↓                                    |
-   63            28 27               0                  | 48-bits (56-8)
+   63            28 27               0                  | 56-bits (64-8)
    +---------------------------------+                  |
    |    L₀         |     R₀          |      55          ↓              0
    +---------------------------------+      +---------------------------+
@@ -307,3 +307,137 @@ bits affected by the previous xor and s-box (so that they are not local to
 a section of the bit array). And this will mean that in the next round more
 s-boxes will be involved and this continues allowing for even a single bit-flip
 to affect many output bits.
+
+### Key Schedule
+If we look at the digrams above we a an input key which is then transformed
+into 16 subkeys, one for every round.
+The input key is 56-bits and each tras
+```
+        63                           0
+        +----------------------------+
+        |          Key               |
+        +----------------------------+
+                      ↓
+        +----------------------------+
+        |   Permuted Choice 1 (PC-1) |
+        +----------------------------+
+                     |
+                     | 56-bits (64-8 parity bits)
+                     |
+          55         ↓            0
+          +-----------------------+
+          |   C₀     |   D₀       |
+          +-----------------------+
+     28-bits   ↓            ↓
+          +----------+ +-----------+
+          |   LRi    | |   LRi     |         Left Rotate 
+          +----------+ +-----------+         1 position for rounds 1,2,9,16
+               |            |                2 positions for rounds the rest
+          55   ↓            ↓     0
+          +-----------------------+
+          |   Permuted Choice 2   |          8 bits are dropped and the rest
+          +-----------------------+          permuted.
+                     |
+            48       ↓           0
+            +--------------------+
+            |   Sub key          |
+            +--------------------+
+         
+```
+In PC-1 the bits 8, 16, 24, 32, 40, 48, 56, and 64 are not used. So the last
+it of each byte is removed. The rest of the bits are permuted.
+Notice that in rounds 1, 2, 9, and 16 we shift by one bit position and the rest
+of the 12 rounds we shift by 2, 2*12+4=28 in total. Notice that this will be
+the same value as C₀ and likewise D₁₆ will be equal to D₀.
+
+### Decryption
+This deals with reversing the steps in encryption.
+
+This first part below shows the last round of encryption:
+```
+   63            28 27               0
+   +---------------------------------+
+   |    L₁₅        |     R₁₅         |
+   +---------------------------------+               +---------------+
+         |       +------------|--------[ki]----------| Key scheduler |
+  32-bits|       ↓ 48-bits    | 32-bits              +---------------+
+         ↓    +-----+         |
+        (+)←--|  f  |←--------+
+         |    +-----+         |
+         |                    |
+         +----------------+   |
+         +----------------|---+
+         |                |
+         ↓                ↓
+   +---------------------------------+
+   |    L₁₆        |      R₁₆        |
+   +---------------------------------+
+         |                 |                
+         | +---------------+
+         | |                
+         +-|----------------+
+           ↓                 ↓
+   +---------------------------------+
+   |    Final Permuation IP^-1(x)    |
+   +---------------------------------+
+                  ↓
+   +---------------------------------+
+   |    Initial Permuation IP1(x)    |
+   +---------------------------------+
+                  ↓
+   63            28 27               0
+   +---------------------------------+
+   |    L₀         |     R₀          |
+   +---------------------------------+                +----------------+
+         |       +------------|--------[ki]-----------| Key schduler   |
+  32-bits|       ↓ 48-bits    | 32-bits               +----------------+
+         ↓    +-----+         |
+        (+)←--|  f  |←--------+
+         |    +-----+         |
+         |                    |
+         +----------------+   |
+         +----------------|---+
+         |                |
+         ↓                ↓
+   +---------------------------------+
+   |    L₁         |      R₁         |
+   +---------------------------------+
+                  ...
+```
+So if we look at L₁₅ it will get encrypted and then it will be store in R₁₆,
+and notice that they are crossed before the final permuation. So L₀ will be
+the encrypted value of L₁₅ which will be decrypted and the output will be in
+R₁. So R₁ = L₁₅, and L₁ = R₁₅ (which is not encrypted).
+
+```
+R₁ = L₀ ^ f(ki, R₀)
+```
+And we can write L₀ as:
+```
+L₀ = L₁₅ ^ k(k₁₆, R₁₅)
+```
+And if we replace L₀:
+```
+R₁ = L₁₅ ^ k(k₁₆i, R₁₅) ^ f(ki, R₀)
+```
+If we look at this part:
+```
+           k(k₁₆i, R₁₅) ^ f(ki, R₀)
+```
+If these two are the same values, xoring the same value will be 0 then the
+only thing left in the expression is:
+```
+R₁ = L₁₅ ^ 0
+```
+And we know that R₀ is infact the same as R₁₅, and if we the provide the same
+subkey this will indeed become 0:
+```
+R₁ = L₁₅ ^ k(k₁₆i, R₁₅) ^ f(k₁₆, R₁₅)
+R₁ = L₁₅ ^ 0
+
+ 1110
+^0000
+-----
+ 1110
+```
+
