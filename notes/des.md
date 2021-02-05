@@ -441,3 +441,25 @@ R₁ = L₁₅ ^ 0
  1110
 ```
 
+### Analytical attacks
+Differential cryptoanalysis requires 2⁴⁷ (plaintext, ciphertext) pairs.
+Linear cryptoanalysis requires 2⁴³ (plaintext, ciphertext) pairs.
+
+### Brute-Force attach
+Brute-Force is performed by having a plaintext and some ciphertext that was
+encrypted using the targets key, and then trying to descrypt the  ciphertext
+and guessing the key. This result is then checked against the plaintext
+and if they are not the same try a different key, and continue for all possible
+keys from 0-2⁵⁶-1. Once there is a match we know the key that was used to
+encrypt and could use it to decrypt other messages.
+```
+long x, y;
+long k[] ...;
+for (int i = 0; i < (2⁵⁶-1); i++) {
+  if (descrypt(k[i]), y) == x)
+    return k[i];
+}
+```
+In 1998 there as a Deep-Crack special purpose DES hardware cracker build which
+used brute-force and the cost was round $250.000. 
+This was pretty much the end of DES but AES was already in the working.
