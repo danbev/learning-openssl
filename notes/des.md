@@ -36,9 +36,11 @@ Inside DES there are 16 rounds of:
 
 ```
 
+### Confusion
 Remember that confusion is about making the relationship between the key and
 the ciphertext as complex and involved as possible.
 
+### Diffusion
 Diffusion refers to how each bit in the plaintext influences many of the bits
 
 Combining confusion/diffusion multiple times can build a strong block cipher:
@@ -181,7 +183,7 @@ remember that this was back in 1974.
     +-----+-----+-----+-----+-----+-----+-----+
     ↓     ↓     ↓     ↓     ↓     ↓     ↓     ↓  6 bits (48/8)
    +--+  +--+  +--+  +--+  +--+  +--+  +--+  +--+
-   |S₁|  |S₂|  |S₃|  |S₄|  |S₅|  |S₆|  |S₇|  |S₈|
+   |S₁|  |S₂|  |S₃|  |S₄|  |S₅|  |S₆|  |S₇|  |S₈|  (S-boxes)
    +--+  +--+  +--+  +--+  +--+  +--+  +--+  +--+
     |     |     |      |    |      |     |    |  4 bits (4*8=32)
     +-----+-----+-----+-----+-----+-----+-----+
@@ -195,3 +197,102 @@ remember that this was back in 1974.
                          ↓ 32 bits
 
 ```
+
+### Expansion
+In this step we are going from 32 bits to 48. So we are increasing the size
+making the array bigger. This is a step prior to the xor operation with the
+subkey, which happens to be 48 bits. This step provides diffusion (making
+changes in the plaintext influece many of the bits):
+```
+        32-bits
+          ↓
++-----------------------------------------------------------------------------------------------+
+| 1| 2| 3| 4| 5| 6| 7| 8| 9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|
++-----------------------------------------------------------------------------------------------+
+ |  |  |  |   |                                                                               |
+ |  |  |  |   |                                                                               |
+ +--|--|--|---|-------------------------------------------------------------------------------|------------------------------------------------+
+ |  |  |  |   +--+----+                                                                       |                                                |
+ |  |  |  +--+---|--+ |                                                                       |                                                |
+ |  |  +---+ |   |  | |                                                                       |                                                |
+ |  +--+   | |   |  | |                                                                       |                                                |
+ +--+  |   | |   |  | |                                                                       |                                                |
+    |  |   | |   |  | |                                                                       |                                                |
+ +--|--|---|-|---|--|-|-----------------------------------------------------------------------+                                                |
+ ↓  ↓  ↓   ↓ ↓   ↓  ↓ ↓                                                                                                                        ↓
++-----------------------------------------------------------------------------------------------------------------------------------------------+
+| 1| 2| 3| 4| 5| 6| 7| 8| 9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|34|36|37|38|39|40|41|42|43|44|45|46|47|48|
++-----------------------------------------------------------------------------------------------------------------------------------------------+
+
+Mapping table
++-----------------+
+|32  1  2  3  4  5|
+| 4  5  6  7  8  9|
+| 8  9 10 11 12 13|
+|16 17 18 19 20 21|
+|20 21 22 23 24 25|
+|24 25 26 27 28 29|
+|28 29 30 31 32  1|
++-----------------+
+```
+Notice that 16 or the 32 input bits are copied once and 16 are copied
+into two locations in the output array, so we get 16+12x2=48.
+
+### S-box
+Before this stage in a round the expansion of the 32-bits into 48 bits has
+already happend, and that output has been xor:ed with the subkey. The output
+from that will be the input to the s-box. These are substitution/lookup tables
+which is why the are called s-boxes. This is the step that provides confusion.
+``` 
+                                                 |
+        +--------------------+-------------------+-------------------+-------------------+-------------------+-------------------+-------------------+
+        ↓                    ↓                   ↓                   ↓                   ↓                   ↓                   ↓                   ↓
++-----------------+ +-----------------+ +-----------------+ +-----------------+ +-----------------+ +-----------------+ +-----------------+ +-----------------+
+| 1| 2| 3| 4| 5| 6| | 7| 8| 9|10|11|12| |13|14|15|16|17|18| |19|20|21|22|23|24| |25|26|27|28|29|30| |31|32|33|34|34|36| |37|38|39|40|41|42| |43|44|45|46|47|48|
++-----------------+ +-----------------+ +-----------------+ +-----------------+ +-----------------+ +-----------------+ +-----------------+ ------------------+
+        ↓                    ↓                   ↓                   ↓                   ↓                   ↓                   ↓                   ↓
+  +-----------+         +----------+        +-----------+        +-----------+      +-----------+        +-----------+     +-----------+        +-----------+ 
+S1| 1| 2| 3| 4|       S2|5| 6| 7| 8|      S3| 9|10|11|12|      S4|13|14|15|16|    S5|17|18|19|20|      S6|21|22|23|24|   S7|25|26|27|28|      S8|29|30|31|32|
+  +-----------+         +----------+        +-----------+        +-----------+      +-----------+        +-----------+     +-----------+        +-----------+
+        |                    |                   |                   |                   |                   |                   |                   |
+        +--------------------+-------------------+-------------------+-------------------+-------------------+-------------------+-------------------+
+                                                 ↓
+                              +--------------------------------------------+
+                              | Permutation                                |
+                              +--------------------------------------------+
+```
+So for each s-box we have 6 input bits and we want to have a lookup table for
+each of them. So each table will contain 2⁶ (64) entries.
+```
+000000   1110   14
+
+111111   1101   13
+```
+There no underlying rule to the these lookup tables but instead the mapping
+is provided by tables like the following:
+```
++--------------------------------------------------+
+|S₁| 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15|
+---------------------------------------------------|
+|0 |14 04 13 01 02 15 11 08 03 10 06 12 05 09 00 07|
+|1 |00 15 07 04 14 02 13 01 10 06 12 11 09 05 03 08|
+|2 |04 01 14 08 13 06 02 11 15 12 09 07 03 10 05 00|
+|3 |15 12 08 02 04 09 01 07 05 11 03 14 10 00 06 13|
++--------------------------------------------------+
+```
+So find the row we use the first and last bit in the 6 bit input (together)
+So for 000000 that would be 00 and then the 4 bits in middle to determine the
+column, which is 0000 in this case so 0. 
+```
+110011
+row: 11 = 3
+col: 1001 = 9
+So that should be output value 11 (1011)
+```
+Now we could just write this like I first did with 6 binary digits that map to
+an number but apperently this way of using columns/rows is used in many books
+and documentation so it might be good to understand it.
+
+So how did IBM come up with these substitution/lookup tables?  
+"Because it is secure, trust us" :) 
+These values were chosen as they prevent diffential crypto analysis.
