@@ -295,4 +295,15 @@ and documentation so it might be good to understand it.
 
 So how did IBM come up with these substitution/lookup tables?  
 "Because it is secure, trust us" :) 
-These values were chosen as they prevent diffential crypto analysis.
+These values were chosen as they prevent diffential crypto analysis. This type
+of attack was only discovered like 18 years after DES was invented. But IBM/NSA
+must have know about these types of attacks but did not make that public and
+perhaps they wanted to be able to use that attack against other crypto
+algorithms. But it now seems like the attack was known by other parties that
+were not relevling them either.
+
+The last Permuation of the round is important as this will spread out the
+bits affected by the previous xor and s-box (so that they are not local to
+a section of the bit array). And this will mean that in the next round more
+s-boxes will be involved and this continues allowing for even a single bit-flip
+to affect many output bits.
