@@ -154,6 +154,10 @@ cprovider.o: cprovider.c
 	${CC} -g -O0 -I$(OPENSSL_INCLUDE_DIR) -I. -L$(OPENSSL_LIB_DIR) \
               -L$(OPENSSL_LIB_DIR)/ossl-modules -lcrypto \
               -lpthread -lssl -fPIC -o $@ -c cprovider.c -I.
+
+arr-over: src/array-overflow.c
+	$(CC) -g -o $@ $<
+
 .PHONY: clean 
 
 clean: 
