@@ -2385,7 +2385,9 @@ padding and that the digest/hash functions used are sha256.
   }
 ```
 Now, while looking into this I found that using `SHA1` instead of `SHA256`
-allows the test to pass, why?
+allows the test to pass, why?  
+I believe that the default when initializeing a context for signing will be
+SHA1, more on this later.
 
 So this issue only came about after removing the additional EVP_PKEY_keygen_init
 in DoKeyGen:
@@ -2418,13 +2420,418 @@ error stack:
 (const char *) $32 = 0x00007ffff7eec7a7 "digest not allowed"
 ```
 
-In the reproducer this error will happen with the following call:
+In the [reproducer](../rsa_sign.c) we first have the following call:
 ```c
-  const EVP_MD* vmd = EVP_MD_CTX_md(vmdctx);
-  if (EVP_PKEY_CTX_set_signature_md(verify_ctx, vmd) <= 0) {
+  const EVP_MD* md = EVP_get_digestbyname("SHA256");
+  ...
+```
+```console
+(lldb) br s -f rsa_sign.c -l 22
+(lldb) r
+```
+Lets first look at EVP_get_digestbyname which can be found in names.c:
+```c
+const EVP_MD *EVP_get_digestbyname(const char *name)                            
+{                                                                               
+    return evp_get_digestbyname_ex(NULL, name);                                 
+}
+
+const EVP_MD *evp_get_digestbyname_ex(OSSL_LIB_CTX *libctx, const char *name)   
+{                                                                               
+    const EVP_MD *dp;                                                           
+    OSSL_NAMEMAP *namemap;                                                      
+    int id;                                                                     
+                                                                                
+    if (!OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_DIGESTS, NULL))               
+        return NULL;                                                            
+                                                                                
+    dp = (const EVP_MD *)OBJ_NAME_get(name, OBJ_NAME_TYPE_MD_METH);             
+                                                                                
+    if (dp != NULL)                                                             
+        return dp;                                                              
+                                                                                
+    /*                                                                          
+     * It's not in the method database, but it might be there under a different 
+     * name. So we check for aliases in the EVP namemap and try all of those    
+     * in turn.                                                                 
+     */                                                                         
+                                                                                
+    namemap = ossl_namemap_stored(libctx);                                      
+    id = ossl_namemap_name2num(namemap, name);                                  
+    if (id == 0)                                                                
+        return NULL;                                                            
+                                                                                
+    ossl_namemap_doall_names(namemap, id, digest_from_name, &dp);               
+```
+Notice that OPENSSL_init_crypto is called (there are some notes in
+[README.md](../README.md) that contains some details about OPENSSL_init_crypto.
+
+Lets set another breakpoint in openssl_add_all_digests_int:
+```console
+(lldb) br s -n openssl_add_all_digests_int
+```
+We are interested:
+```console
+-> 39  	    EVP_add_digest(EVP_sha256());
+```
+Lets take a look at the return value of EVP_sha256:
+```console
+(lldb) expr *md
+(EVP_MD) $2 = {
+  type = 672
+  pkey_type = 668
+  md_size = 32
+  flags = 8
+  init = 0x00007ffff7d2c588 (libcrypto.so.3`sha256_init at legacy_sha.c:58:1)
+  update = 0x00007ffff7d2c5aa (libcrypto.so.3`sha256_update at legacy_sha.c:58:1)
+  final = 0x00007ffff7d2c5e2 (libcrypto.so.3`sha256_final at legacy_sha.c:58:1)
+  copy = 0x0000000000000000
+  cleanup = 0x0000000000000000
+  block_size = 64
+  ctx_size = 0
+  md_ctrl = 0x0000000000000000
+  name_id = 0
+  prov = 0x0000000000000000
+  refcnt = 0
+  lock = 0x0000000000000000
+  newctx = 0x0000000000000000
+  dinit = 0x0000000000000000
+  dupdate = 0x0000000000000000
+  dfinal = 0x0000000000000000
+  digest = 0x0000000000000000
+  freectx = 0x0000000000000000
+  dupctx = 0x0000000000000000
+  get_params = 0x0000000000000000
+  set_ctx_params = 0x0000000000000000
+  get_ctx_params = 0x0000000000000000
+  gettable_params = 0x0000000000000000
+  settable_ctx_params = 0x0000000000000000
+  gettable_ctx_params = 0x0000000000000000
+}
+```
+And now lets step in to EVP_add_digest:
+```c
+int EVP_add_digest(const EVP_MD *md)                                               
+{                                                                                  
+    int r;                                                                         
+    const char *name;                                                              
+                                                                                   
+    name = OBJ_nid2sn(md->type);                                                   
+    r = OBJ_NAME_add(name, OBJ_NAME_TYPE_MD_METH, (const char *)md);
+    ...
+```
+OBJ_nid2sn(md->type) is a call to get a short name (sn) from nid (node identifier
+to short name)
+```console
+(lldb) expr md->type
+(const int) $3 = 672
+```
+OBJ_nid2sn can be found in obj_data.c:
+```c
+const char *OBJ_nid2sn(int n)                                                   
+{                                                                               
+    ADDED_OBJ ad, *adp;                                                         
+    ASN1_OBJECT ob;                                                             
+                                                                                
+    if ((n >= 0) && (n < NUM_NID)) {                                            
+        if ((n != NID_undef) && (nid_objs[n].nid == NID_undef)) {               
+            ERR_raise(ERR_LIB_OBJ, OBJ_R_UNKNOWN_NID);                          
+            return NULL;                                                        
+        }                                                                       
+        return nid_objs[n].sn;                                                  
+    }                                                                           
+    ...
+}                          
+```
+So notice that the md->type which is 672 is just and index into an array.
+NUM_NID can be found in crypto/objects/obj_dat.h along with nid_objs:
+```console
+#define NUM_NID 1234                                                            
+static const ASN1_OBJECT nid_objs[NUM_NID] = {                                  
+    {"UNDEF", "undefined", NID_undef},
+    ...
+     {"SHA1", "sha1", NID_sha1, 5, &so[360]},       // entry 64
+    ...
+    {"SHA256", "sha256", NID_sha256, 9, &so[4544]}, // entry 672
+}
+
+struct asn1_object_st {                                                         
+    const char *sn, *ln;                                                        
+    int nid;                                                                    
+    int length;                                                                 
+    const unsigned char *data;  /* data remains const after init */             
+    int flags;                  /* Should we free this one */                   
+};
+```
+`so` is a serialized array 
+```c
+/* Serialized OID's */                                                          
+static const unsigned char so[7947] = {
+    ...
+    0x60,0x86,0x48,0x01,0x65,0x03,0x04,0x02,0x01,  /* [ 4544] OBJ_sha256 */
+    ...
+}
+```
+
+```console
+(lldb) expr nid_objs[n].ln
+(const char *const) $6 = 0x00007ffff7ed0eee "sha256"
+(lldb) expr nid_objs[n].sn
+(const char *const) $7 = 0x00007ffff7ed0ee7 "SHA256"
+(lldb) expr nid_objs[n].nid
+(const int) $8 = 672
+```
+You can see these defined in include/openssl/obj_mac.h, for example `NID_sha1`
+and `NID_sha256`.
+
+So this is just returning the short name which is SHA256.
+Back in names.c we then have:
+```c
+  r = OBJ_NAME_add(name, OBJ_NAME_TYPE_MD_METH, (const char *)md);
+```
+This is adding the passed in md for the name we just retrieved.
+```c
+static LHASH_OF(OBJ_NAME) *names_lh = NULL;
+
+int OBJ_NAME_add(const char *name, int type, const char *data)                  
+{
+   OBJ_NAME *onp, *ret;
+   
+   onp->name = name;                                                           
+   onp->alias = alias;                                                         
+   onp->type = type;                                                           
+   onp->data = data;                                                           
+                                                                                
+   CRYPTO_THREAD_write_lock(obj_lock);                                         
+                                                                                
+   ret = lh_OBJ_NAME_insert(names_lh, onp);
+}
+```
+`names_ln` is a hash table (see [hash.md](./hash.md) for details) and we are
+inserting this struct into it.
+So after that we are back in EVP_add_digest (in names.c):
+```c
+  r = OBJ_NAME_add(OBJ_nid2ln(md->type), OBJ_NAME_TYPE_MD_METH,               
+                   (const char *)md); 
+```
+We are now going to add the long name 'sha256' and we are going to insert this
+into the hash table `names_lh` which like before.
+
+Back again in names.c and EVP_add_digest we have:
+```c
+if (md->pkey_type && md->type != md->pkey_type) {                           
+        r = OBJ_NAME_add(OBJ_nid2sn(md->pkey_type),                             
+                         OBJ_NAME_TYPE_MD_METH | OBJ_NAME_ALIAS, name);         
+        if (r == 0)                                                             
+            return 0;                                                           
+        r = OBJ_NAME_add(OBJ_nid2ln(md->pkey_type),                             
+                         OBJ_NAME_TYPE_MD_METH | OBJ_NAME_ALIAS, name);         
+    }                                                                           
+    return r;                       
+```
+```console
+(lldb) expr OBJ_nid2sn(md->pkey_type)
+(const char *) $22 = 0x00007ffff7ed0e5b "RSA-SHA256"
+
+(lldb) expr *onp
+(OBJ_NAME) $32 = (type = 1, alias = 32768, name = "RSA-SHA256", data = "SHA256")
+```
+So notice that the name here is RSA-SHA256 which has the value SHA256.
+Next we have the second OBJ_NAME_add call which is inserting the long name:
+```console
+(lldb) expr OBJ_nid2ln(md->pkey_type)
+(const char *) $35 = 0x00007ffff7ed0e66 "sha256WithRSAEncryption"
+```
+
+OBJ_NAME is a struct with a type, alias, name, and data which will be set.
+```c
+typedef struct obj_name_st {                                                    
+    int type;                                                                   
+    int alias;                                                                  
+    const char *name;                                                           
+    const char *data;                                                           
+} OBJ_NAME;
+```
+
+Later in rsa_sign.c (our reproducer) we have:
+```c
+  if (EVP_PKEY_CTX_set_signature_md(verify_ctx, EVP_MD_CTX_md(vmdctx)) <= 0) {
     error_and_exit("EVP_PKEY_CTX_set_signature_md failed");
   }
 ```
+Notice that we care calling EVP_MD_CTX_md to get the EVP_MD digest from the
+specified context:
+```c
+const EVP_MD *EVP_MD_CTX_md(const EVP_MD_CTX *ctx)                               
+{                                                                                
+    if (ctx == NULL)                                                             
+        return NULL;                                                             
+    return ctx->reqdigest;                                                       
+}
+```
+And we can inspect the EVP_MD's type using:
+```console
+(lldb) expr ctx->reqdigest->type
+(const int) $2 = 672
+```
+So we can see that at this stage the EVP_MD is the same as we saw before.
+The returned EVP_MD pointer will then be passed into
+EVP_PKEY_CTX_set_signature_md:
+```c
+int EVP_PKEY_CTX_set_signature_md(EVP_PKEY_CTX *ctx, const EVP_MD *md)              
+{                                                                                   
+    return evp_pkey_ctx_set_md(ctx, md, ctx->op.sig.sigprovctx == NULL,             
+                               OSSL_SIGNATURE_PARAM_DIGEST,                         
+                               EVP_PKEY_OP_TYPE_SIG, EVP_PKEY_CTRL_MD);             
+}
+```
+Notice that the third argument (which is called fallback in the receiving
+function is false:
+```console
+(lldb) expr *(PROV_RSA_CTX*)ctx->op.sig.sigprovctx
+(PROV_RSA_CTX) $65 = {
+  libctx = 0x00007ffff7fc57e0
+  rsa = 0x0000000000000000
+  pad_mode = 4517712
+  operation = 0
+  oaep_md = 0x0000000100000040
+  mgf1_md = 0x0000000000000000
+  oaep_label = 0x0000000000000000
+  oaep_labellen = 0
+  client_version = 0
+  alt_version = 0
+}
+(lldb) expr md->type
+(const int) $68 = 67
+```
+Setting again will land in pmeth_lib.c and evp_pkey_ctx_set_md:
+```c
+static int evp_pkey_ctx_set_md(EVP_PKEY_CTX *ctx, const EVP_MD *md,                 
+                               int fallback, const char *param, int op,             
+                               int ctrl)                                            
+{                                                                                   
+    OSSL_PARAM md_params[2], *p = md_params;                                        
+    const char *name;                                                               
+                                                                                    
+    ...
+    /* TODO(3.0): Remove this eventually when no more legacy */                     
+    if (fallback)                                                                   
+        return EVP_PKEY_CTX_ctrl(ctx, -1, op, ctrl, 0, (void *)(md));               
+                                                                                    
+    if (md == NULL) {                                                               
+        name = "";                                                                  
+    } else {                                                                        
+        name = EVP_MD_name(md);                                                     
+    }                                                                               
+                                                                                    
+    *p++ = OSSL_PARAM_construct_utf8_string(param, (char *)name, 0);                       
+    *p = OSSL_PARAM_construct_end();                                                
+                                                                                    
+    return EVP_PKEY_CTX_set_params(ctx, md_params);                                 
+}
+```
+We can also see that name of the message digest will be retrieved using
+EVP_MD_name(md).
+```c
+const char *EVP_MD_name(const EVP_MD *md)                                       
+{                                                                               
+    if (md->prov != NULL)                                                       
+        return evp_first_name(md->prov, md->name_id);                           
+#ifndef FIPS_MODULE                                                             
+    return OBJ_nid2sn(EVP_MD_nid(md));                                          
+#else                                                                           
+    return NULL;                                                                
+#endif                                                                          
+}
+```
+In our case OBJ_nid2sn will be called, and note that EVP_MD_nid is a macro:
+```c
+# define EVP_MD_nid(e)                   EVP_MD_type(e) 
+```
+And the value in our case is 672 which matches what we expect from above.
+```console
+(lldb) expr nid_objs[672].sn
+(const char *const) $46 = 0x00007ffff7ed0ee7 "SHA256"
+```
+And notice that we are getting the short name here.
+
+The last line in evp_pkey_ctx_set_md will call EVP_PKEY_CTX_set_params:
+```c
+int EVP_PKEY_CTX_set_params(EVP_PKEY_CTX *ctx, OSSL_PARAM *params)              
+{ 
+    ...
+    if (EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx)                                       
+            && ctx->op.sig.sigprovctx != NULL                                   
+            && ctx->op.sig.signature != NULL                                    
+            && ctx->op.sig.signature->set_ctx_params != NULL)                   
+        return ctx->op.sig.signature->set_ctx_params(ctx->op.sig.sigprovctx,    
+                                                     params); 
+    ....
+}
+```
+Notice that the the first argument is `ctx->op.sig.sigprovctx`, and
+set_ctx_params is called on ctx->op.sig.signature is of type EVP_SIGNATURE
+which in this case will end up calling rsa_set_ctx_params.
+```c
+static int rsa_set_ctx_params(void *vprsactx, const OSSL_PARAM params[])          
+{                                                                                 
+    PROV_RSA_CTX *prsactx = (PROV_RSA_CTX *)vprsactx;                             
+    const OSSL_PARAM *p;
+```
+
+
+I `rsa_setup_md` we pass in `SHA256` as the mdname, which is then passed
+to EVP_MD_fetch which will use it to look up the EVP_MD:
+```c
+static int rsa_setup_md(PROV_RSA_CTX *ctx, const char *mdname,                  
+		        const char *mdprops)                                    
+{ 
+    if (mdname != NULL) {                                                       
+          WPACKET pkt;                                                            
+          EVP_MD *md = EVP_MD_fetch(ctx->libctx, mdname, mdprops); 
+          ...
+}
+```
+So we are passing in `SHA256` this will gt
+
+```console
+(lldb) expr *namenum_entry
+(NAMENUM_ENTRY) $110 = (name = "SHA256", number = 141)
+
+(lldb) bt
+* thread #1, name = 'rsa_sign', stop reason = step over
+    frame #0: 0x00007ffff7d4bfe7 libcrypto.so.3`namemap_name2num_n(namemap=0x0000000000415080, name="SHA256", name_len=6) at core_namemap.c:157:58
+  * frame #1: 0x00007ffff7d4c05c libcrypto.so.3`ossl_namemap_name2num_n(namemap=0x0000000000415080, name="SHA256", name_len=6) at core_namemap.c:174:14
+    frame #2: 0x00007ffff7d4c0b4 libcrypto.so.3`ossl_namemap_name2num(namemap=0x0000000000415080, name="SHA256") at core_namemap.c:185:12
+    frame #3: 0x00007ffff7d21308 libcrypto.so.3`inner_evp_generic_fetch(libctx=0x00007ffff7fc57e0, operation_id=1, name_id=0, name="SHA256", properties=0x0000000000000000, new_method=(libcrypto.so.3`evp_md_from_dispatch at digest.c:856:1), up_ref_method=(libcrypto.so.3`evp_md_up_ref at digest.c:974:1), free_method=(libcrypto.so.3`evp_md_free at digest.c:979:1)) at evp_fetch.c:259:19
+    frame #4: 0x00007ffff7d21637 libcrypto.so.3`evp_generic_fetch(libctx=0x00007ffff7fc57e0, operation_id=1, name="SHA256", properties=0x0000000000000000, new_method=(libcrypto.so.3`evp_md_from_dispatch at digest.c:856:1), up_ref_method=(libcrypto.so.3`evp_md_up_ref at digest.c:974:1), free_method=(libcrypto.so.3`evp_md_free at digest.c:979:1)) at evp_fetch.c:349:12
+    frame #5: 0x00007ffff7d057e5 libcrypto.so.3`EVP_MD_fetch(ctx=0x00007ffff7fc57e0, algorithm="SHA256", properties=0x0000000000000000) at digest.c:987:9
+    frame #6: 0x00007ffff7e8e049 libcrypto.so.3`rsa_setup_md(ctx=0x0000000000518220, mdname="SHA256", mdprops=0x0000000000000000) at rsa.c:190:22
+    frame #7: 0x00007ffff7e8f9c9 libcrypto.so.3`rsa_digest_signverify_init(vprsactx=0x0000000000518220, mdname="SHA256", vrsa=0x000000000044ef50, operation=32) at rsa.c:731:13
+    frame #8: 0x00007ffff7e8fb43 libcrypto.so.3`rsa_digest_sign_init(vprsactx=0x0000000000518220, mdname="SHA256", vrsa=0x000000000044ef50) at rsa.c:770:12
+    frame #9: 0x00007ffff7d2d31e libcrypto.so.3`do_sigver_init(ctx=0x000000000047d0d0, pctx=0x00007fffffffd098, type=0x00007ffff7f80d40, mdname="SHA256", libctx=0x0000000000000000, props=0x0000000000000000, e=0x0000000000000000, pkey=0x0000000000451120, ver=0) at m_sigver.c:222:15
+    frame #10: 0x00007ffff7d2d7e5 libcrypto.so.3`EVP_DigestSignInit(ctx=0x000000000047d0d0, pctx=0x00007fffffffd098, type=0x00007ffff7f80d40, e=0x0000000000000000, pkey=0x0000000000451120) at m_sigver.c:323:12
+    frame #11: 0x00000000004014d0 rsa_sign`main(arc=1, argv=0x00007fffffffd1e8) at rsa_sign.c:76:7
+    frame #12: 0x00007ffff78781a3 libc.so.6`.annobin_libc_start.c + 243
+    frame #13: 0x000000000040122e rsa_sign`.annobin_init.c.hot + 46
+
+```
+
+Now, going back to this line in rsa_sign.c:
+```c
+  const EVP_MD* md = EVP_get_digestbyname("SHA256");
+```
+This call will end up in evp_get_digestbyname_ex where a look up of the name
+will be done using OBJ_NAME_get which we saw earlier.
+```console
+(lldb) expr ossl_namemap_name2num(ossl_namemap_stored(libctx), name)
+(int) $130 = 141
+```
+Should this instead try the namemap first and then revert to OBJ_NAME_get?
+No what will not work as there are other parts of the code that need to be
+able to look up using the md->type and those calls will fail and passed to
+OBJ_NAME_get.
+
 In providers/implementations/signature/rsa.c we find the following:
 ```c
 
@@ -2447,18 +2854,337 @@ This can be seen by setting the following breakpoint:
 ```console
 (lldb) br s -f rsa.c -l 1038
 ```
+Notice that rsa_set_ctx_restricted is true and the check EVP_MD_is_a is failing.
+What does it mean that rsa_pss is restricted. I see that it is considered
+restricted if PROV_RSA_CTX's min_saltlen is -1.
+
+Now, if we go back an look at `rsa_signverify_init` in
+providers/implementations/signature/rsa.c we have:
 ```c
-int evp_is_a(OSSL_PROVIDER *prov, int number, const char *legacy_name, const char *name)
-{
-  ...
-  return ossl_namemap_name2num(namemap, name) == number
+static int rsa_signverify_init(void *vprsactx, void *vrsa, int operation)           
+{ 
+    PROV_RSA_CTX *prsactx = (PROV_RSA_CTX *)vprsactx;
+
+    /* Maximum for sign, auto for verify */                                         
+    prsactx->saltlen = RSA_PSS_SALTLEN_AUTO;                                        
+    prsactx->min_saltlen = -1;
+
+    switch (RSA_test_flags(prsactx->rsa, RSA_FLAG_TYPE_MASK)) {                     
+      case RSA_FLAG_TYPE_RSA:                                                         
+          prsactx->pad_mode = RSA_PKCS1_PADDING;                                      
+          break;                                                                      
+      case RSA_FLAG_TYPE_RSASSAPSS:                                                   
+          prsactx->pad_mode = RSA_PKCS1_PSS_PADDING;                                  
+                                                                                      
+          {                                                                           
+              const RSA_PSS_PARAMS_30 *pss =                                          
+                  ossl_rsa_get0_pss_params_30(prsactx->rsa);  
+           
+          if (!ossl_rsa_pss_params_30_is_unrestricted(pss)) {                     
+                  int md_nid = ossl_rsa_pss_params_30_hashalg(pss);                   
+                  int mgf1md_nid = ossl_rsa_pss_params_30_maskgenhashalg(pss);    
+                  int min_saltlen = ossl_rsa_pss_params_30_saltlen(pss);              
+                  const char *mdname, *mgf1mdname;                                    
+                  size_t len;                                                         
+                                                                                      
+                  mdname = ossl_rsa_oaeppss_nid2name(md_nid);                         
+                  mgf1mdname = ossl_rsa_oaeppss_nid2name(mgf1md_nid);                 
+                  prsactx->min_saltlen = min_saltlen;        
+}
+```
+In our case we are using `RSA_FLAG_TYPE_RSASSAPSS` so that case will be entered.
+
+Notice that an RSA_PSS_PARAMS_30 will be retrieved which looks like this:
+```c
+RSA_PSS_PARAMS_30 *ossl_rsa_get0_pss_params_30(RSA *r)                          
+{                                                                               
+    return &r->pss_params;                                                      
 }
 ```
 ```console
-(lldb) expr ossl_namemap_name2num(namemap, name)
-(int) $0 = 141
-(lldb) expr number
-(int) $1 = 153
+(lldb) expr *pss
+(RSA_PSS_PARAMS_30) $2 = {
+  hash_algorithm_nid = 64
+  mask_gen = (algorithm_nid = 911, hash_algorithm_nid = 64)
+  salt_len = 16
+  trailer_field = 1
 ```
-Notice that rsa_set_ctx_restricted is true and the check EVP_MD_is_a is failing.
-**WIP**
+Next we have !ossl_rsa_pss_params_30_is_unrestricted 
+```c
+int ossl_rsa_pss_params_30_is_unrestricted(const RSA_PSS_PARAMS_30 *rsa_pss_params)
+{                                                                               
+    static RSA_PSS_PARAMS_30 pss_params_cmp = { 0, };                           
+                                                                                   
+    return rsa_pss_params == NULL                                               
+        || memcmp(rsa_pss_params, &pss_params_cmp,                              
+                  sizeof(*rsa_pss_params)) == 0;                                   
+}
+```
+Now, in our case the rsa_pss_params are not null:
+```console
+(lldb) expr *prsactx->rsa
+(RSA) $5 = {
+  dummy_zero = 0
+  libctx = 0x00007ffff7fc5820
+  version = 0
+  meth = 0x00007ffff7fc3c40
+  engine = 0x0000000000000000
+  n = 0x000000000047d050
+  e = 0x0000000000487c00
+  d = 0x000000000047d570
+  p = 0x00000000004886a0
+  q = 0x000000000047dfb0
+  dmp1 = 0x0000000000463970
+  dmq1 = 0x0000000000463e80
+  iqmp = 0x0000000000451e00
+  pss_params = {
+    hash_algorithm_nid = 64
+    mask_gen = (algorithm_nid = 911, hash_algorithm_nid = 64)
+    salt_len = 16
+    trailer_field = 1
+  }
+  pss = 0x0000000000000000
+  prime_infos = 0x0000000000000000
+  ex_data = {
+    ctx = 0x0000000000000000
+    sk = 0x0000000000000000
+  }
+  references = 2
+  flags = 4102
+  _method_mod_n = 0x0000000000000000
+  _method_mod_p = 0x0000000000000000
+  _method_mod_q = 0x0000000000000000
+  bignum_data = 0x0000000000000000
+  blinding = 0x0000000000000000
+  mt_blinding = 0x0000000000000000
+  lock = 0x00000000004362b0
+  dirty_cnt = 1
+}
+```
+If `rsa_pss_params` had been NULL the memcpy function would have copyied the
+`pss_params_cmp`  into `rsa_pss_params) and then compared it with 0.
+I'm guessing that these parameters were set up when the key was generated?
+
+```console
+(lldb) br s -n rsa_signverify_init
+```
+
+In evp_pkey_signature_init which is called from
+```console
+(lldb) bt
+* thread #1, name = 'rsa_sign', stop reason = step over
+  * frame #0: 0x00007ffff7d3c71e libcrypto.so.3`evp_pkey_signature_init(ctx=0x0000000000508910, operation=64) at signature.c:443:18
+    frame #1: 0x00007ffff7d3ce0b libcrypto.so.3`EVP_PKEY_verify_init(ctx=0x0000000000508910) at signature.c:580:12
+    frame #2: 0x0000000000401702 rsa_sign`verify(sig="��AWL\x8d=#%", siglen=0, pkey=0x0000000000451120, md=0x00007ffff7f809c0) at rsa_sign.c:122:7
+    frame #3: 0x0000000000401886 rsa_sign`main(arc=1, argv=0x00007fffffffd1e8) at rsa_sign.c:162:3
+```
+We have
+```c
+ctx->op.sig.sigprovctx =                                                          
+        signature->newctx(ossl_provider_ctx(signature->prov), ctx->propquery);
+```
+Which will land in rsa.c `rsa_newctx` which will create a new context but
+does nothing with the md, basically everything but libctx is null:
+```console
+(lldb) expr *prsactx
+(PROV_RSA_CTX) $6 = {
+  libctx = 0x00007ffff7fc5820
+  propq = 0x0000000000000000
+  rsa = 0x0000000000000000
+  operation = 0
+  flag_allow_md = 1
+  aid_buf = ""
+  aid = 0x0000000000000000
+  aid_len = 0
+  md = 0x0000000000000000
+  mdctx = 0x0000000000000000
+  mdnid = 0
+  mdname = ""
+  pad_mode = 0
+  mgf1_md = 0x0000000000000000
+  mgf1_mdname = ""
+  saltlen = 0
+  min_saltlen = 0
+  tbuf = 0x0000000000000000
+```
+In our case we are doing a verify_init so the switch statement in evp_pkey_signature_init
+will call:
+```c
+        case EVP_PKEY_OP_VERIFY:                                                       
+        if (signature->verify_init == NULL) {                                      
+            ERR_raise(ERR_LIB_EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
+            ret = -2;                                                              
+            goto err;                                                              
+        }                                                                          
+        ret = signature->verify_init(ctx->op.sig.sigprovctx, provkey);             
+        break;                                                              
+
+```
+This will delegate to rsa_verify_init in rsa.c which will call
+rsa_signverify_init with an operation of type EVP_PKEY_OP_VERIFY.
+```c
+static int rsa_signverify_init(void *vprsactx, void *vrsa, int operation)           
+{                                                                                   
+    PROV_RSA_CTX *prsactx = (PROV_RSA_CTX *)vprsactx;
+    ...
+    /* Maximum for sign, auto for verify */                                         
+    prsactx->saltlen = RSA_PSS_SALTLEN_AUTO;                                        
+    prsactx->min_saltlen = -1;   
+
+    case RSA_FLAG_TYPE_RSASSAPSS:                                                   
+          prsactx->pad_mode = RSA_PKCS1_PSS_PADDING;                                  
+                                                                                      
+          {                                                                           
+              const RSA_PSS_PARAMS_30 *pss =                                          
+                  ossl_rsa_get0_pss_params_30(prsactx->rsa);                          
+                                                                                      
+              if (!ossl_rsa_pss_params_30_is_unrestricted(pss)) {                     
+                  int md_nid = ossl_rsa_pss_params_30_hashalg(pss);                   
+                  int mgf1md_nid = ossl_rsa_pss_params_30_maskgenhashalg(pss);    
+                  int min_saltlen = ossl_rsa_pss_params_30_saltlen(pss);              
+                  const char *mdname, *mgf1mdname;                                    
+                  size_t len;                                                         
+                                                                                      
+                  mdname = ossl_rsa_oaeppss_nid2name(md_nid);                         
+                  mgf1mdname = ossl_rsa_oaeppss_nid2name(mgf1md_nid);                 
+                  prsactx->min_saltlen = min_saltlen;                                 
+                  ...
+                  prsactx->saltlen = min_saltlen;                                 
+                                                                                  
+                  return rsa_setup_md(prsactx, mdname, prsactx->propq)            
+                      && rsa_setup_mgf1_md(prsactx, mgf1mdname, prsactx->propq)   
+                      && rsa_check_parameters(prsactx);                           
+              }                                                                   
+          }                                                                     
+```
+Notice the RSA* is passed into ossl_rsa_get0_pss_params_30 and if we take a look
+at what it returns it is simply rsa->pss_params which is:
+```console
+(RSA_PSS_PARAMS_30) $9 = {
+  hash_algorithm_nid = 64
+  mask_gen = (algorithm_nid = 911, hash_algorithm_nid = 64)
+  salt_len = 16
+  trailer_field = 1
+}
+```
+But notice that `hash_algorithm_nid` is `64` which I believe is the nid for
+`sha1`:
+(lldb) expr EVP_get_digestbyname("sha1")->type
+(const int) $12 = 64
+```
+And this is also the default values which are set in rsa_pss.c
+```c
+int ossl_rsa_pss_params_30_set_defaults(RSA_PSS_PARAMS_30 *rsa_pss_params)         
+{                                                                               
+    if (rsa_pss_params == NULL)                                                 
+        return 0;                                                               
+    *rsa_pss_params = default_RSASSA_PSS_params;                                
+    return 1;                                                                   
+} 
+```
+In rsa_backend.c:
+```c
+int ossl_rsa_pss_params_30_fromdata(RSA_PSS_PARAMS_30 *pss_params,              
+                                    const OSSL_PARAM params[],                  
+                                    OSSL_LIB_CTX *libctx)
+...
+    if ((md = EVP_MD_fetch(libctx, mdname, propq)) == NULL                     
+            || !ossl_rsa_pss_params_30_set_hashalg(pss_params,                  
+                                                   ossl_rsa_oaeppss_md2nid(md)))
+            goto err;                                                            
+```
+If we follow this call it will set the rsa_pass_params->hash_algorithm_nid:
+```
+int ossl_rsa_pss_params_30_set_hashalg(RSA_PSS_PARAMS_30 *rsa_pss_params,          
+                                       int hashalg_nid)                         
+{                                                                               
+    if (rsa_pss_params == NULL)                                                 
+        return 0;                                                               
+    rsa_pss_params->hash_algorithm_nid = hashalg_nid;                           
+    return 1;                                                                   
+} 
+```
+Lets check the value which we expect/hope is 672:
+```console
+(lldb) expr hashalg_nid
+(int) $28 = 672
+```
+And after this function has returned the value of rsa_pss_params is:
+```console
+(lldb) expr *rsa_pss_params
+(RSA_PSS_PARAMS_30) $31 = {
+  hash_algorithm_nid = 672
+  mask_gen = (algorithm_nid = 911, hash_algorithm_nid = 64)
+  salt_len = 20
+  trailer_field = 1
+}
+```
+So far so good. So what happens when we generate the RSA key then?  
+If we look in rsa_kmgmt.c and rsa_gen:
+```c
+if (!ossl_rsa_pss_params_30_copy(ossl_rsa_get0_pss_params_30(rsa_tmp),         
+                                       &gctx->pss_params))                        
+          goto err;           
+```
+
+
+So even though we have set the rsa_pss md:
+```c
+  if (EVP_PKEY_CTX_set_rsa_pss_keygen_md(ctx, md) <= 0) {
+    error_and_exit("EVP_PKEY_CTX_set_rsa_pss_keygen_md failed");
+  }
+```
+So what is this setting?  
+After this function I can verify that ctx->op.keymgmt.genctx contains the
+field pss_param with the values set above. This can be inspected by stepping
+into the next function which is setting the rsa_pss_keygen_mgf1_md function.
+Lets to this in each of the following functions just to see if this field is
+perhaps modified by one of them.
+Well, if we follow `int_set_rsa_mgf1_md` down into 
+
+```c
+int ossl_rsa_pss_params_30_fromdata(RSA_PSS_PARAMS_30 *pss_params,                 
+                                    const OSSL_PARAM params[],                     
+                                    OSSL_LIB_CTX *libctx)                          
+{ 
+    ...
+    /*                                                                             
+    * If we get any of the parameters, we know we have at least some              
+    * restrictions, so we start by setting default values, and let each           
+    * parameter override their specific restriction data.                         
+    */                                                                            
+    if (param_md != NULL || param_mgf != NULL || param_mgf1md != NULL              
+        || param_saltlen != NULL)                                                  
+        if (!ossl_rsa_pss_params_30_set_defaults(pss_params))                      
+            return 0;                                                          
+```
+Now before this call to ossl_rsa_pss_params_30_set_defaults pss_params is:
+```console
+(lldb) expr *rsa_pss_params
+(RSA_PSS_PARAMS_30) $74 = {
+  hash_algorithm_nid = 672
+  mask_gen = (algorithm_nid = 911, hash_algorithm_nid = 64)
+  salt_len = 20
+  trailer_field = 1
+}
+```
+And after it is:
+```console
+(lldb) expr *rsa_pss_params
+(RSA_PSS_PARAMS_30) $75 = {
+  hash_algorithm_nid = 64
+  mask_gen = (algorithm_nid = 911, hash_algorithm_nid = 64)
+  salt_len = 20
+  trailer_field = 1
+}
+```
+Should the check above perhaps first check if rss_params is null before this
+to avoid setting the default values?  
+
+
+
+
+Later we will call EVP_DigestInit which does not take a message digest.
+
+This was fixed in https://github.com/openssl/openssl/commit/bbde8566191e5851f4418cbb8acb0d50b16170d8
+
