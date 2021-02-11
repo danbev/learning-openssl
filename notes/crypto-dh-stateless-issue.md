@@ -176,6 +176,20 @@ if (!DH_check_pub_key(dh, pub_key, &check_result) || check_result) {
    goto err;
 }
 
+The code that is causing this issue can is the following:
+```js
+  for (const [params1, params2] of [
+    // Same generator, but different primes.
+    [{ group: 'modp5' }, { group: 'modp18' }],
+  ]) {
+    assert.throws(() => {
+      test(crypto.generateKeyPairSync('dh', params1),
+           crypto.generateKeyPairSync('dh', params2));
+    }, {
+      name: 'Error',
+      code: 'ERR_OSSL_EVP_DIFFERENT_PARAMETERS'
+    });
+  }
 ```
 
 __WIP__
