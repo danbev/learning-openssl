@@ -1685,48 +1685,6 @@ This is done by padding the message with random bytes:
 00 02 [a number of none-zero random bytes] 00 [message]
 ```
 
-
-### Diffie Hellman Key Exchange
-
-```
-Alice                 Public                        Bob
-a (number < n)        g (generator, small prime)    b (number < n)
-                      n (big prime number)
-
-g^a mod n ------------> a₁             b₁ <--------- g^b mod n
-
-(b₁)^a mod n                                         (a₁)^b mod n
-is same as:                                          is the same as:
-(g^b)^a mod n                                        (g^a)^b mod n
-(g)^ba mod n                                         (g)^ba mod n
-```
-Notice that they are both calculating the same value which is the secret that
-will be used for encryption. They have been able to communicate this in the
-open and even if Eve gets a₁ or b₁ she does not have a or b and to brute force
-this would take a lot of time.
-
-Example:
-```
-a = 3                  g = 5                         b = 2
-                       n = 7
-
-                    a₁ = 5³ mod 7 = 125 mod 7 = 6
-                    b₁ = 5² mod 7 = 25  mod 7 = 4
-
-(b₁)³ = 4³ = 64 mod 7 = 1 (secret key)             (a₁)² = 6² = 36 mod n = 1
-```
-Notice that `g` for generator is like the starting point on the circle and n is
-the max size of the circle after which is will wrap over.
-Visualize this as a circle (like a clock and 12 is the number n). So we take
-our private key (a) and raise g to that, and then mod it to the circle, so this
-will be a point some where on the circle. Bob does the same and his value will
-also be somewhere on the circle. The can now share this publicly as just knowing
-the point on the cicle is not enough, only alice knows how many times around the
-circle (a times) to get to the point.
-
-So after the exchange here is a secret key that both parties can use to encrypt
-and decrypt messages.
-
 ### ECDH
 Now Eliptic Curve Cryptography with Diffie Hellman ECDH is done in a similar way
 as described above, but ECHD, or rather EC, does not use module maths. Instead
