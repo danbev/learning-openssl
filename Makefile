@@ -158,6 +158,9 @@ cprovider.o: cprovider.c
 arr-over: src/array-overflow.c
 	$(CC) -g -o $@ $<
 
+dh: dh.c
+	$(CC) $(CFLAGS)
+
 .PHONY: clean 
 
 clean: 
