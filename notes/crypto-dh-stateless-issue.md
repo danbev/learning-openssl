@@ -3,7 +3,9 @@ This document contains notes around an issue with this test that was discovered
 when upgrading Node.js to OpenSSL 3.0 (currently only dynamically linking to
 the latest OpenSSL uptream master).
 
-### Error
+[reproducer](../dh.c).
+
+### Error in Node.js
 
 ```console
 $ out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-dh-stateless.js
@@ -191,5 +193,53 @@ The code that is causing this issue can is the following:
     });
   }
 ```
+So we are using [modp5](https://tools.ietf.org/html/rfc3526#section-2)
+and [modp18](https://tools.ietf.org/html/rfc3526#section-7).
 
-__WIP__
+If we set the following break point, we can see that this is in fact the same
+issue that happens in Node.js and is due to incorrec
+```console
+(lldb) br s -f ffc_key_validate.c -l 45
+```
+This will break in ossl_ffc_validate_public_key_partial:
+```c
+    if (BN_cmp(pub_key, tmp) >= 0) {
+        *ret |= FFC_ERROR_PUBKEY_TOO_LARGE;
+        goto err;
+    }
+```
+These are the valued being compared:
+```console
+(lldb) expr *pub_key
+(BIGNUM) $28 = {
+  d = 0x0000000005b452a0
+  top = 128
+  dmax = 128
+  neg = 0
+  flags = 1
+}
+(lldb) expr *tmp
+(BIGNUM) $29 = {
+  d = 0x0000000005b41fe0
+  top = 24
+  dmax = 24
+  neg = 0
+  flags = 0
+}
+```
+In this case the `BN_cmp` will fail and return with an error which will cause
+the caller of this function, `ossl_ffc_validate_public_key` to return 0. And
+the is returned to `dh_check_pub_key_partial` which is called from
+`compute_key`:
+```c
+    #ifndef FIPS_MODULE
+    if (!DH_check_pub_key(dh, pub_key, &check_result) || check_result) {
+        ERR_raise(ERR_LIB_DH, DH_R_INVALID_PUBKEY);
+        goto err;
+    }
+```
+And here we can see that this an error will be raised with is of type
+DH_R_INVALID_PUBKEY and this is the error we are seeing in Node.js.
+
+So in this case the just seems to be a different error and we could add a
+check for this in the test.
