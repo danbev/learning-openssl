@@ -243,3 +243,131 @@ DH_R_INVALID_PUBKEY and this is the error we are seeing in Node.js.
 
 So in this case the just seems to be a different error and we could add a
 check for this in the test.
+
+
+### followup issue
+This issue was surfaced after a fix/check for the above error was added specific
+to OpenSSL3. 
+
+```console
+$  out/Debug/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-dh-stateless.js
+node:assert:580
+      throw err;
+      ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ actual - expected
+
+  Comparison {
++   code: 'ERR_ASSERTION',
++   name: 'AssertionError'
+-   code: 'ERR_OSSL_DH_INVALID_PUBLIC_KEY',
+-   name: 'Error'
+  }
+    at Object.<anonymous> (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-dh-stateless.js:157:10)
+    at Module._compile (node:internal/modules/cjs/loader:1094:14)
+    at Object.Module._extensions..js (node:internal/modules/cjs/loader:1123:10)
+    at Module.load (node:internal/modules/cjs/loader:974:32)
+    at Function.Module._load (node:internal/modules/cjs/loader:815:14)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:76:12)
+    at node:internal/main/run_main_module:17:47 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected ... Lines skipped
+  
+    Buffer(192) [Uint8Array] [
+  +   179,
+  +   60,
+  +   36,
+  +   102,
+  +   161,
+  +   249,
+  +   196,
+  +   165,
+  +   116,
+  +   205,
+  +   44,
+  +   75,
+  +   142,
+  +   76,
+  +   155,
+  +   148,
+  +   85,
+  +   217,
+  +   62,
+  +   36,
+  +   37,
+  +   83,
+  +   16,
+  +   148,
+  +   225,
+  ...
+  -   166,
+  -   29,
+  -   161,
+  -   179,
+  -   2,
+  -   104,
+  -   32,
+  -   29,
+  -   182,
+  -   89,
+  -   199,
+  -   0,
+  -   61,
+  -   206,
+  -   180,
+  -   87,
+  -   254,
+  -   250,
+  -   99,
+  -   194,
+  -   182,
+  -   190,
+  -   210,
+  -   100,
+  -   49,
+  ...
+      at test (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-dh-stateless.js:40:10)
+      at assert.throws.common.hasOpenSSL3.name (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-dh-stateless.js:158:5)
+      at getActual (node:assert:701:5)
+      at Function.throws (node:assert:841:24)
+      at Object.<anonymous> (/home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-dh-stateless.js:157:10)
+      at Module._compile (node:internal/modules/cjs/loader:1094:14)
+      at Object.Module._extensions..js (node:internal/modules/cjs/loader:1123:10)
+      at Module.load (node:internal/modules/cjs/loader:974:32)
+      at Function.Module._load (node:internal/modules/cjs/loader:815:14)
+      at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:76:12) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Buffer(192) [Uint8Array] [
+      179,  60,  36, 102, 161, 249, 196, 165, 116, 205,  44,  75,
+      142,  76, 155, 148,  85, 217,  62,  36,  37,  83,  16, 148,
+      225, 137, 208, 107, 202, 231, 201,   5,  43, 108,  81,   9,
+       83,   0,  43, 145, 119,  27,  91, 155, 115,  61, 211, 136,
+        6, 254, 166, 139,  77, 183,  63, 145,  24, 119,  51, 244,
+      240, 136,  23,  67, 177,  19, 147, 222,   7,  36, 121, 246,
+      215, 242, 189, 206,  46, 145, 179, 238,  67,   2,  51, 219,
+       15, 137, 235, 102,  77,  54,  97,  97,   7,  56, 180, 212,
+      129,   2, 110,  89,
+      ... 92 more items
+    ],
+    expected: Buffer(192) [Uint8Array] [
+      166,  29, 161, 179,   2, 104,  32,  29, 182,  89, 199,   0,
+       61, 206, 180,  87, 254, 250,  99, 194, 182, 190, 210, 100,
+       49,  77,  64,  17, 212, 162,  10, 224,  22,  50,  59, 231,
+       31,  22,  31, 117,  88, 123, 250,  83,  13,  76, 107, 185,
+       71,  46,  65,   2, 112, 167, 151, 241, 103, 101, 113, 140,
+      215,  65,  63, 141,  65,  29,  57, 240,  56,  10,   9, 195,
+      225,  45, 210,  59, 133, 146, 122,  36,  35, 118, 155, 150,
+      192, 233, 255,   9, 143, 145, 249,  72, 242,   7,   7, 204,
+       61, 221, 137,  50,
+      ... 92 more items
+    ],
+    operator: 'deepStrictEqual'
+  },
+  expected: { name: 'Error', code: 'ERR_OSSL_DH_INVALID_PUBLIC_KEY' },
+  operator: 'throws'
+}
+```
