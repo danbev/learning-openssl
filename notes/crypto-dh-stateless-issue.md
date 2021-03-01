@@ -371,3 +371,72 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
   operator: 'throws'
 }
 ```
+The cause of this failure is that the test is expecting an error to be thrown
+because the parameters are different. This was checked in OpenSSL 1.1.1 in
+the function `EVP_PKEY_derive_set_peer`:
+```c
+int EVP_PKEY_derive_set_peer(EVP_PKEY_CTX *ctx, EVP_PKEY *peer)
+{
+    ...
+    /*
+     * For clarity.  The error is if parameters in peer are
+     * present (!missing) but don't match.  EVP_PKEY_cmp_parameters may return
+     * 1 (match), 0 (don't match) and -2 (comparison is not defined).  -1
+     * (different key types) is impossible here because it is checked earlier.
+     * -2 is OK for us here, as well as 1, so we can check for 0 only.
+     */
+    if (!EVP_PKEY_missing_parameters(peer) &&
+        !EVP_PKEY_cmp_parameters(ctx->pkey, peer)) {
+        EVPerr(EVP_F_EVP_PKEY_DERIVE_SET_PEER, EVP_R_DIFFERENT_PARAMETERS);
+        return -1;
+    }
+```
+In OpenSSL 3.0 this is still part of the legacy code path, but it not present
+in the path where a provider is available.
+```c
+int EVP_PKEY_derive_set_peer(EVP_PKEY_CTX *ctx, EVP_PKEY *peer)
+{
+    ...
+    if (provkey == NULL)
+          goto legacy;
+      return ctx->op.kex.exchange->set_peer(ctx->op.kex.exchprovctx, provkey);
+
+   legacy:
+  #ifdef FIPS_MODULE
+      return ret;
+      ...
+
+      /*
+       * For clarity.  The error is if parameters in peer are
+       * present (!missing) but don't match.  EVP_PKEY_parameters_eq may return
+       * 1 (match), 0 (don't match) and -2 (comparison is not defined).  -1
+       * (different key types) is impossible here because it is checked earlier.
+       * -2 is OK for us here, as well as 1, so we can check for 0 only.
+       */
+      if (!EVP_PKEY_missing_parameters(peer) &&
+          !EVP_PKEY_parameters_eq(ctx->pkey, peer)) {
+          ERR_raise(ERR_LIB_EVP, EVP_R_DIFFERENT_PARAMETERS);
+          return -1;
+      }
+```
+So we can see that this check is only present if the legacy code path is taken.
+Should this check also exist in the provider path, something like this:
+```c
+    if (provkey == NULL)
+        goto legacy;
+
+#ifndef FIPS_MODULE
+    if (!EVP_PKEY_missing_parameters(peer) &&
+        !EVP_PKEY_parameters_eq(ctx->pkey, peer)) {
+        ERR_raise(ERR_LIB_EVP, EVP_R_DIFFERENT_PARAMETERS);
+        return -1;
+    }
+#endif
+
+      return ctx->op.kex.exchange->set_peer(ctx->op.kex.exchprovctx, provkey);
+
+   legacy:
+  #ifdef FIPS_MODULE
+      return ret;
+}
+```
