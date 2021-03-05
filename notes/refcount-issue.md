@@ -372,12 +372,368 @@ If we look at the out above and recall that an object will be freed in OpenSSL
 if its refcount becomes zero and not otherwise. We can see that for some reason
 0x7fffe0002830 is getting released.
 
-Before EVP_PKEY_get0_EC_KEY is called the reference count could be 3
+Before EVP_PKEY_get0_EC_KEY is called the reference count could is 3:
 ```c++
  const EC_KEY* private_key = EVP_PKEY_get0_EC_KEY(m_privkey.get());
 ```
-Now, EVP_PKEY_get0_EC_KEY will call downgrade which will clear this instance
-and set the reference count to 1. And later it will copy over the reference
-count into a tmp_copy.
 
-_work in progress__
+```c
+EC_KEY *EVP_PKEY_get0_EC_KEY(const EVP_PKEY *pkey)     
+{                                                                                 if (!evp_pkey_downgrade((EVP_PKEY *)pkey)) {
+        ERR_raise(ERR_LIB_EVP, EVP_R_INACCESSIBLE_KEY);                               return NULL;
+    }                                                                             if (EVP_PKEY_base_id(pkey) != EVP_PKEY_EC) {
+        EVPerr(EVP_F_EVP_PKEY_GET0_EC_KEY, EVP_R_EXPECTING_A_EC_KEY);
+        return NULL;                                               
+    }       
+    return pkey->pkey.ec;                                            
+} 
+```
+We can inspect the references in EVP_PKEY_get0_EC_KEY:
+```console
+(lldb) expr pkey->references
+(const int) $0 = 3
+```
+Now, EVP_PKEY_get0_EC_KEY will call evp_pkey_downgrade which will clear this
+instance and set the reference count to 1. This is done by calling
+`evp_pkey_reset_unlocked`: 
+```c
+int evp_pkey_downgrade(EVP_PKEY *pk)
+{
+  EVP_PKEY tmp_copy;
+  ...
+    tmp_copy = *pk;
+  
+    if (evp_pkey_reset_unlocked(pk)
+       && evp_pkey_copy_downgraded(&pk, &tmp_copy)) {
+       ....
+    }
+}
+```
+Just to verify the reference count upon entering this function we can see
+that the refcount is still 3:
+```console
+
+(lldb) expr pk->references
+(int) $31 = 3
+```
+So this is the count before entering `evp_pkey_reset_unlocked`.
+And notice that `tmp_copy` is stored on the stack:
+```console
+(lldb) memory read -f x -c 64 -s 8 $rsp
+0x7fffef7fdbc0: 0x00007fffef7fdd90 0x00007fffe0002830
+0x7fffef7fdbd0: 0x0000000000000198 0x0000000000000000
+0x7fffef7fdbe0: 0x0000000000000000 0x0000000000000000
+0x7fffef7fdbf0: 0x0000000000000000 0x0000000000000003
+0x7fffef7fdc00: 0x00007fffe0001330 0x0000000000000000
+0x7fffef7fdc10: 0x0000000000000001 0x0000000000000000
+0x7fffef7fdc20: 0x0000000000000000 0x00007fffe801aab0
+0x7fffef7fdc30: 0x00007fffe0001aa0 0x0000000000000000
+0x7fffef7fdc40: 0x0000000000000000 0x0000000000000000
+0x7fffef7fdc50: 0x0000010000000209 0x000000000000008b
+0x7fffef7fdc60: 0x00007fffef7fdc80 0x000000000122c55e
+0x7fffef7fdc70: 0x0000000005ba3b10 0x00007fffe8026530
+0x7fffef7fdc80: 0x00007fffef7fdca0 0x00007ffff7d2723d
+0x7fffef7fdc90: 0x00007fffe8027760 0x00007fffe0002830
+0x7fffef7fdca0: 0x00007fffef7fdd90 0x000000000124c316
+0x7fffef7fdcb0: 0x0000000000000000 0x0000000005ba6540
+
+(lldb) expr &tmp_copy
+(EVP_PKEY *) $39 = 0x00007fffef7fdbd0
+
+(lldb) memory read -f d -c 1 0x00007fffef7fdbd0
+0x7fffef7fdbd0: 408
+
+(lldb) expr tmp_copy.type
+(int) $41 = 408
+```
+
+`evp_pkey_reset_unlocked` use memset to clear out the passed in EVP_PKEY pk
+and set the reference count to 1.`
+```console
+(lldb) expr pk->references
+(int) $1 = 1
+```
+But this does not affect the copy that is on the stack of course:
+```console
+(lldb) expr tmp_copy->references
+(const int) $3 = 3
+```
+Next `evp_pkey_copy_downgraded` will be called.
+```c
+int evp_pkey_copy_downgraded(EVP_PKEY **dest, const EVP_PKEY *src)
+{
+                ....
+   1826	        /* Make sure we have a clean slate to copy into */
+   1827	        if (*dest == NULL)
+   1828	            *dest = EVP_PKEY_new();
+   1829	        else
+-> 1830	            evp_pkey_free_it(*dest);
+}
+```
+The refcount for dest is still one after this call:
+```console
+(lldb) expr (*dest)->references
+(int) $4 = 1
+```
+
+```console
+   1794	int evp_pkey_copy_downgraded(EVP_PKEY **dest, const EVP_PKEY *src)
+   1795	{
+
+   1847	                EVP_PKEY_CTX *pctx =
+-> 1848	                    EVP_PKEY_CTX_new_from_pkey(libctx, *dest, NULL);
+```
+So we are passing in our EVP_PKEY pointer which we know has a refcount of 1.
+```console
+   177 	static EVP_PKEY_CTX *int_ctx_new(OSSL_LIB_CTX *libctx,
+   178 	                                 EVP_PKEY *pkey, ENGINE *e,
+   179 	                                 const char *keytype, const char *propquery,
+   180 	                                 int id)
+
+-> 332 	    if (pkey != NULL)
+   333 	        EVP_PKEY_up_ref(pkey);
+
+(lldb) expr pkey->references
+(int) $52 = 2
+```
+After this we return to evp_pkey_copy_downgraded and we find:
+```console
+  1862	                    EVP_PKEY_CTX_free(pctx);
+```
+And just to make sure we can check the refcount:
+```console
+(lldb) expr (*dest)->references
+(int) $53 = 2
+```
+EVP_PKEY_CTX_free will call EVP_PKEY_free:
+```console
+  409 	    EVP_PKEY_free(ctx->pkey);
+```
+This will bring the refcount down to 1 but the object is only freed when
+it becomes zero.
+
+After this we will return back to evp_pkey_downgrade. We will now use the
+copy we have on the stack to populate the cleared EVP_PKEY (pk):
+```console
+-> 1908	        pk->references = tmp_copy.references;
+```
+
+Console output from SIGSEGV fault:
+```console
+DeriveBits got lock for 0x7fffe0002830 and 0x7fffe8026530
+before EVP_PKEY_get0_EC_KEY 0x7fffe0002830 
+0x7fffe0002830:   2:EVP_PKEY_up_ref
+0x7fffe8026530:   4:EVP_PKEY_up_ref
+0x7fffe0002830:   1:EVP_PKEY_free
+0x7fffe0002830:   1:downgrade refcount
+EVP_PKEY_CTX_FREE...
+0x7fffe0002830:   0:EVP_PKEY_free  <---- Notice the refcount became 0!
+0x7fffe40016a0:   0:EC_KEY
+0x7fffe8026530:   2:EVP_PKEY_up_ref
+0x7fffe8026530:   2:downgrade refcount
+EVP_PKEY_CTX_FREE...
+0x7fffe8026530:   1:EVP_PKEY_free
+private_key 0x7fffe0002830 0x7fffef7fdcd0 (nil)
+```
+Notice that refcount became zero and it will have been freed. 
+For this to happen EVP_PKEY_free must have been called
+
+For a successful run:
+```console
+DeriveBits got lock for 0x7fffe0002830 and 0x7fffe8026530
+before EVP_PKEY_get0_EC_KEY 0x7fffe0002830 
+0x7fffe0002830:   2:EVP_PKEY_up_ref
+0x7fffe8026530:   5:EVP_PKEY_up_ref
+0x7fffe8026530:   4:EVP_PKEY_free
+0x7fffe0002830:   2:downgrade refcount
+EVP_PKEY_CTX_FREE...
+0x7fffe0002830:   1:EVP_PKEY_free
+0x7fffe8026530:   2:EVP_PKEY_up_ref
+0x7fffe8026530:   2:downgrade refcount
+EVP_PKEY_CTX_FREE...
+0x7fffe8026530:   1:EVP_PKEY_free
+private_key 0x7fffe0002830 0x7fffef7fdcd0 0x7fffe40016a0
+```
+So when we step through this in the debugger it looks correct and the 
+count will only ever go down to 1. But what we are seeing is that the count
+goes down to zero.
+
+Lets set a conditional break point in EVP_PKEY_free:
+```console
+(lldb) br s -n EVP_PKEY_free -c 'x == 0x7fffe0002830'
+```
+
+Now, I think this issue is due to a race condition as mentioned earlier but
+simply locking the ManagedEVP object will not work as we have two, a public
+key and a private key. And in the case of this test the same private/public
+key is used two times. 
+```js
+        subtle.deriveBits({
+          name: 'ECDH', namedCurve, public: alice.publicKey
+        }, bob.privateKey, 128),
+        subtle.deriveBits({
+          name: 'ECDH', namedCurve, public: bob.publicKey
+        }, alice.privateKey, 128)
+```
+So aquiring the lock of the private key and then the public will not work
+as the next time the keys will be switched and we have a different order
+of aquires. This is still a problem, but the actual issue is this:
+```console
+crypto/evp/p_lib.c:1556: OpenSSL internal error: refcount error
+Process 2997359 stopped
+* thread #10, name = 'node', stop reason = signal SIGABRT
+    frame #0: 0x00007ffff7517625 libc.so.6`.annobin_raise.c + 325
+```
+So I'm just going to write down my current thought on this which is that
+we are sharing a pointer to the EVP_PKEY (the private key) and this works in
+most case but becomes a problem when the one thread is in the downgrade function
+and the other is calls EVP_PKEY_free. If this happens at the stage where the
+downgrade function has reset the objects memory, meaning that the reference
+count is 1, this would bring it down do zero and allow it be freed. 
+
+After adding some logging, the thread id is the first entry below inside of the
+brackets:
+```console
+Process 3030240 launched: '/home/danielbevenius/work/nodejs/openssl/out/Debug/node' (x86_64)
+[f74d9fc0] EcKeyGenTraits::AdditionalConfig ffffb830 
+[f74d9fc0] EcKeyGenTraits::AdditionalConfig ffffb830 
+[effff700]  Setup
+[effff700] int_ctx_new references: 1
+[effff700] EVP_PKEY_up_ref ref: 0x7fffe0001100 refcount: 2 
+[effff700] EVP_PKEY_free ref: 0x7fffe0001100 refcount: 1 
+[effff700] EVP_PKEY_CTX_FREE
+[f4c51700]  Setup
+[f4c51700] int_ctx_new references: 1
+[f4c51700] EVP_PKEY_up_ref ref: 0x7fffe8025270 refcount: 2 
+[f4c51700] EVP_PKEY_free ref: 0x7fffe8025270 refcount: 1 
+[f4c51700] EVP_PKEY_CTX_FREE
+[effff700] EVP_PKEY_up_ref ref: 0x7fffe0002830 refcount: 2 
+[effff700] EVP_PKEY_free ref: 0x7fffe0002830 refcount: 1 
+[effff700] EVP_PKEY_CTX_FREE
+[effff700] EVP_PKEY_free ref: 0x7fffe0001100 refcount: 0 
+[f4c51700] EVP_PKEY_up_ref ref: 0x7fffe8026530 refcount: 2 
+[f74d9fc0] EVP_PKEY_up_ref ref: 0x7fffe0002830 refcount: 2 
+[f74d9fc0] EVP_PKEY_up_ref ref: 0x7fffe0002830 refcount: 3 
+[f74d9fc0] EVP_PKEY_up_ref ref: 0x7fffe0002830 refcount: 4 
+[f4c51700] EVP_PKEY_free ref: 0x7fffe8026530 refcount: 1 
+[f74d9fc0] EVP_PKEY_up_ref ref: 0x7fffe0002830 refcount: 5 
+[f4c51700] EVP_PKEY_CTX_FREE
+[f74d9fc0] EVP_PKEY_free ref: 0x7fffe0002830 refcount: 4 
+[f4c51700] EVP_PKEY_free ref: 0x7fffe8025270 refcount: 0 
+[f74d9fc0] EVP_PKEY_free ref: 0x7fffe0002830 refcount: 3 
+[f74d9fc0] EVP_PKEY_free ref: 0x7fffe0002830 refcount: 2 
+[f74d9fc0] EVP_PKEY_up_ref ref: 0x7fffe8026530 refcount: 2 
+[f74d9fc0] EVP_PKEY_up_ref ref: 0x7fffe8026530 refcount: 3 
+[f74d9fc0] EVP_PKEY_up_ref ref: 0x7fffe8026530 refcount: 4 
+[f74d9fc0] EVP_PKEY_up_ref ref: 0x7fffe8026530 refcount: 5 
+[f74d9fc0] EVP_PKEY_free ref: 0x7fffe8026530 refcount: 4 
+[f74d9fc0] EVP_PKEY_free ref: 0x7fffe8026530 refcount: 3 
+[f74d9fc0] DeriveBitsJob 
+[f74d9fc0] AdditionalConfig 5c04d30 
+[f74d9fc0] DeriveBitsJob...done 
+[ef7fe700] DeriveBitsJob::DoThreadPoolWork 
+[ef7fe700] EVP_PKEY_up_ref ref: 0x7fffe8026530 refcount: 4 
+[ef7fe700] EVP_PKEY_up_ref ref: 0x7fffe0002830 refcount: 3 
+[ef7fe700] DeriveBits go lock for 0x7fffe8026530 and 0x7fffe0002830
+[ef7fe700] before EVP_PKEY_get0_EC_KEY 0x7fffe8026530 
+[ef7fe700] EVP_PKEY_get0_EC_KEY references: 4
+[ef7fe700] evp_pkey_downgrade references: 4
+[f74d9fc0] EVP_PKEY_free ref: 0x7fffe8026530 refcount: 0 
+[ef7fe700] evp_pkey_copy_downgraded references: 0
+[ef7fe700] int_ctx_new references: 0
+[ef7fe700] EVP_PKEY_up_ref ref: 0x7fffe8026530 refcount: 1 
+crypto/evp/p_lib.c:1556: OpenSSL internal error: refcount error
+Process 3030240 stopped
+* thread #10, name = 'node', stop reason = signal SIGABRT
+    frame #0: 0x00007ffff7517625 libc.so.6`.annobin_raise.c + 325
+libc.so.6`.annobin_raise.c:
+->  0x7ffff7517625 <+325>: mov    rax, qword ptr [rsp + 0x108]
+    0x7ffff751762d <+333>: xor    rax, qword ptr fs:[0x28]
+    0x7ffff7517636 <+342>: jne    0x7ffff751765c            ; <+380>
+    0x7ffff7517638 <+344>: mov    eax, r8d
+
+```
+
+```console
+[ef7fe700] DeriveBits go lock for 0x7fffe8026530 and 0x7fffe0002830
+[ef7fe700] before EVP_PKEY_get0_EC_KEY 0x7fffe8026530 
+[ef7fe700] EVP_PKEY_get0_EC_KEY references: 4
+[ef7fe700] evp_pkey_downgrade references: 4
+[ef7fe700] evp_pkey_reset_unlocked 0x7fffe8026530 pk->references: 1
+[f74d9fc0] EVP_PKEY_free ref: 0x7fffe8026530 refcount: 0 
+[ef7fe700] evp_pkey_copy_downgraded references: 0
+[ef7fe700] int_ctx_new references: 0
+[ef7fe700] EVP_PKEY_up_ref ref: 0x7fffe8026530 refcount: 1 
+crypto/evp/p_lib.c:1558: OpenSSL internal error: refcount error
+Process 3042501 stopped
+* thread #10, name = 'node', stop reason = signal SIGABRT
+    frame #0: 0x00007ffff7517625 libc.so.6`.annobin_raise.c + 325
+libc.so.6`.annobin_raise.c:
+->  0x7ffff7517625 <+325>: mov    rax, qword ptr [rsp + 0x108]
+    0x7ffff751762d <+333>: xor    rax, qword ptr fs:[0x28]
+    0x7ffff7517636 <+342>: jne    0x7ffff751765c            ; <+380>
+    0x7ffff7517638 <+344>: mov    eax, r8d
+```
+So we can see that evp_pkey_reset_unlocked is set to 1 in thread `ef7fe700`
+but thread `f74d9fc0` will then call EVP_PKEY_free using the same pointer
+`0x7fffe8026530 ` which will cause the refcount to become 0 and freed.
+
+```console
+(lldb) bt
+* thread #1, name = 'node', stop reason = signal SIGABRT
+  * frame #0: 0x00007ffff7517625 libc.so.6`.annobin_raise.c + 325
+    frame #1: 0x00007ffff75008d9 libc.so.6`.annobin_loadmsgcat.c_end.unlikely + 299
+    frame #2: 0x00007ffff7d4360a libcrypto.so.3`ossl_ctype_check(c=1608, mask=3892466576) at ctype.c:257:48
+    frame #3: 0x00007ffff7d2aa0e libcrypto.so.3`EVP_PKEY_free(x=0x00007fffe8026530) at p_lib.c:1608:5
+    frame #4: 0x000000000122d29a node`node::FunctionDeleter<evp_pkey_st, &(EVP_PKEY_free)>::operator(this=0x0000000005ae96d8, pointer=0x00007fffe8026530)(evp_pkey_st*) const at util.h:636:47
+    frame #5: 0x000000000122c532 node`std::unique_ptr<evp_pkey_st, node::FunctionDeleter<evp_pkey_st, &(EVP_PKEY_free)> >::~unique_ptr(this=0x0000000005ae96d8) at unique_ptr.h:292:17
+    frame #6: 0x0000000001231958 node`node::crypto::ManagedEVPPKey::~ManagedEVPPKey(this=0x0000000005ae96d0) at crypto_keys.h:75:7
+    frame #7: 0x000000000124fba0 node`node::crypto::KeyPairGenConfig<node::crypto::EcKeyPairParams>::~KeyPairGenConfig(this=0x0000000005ae9680) at crypto_keygen.h:231:8
+    frame #8: 0x0000000001250ac7 node`node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> >::~CryptoJob(this=0x0000000005ae9590) at crypto_util.h:275:7
+    frame #9: 0x0000000001251d7d node`node::crypto::KeyGenJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> >::~KeyGenJob(this=0x0000000005ae9590) at crypto_keygen.h:31:7
+    frame #10: 0x0000000001251d9e node`node::crypto::KeyGenJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> >::~KeyGenJob(this=0x0000000005ae9590) at crypto_keygen.h:31:7
+    frame #11: 0x00000000012535d2 node`std::default_delete<node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> > >::operator(this=0x00007fffffff95b8, __ptr=0x0000000005ae9590)(node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> >*) const at unique_ptr.h:81:2
+    frame #12: 0x0000000001253092 node`std::unique_ptr<node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> >, std::default_delete<node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> > > >::~unique_ptr(this=0x00007fffffff95b8) at unique_ptr.h:292:17
+    frame #13: 0x000000000125265d node`node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> >::AfterThreadPoolWork(this=0x0000000005ae9590, status=0) at crypto_util.h:310:21
+    frame #14: 0x00000000010117a4 node`node::ThreadPoolWork::ScheduleWork(__closure=0x0000000000000000, req=0x0000000005ae95e0, status=0)::'lambda0'(uv_work_s*, int)::operator()(uv_work_s*, int) const at threadpoolwork-inl.h:44:34
+    frame #15: 0x00000000010117ca node`node::ThreadPoolWork::ScheduleWork((null)=0x0000000005ae95e0, (null)=0)::'lambda0'(uv_work_s*, int)::_FUN(uv_work_s*, int) at threadpoolwork-inl.h:45:7
+    frame #16: 0x000000000200c77c node`uv__queue_done(w=0x0000000005ae9638, err=0) at threadpool.c:334:3
+    frame #17: 0x000000000200c6c1 node`uv__work_done(handle=0x0000000005ab1850) at threadpool.c:313:5
+    frame #18: 0x0000000002011163 node`uv__async_io(loop=0x0000000005ab17a0, w=0x0000000005ab1968, events=1) at async.c:163:5
+    frame #19: 0x0000000002028f74 node`uv__io_poll(loop=0x0000000005ab17a0, timeout=0) at linux-core.c:462:11
+    frame #20: 0x0000000002011ae4 node`uv_run(loop=0x0000000005ab17a0, mode=UV_RUN_DEFAULT) at core.c:385:5
+    frame #21: 0x0000000000f2acaa node`node::SpinEventLoop(env=0x0000000005c84f80) at embed_helpers.cc:35:13
+    frame #22: 0x00000000010ce912 node`node::NodeMainInstance::Run(this=0x00007fffffffce90, env_info=0x0000000005aa1da0) at node_main_instance.cc:144:42
+    frame #23: 0x0000000001005be8 node`node::Start(argc=4, argv=0x00007fffffffd118) at node.cc:1083:41
+    frame #24: 0x00000000026fc952 node`main(argc=4, argv=0x00007fffffffd118) at node_main.cc:127:21
+    frame #25: 0x00007ffff75021a3 libc.so.6`.annobin_libc_start.c + 243
+    frame #26: 0x0000000000f251ce node`_start + 46
+```
+src/crypto/crypto_util.h:
+```c++
+void AfterThreadPoolWork(int status) override {                                  
+      Environment* env = AsyncWrap::env();                                           
+      CHECK_EQ(mode_, kCryptoJobAsync);                                              
+      CHECK(status == 0 || status == UV_ECANCELED);                                  
+      std::unique_ptr<CryptoJob> ptr(this);                                        
+      // If the job was canceled do not execute the callback.                        
+      // TODO(@jasnell): We should likely revisit skipping the                       
+      // callback on cancel as that could leave the JS in a pending                  
+      // state (e.g. unresolved promises...)                                         
+      if (status == UV_ECANCELED) return;                                            
+      v8::HandleScope handle_scope(env->isolate());                                  
+      v8::Context::Scope context_scope(env->context());                              
+      v8::Local<v8::Value> args[2];                                                  
+      if (ptr->ToResult(&args[0], &args[1]).FromJust())                              
+        ptr->MakeCallback(env->ondone_string(), arraysize(args), args);              
+    }                                                                   
+```
+Notice that we have unique pointer for the CryptoJob which will try to
+delete/free this instance when it goes out of scope. This will include the
+EVPPkeyPointer that the ManagedEVPPKey instance holds, which will call the
+deleter which is EVP_PKEY_free which might free the underlying instance if
+the refcount becomes zero. ManagedEVPPKey does not define a destructor so
+a default destructor will be generated. Adding an explicit destructor and
+adding some logging we can see that this is infact what is happening. 
+
+_work in progress_
