@@ -132,9 +132,6 @@ And the backtrace for thread 9 (our break point):
     frame #10: 0x00007ffff76ad4e2 libpthread.so.0`start_thread + 226
     frame #11: 0x00007ffff75dc6c3 libc.so.6`__GI___clone + 67
 ```
-The issue here is that there is a race condition and we need to use the mutex
-lock in ECDHBitsTraits::DeriveBits.
-
 
 If we step back and look at the test in question it looks like this:
 (test/parallel/test-webcrypto-derivebits.js)
@@ -331,6 +328,9 @@ class CryptoJob : public AsyncWrap, public ThreadPoolWork {
     env->SetConstructorFunction(target, CryptoJobTraits::JobName, job);         
   }              
 ```
+
+
+
 Now recall that we said that that we first generate two keys named alice and
 bob. We then use alice's public key and bob's private in deriveBits. Next, we
 use bob's public key and alice private key. And that these two jobs will be
@@ -735,5 +735,100 @@ deleter which is EVP_PKEY_free which might free the underlying instance if
 the refcount becomes zero. ManagedEVPPKey does not define a destructor so
 a default destructor will be generated. Adding an explicit destructor and
 adding some logging we can see that this is infact what is happening. 
+```console
+[f74d9fc0] DeriveBitsJob...done 
+[ef7fe700] DeriveBitsJob::DoThreadPoolWork 
+[ef7fe700] EVP_PKEY_up_ref ref: 0x7fffe0002830 refcount: 4 
+[ef7fe700] EVP_PKEY_up_ref ref: 0x7fffe8026530 refcount: 3 
+[ef7fe700] DeriveBits got lock for 0x7fffe0002830 and 0x7fffe8026530
+[ef7fe700] before EVP_PKEY_get0_EC_KEY 0x7fffe0002830 
+[ef7fe700] EVP_PKEY_get0_EC_KEY references: 4
+[ef7fe700] evp_pkey_downgrade references: 4
+[ef7fe700] evp_pkey_reset_unlocked 0x7fffe0002830 pk->references: 1
+[ef7fe700] evp_pkey_copy_downgraded references: 1
+[ef7fe700] int_ctx_new references: 1
+[ef7fe700] EVP_PKEY_up_ref ref: 0x7fffe0002830 refcount: 2 
+[f74d9fc0] DeriveBitsJob 
+[f74d9fc0] DeriveBitsJob...done 
+[f74d9fc0] ~ManagedEVPPkey for 0x7fffe0002830
+[f74d9fc0] ~ManagedEVPPkey for 0x7fffe0002830 Got lock!
+ [eeffd700] DeriveBitsJob::DoThreadPoolWork 
+[eeffd700] EVP_PKEY_up_ref ref: 0x7fffe8026530 refcount: 4 
+[ef7fe700] EVP_PKEY_CTX_FREE
+[ef7fe700] evp_pkey_downgrade after evp_pkey_reset and evp_pkey_copy_downgraded. pk->references: 0, tmp_copy.references: 4
+[ef7fe700] EVP_PKEY_get0_EC_KEY references: 4
+[ef7fe700] evp_pkey_downgrade references: 4
+[ef7fe700] evp_pkey_reset_unlocked 0x7fffe8026530 pk->references: 1
+[ef7fe700] evp_pkey_copy_downgraded references: 1
+[ef7fe700] int_ctx_new references: 1
+[ef7fe700] EVP_PKEY_up_ref ref: 0x7fffe8026530 refcount: 2 
+[ef7fe700] EVP_PKEY_CTX_FREE
+[ef7fe700] EVP_PKEY_free ref: 0x7fffe8026530 refcount: 1 
+[ef7fe700] evp_pkey_downgrade after evp_pkey_reset and evp_pkey_copy_downgraded. pk->references: 1, tmp_copy.references: 4
+private_key 0x7fffe0002830 0x7fffef7fdcb0 (nil)
+```
+
+I want to find out where the call to EVP_PKEY_free is coming from. To do this
+I want to break in this function but only for 0x7fffe0002830 and when the
+refcount becomes close to zero (1 or zero):
+```console
+(lldb) br s -f p_lib.c -l 1606 -c '(uintptr_t)x == (uintptr_t)0x7fffe0002830 && x->references <= 1'
+```
+
+After doing this and breaking a few times I believe I've found the issue which
+is that when CryptoJob for KeyPairGenTraits's AfterThreadPoolWork is completed
+it will destruct the KeyPairGenConfig which has a ManagedEVPPKey member which
+will be destructed:
+```c++
+template <typename AlgorithmParams>                                             
+struct KeyPairGenConfig final : public MemoryRetainer {                         
+  PublicKeyEncodingConfig public_key_encoding;                                  
+  PrivateKeyEncodingConfig private_key_encoding;                                
+  ManagedEVPPKey key;                                                              
+  AlgorithmParams params;                                                          
+                                                                                   
+  KeyPairGenConfig() = default;                                                    
+```
+
+This could be done by one thread while another is started
+and will start using the same EVP_PKEY instance. If these two get interleaved
+it is possible that they will interfere with each other which is what is
+happing above. 
+
+
+```console
+* thread #1, name = 'node', stop reason = breakpoint 1.2
+  * frame #0: 0x00000000012507b8 node`node::crypto::KeyPairGenConfig<node::crypto::EcKeyPairParams>::~KeyPairGenConfig(this=0x0000000005ae9680) at crypto_keygen.h:240:45
+    frame #1: 0x0000000001250989 node`node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> >::~CryptoJob(this=0x0000000005ae9590) at crypto_util.h:275:7
+    frame #2: 0x0000000001251c3f node`node::crypto::KeyGenJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> >::~KeyGenJob(this=0x0000000005ae9590) at crypto_keygen.h:31:7
+    frame #3: 0x0000000001251c60 node`node::crypto::KeyGenJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> >::~KeyGenJob(this=0x0000000005ae9590) at crypto_keygen.h:31:7
+    frame #4: 0x0000000001253476 node`std::default_delete<node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> > >::operator(this=0x00007fffffff95b8, __ptr=0x0000000005ae9590)(node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> >*) const at unique_ptr.h:81:2
+    frame #5: 0x0000000001252f36 node`std::unique_ptr<node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> >, std::default_delete<node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> > > >::~unique_ptr(this=0x00007fffffff95b8) at unique_ptr.h:292:17
+    frame #6: 0x000000000125251f node`node::crypto::CryptoJob<node::crypto::KeyPairGenTraits<node::crypto::EcKeyGenTraits> >::AfterThreadPoolWork(this=0x0000000005ae9590, status=0) at crypto_util.h:310:21
+    frame #7: 0x00000000010117a4 node`node::ThreadPoolWork::ScheduleWork(__closure=0x0000000000000000, req=0x0000000005ae95e0, status=0)::'lambda0'(uv_work_s*, int)::operator()(uv_work_s*, int) const at threadpoolwork-inl.h:44:34
+    frame #8: 0x00000000010117ca node`node::ThreadPoolWork::ScheduleWork((null)=0x0000000005ae95e0, (null)=0)::'lambda0'(uv_work_s*, int)::_FUN(uv_work_s*, int) at threadpoolwork-inl.h:45:7
+    frame #9: 0x000000000200c41c node`uv__queue_done(w=0x0000000005ae9638, err=0) at threadpool.c:334:3
+    frame #10: 0x000000000200c361 node`uv__work_done(handle=0x0000000005ab1850) at threadpool.c:313:5
+    frame #11: 0x0000000002010e03 node`uv__async_io(loop=0x0000000005ab17a0, w=0x0000000005ab1968, events=1) at async.c:163:5
+    frame #12: 0x0000000002028c14 node`uv__io_poll(loop=0x0000000005ab17a0, timeout=0) at linux-core.c:462:11
+    frame #13: 0x0000000002011784 node`uv_run(loop=0x0000000005ab17a0, mode=UV_RUN_DEFAULT) at core.c:385:5
+    frame #14: 0x0000000000f2acaa node`node::SpinEventLoop(env=0x0000000005c84f80) at embed_helpers.cc:35:13
+    frame #15: 0x00000000010ce912 node`node::NodeMainInstance::Run(this=0x00007fffffffce90, env_info=0x0000000005aa1da0) at node_main_instance.cc:144:42
+    frame #16: 0x0000000001005be8 node`node::Start(argc=4, argv=0x00007fffffffd118) at node.cc:1083:41
+    frame #17: 0x00000000026fc5f2 node`main(argc=4, argv=0x00007fffffffd118) at node_main.cc:127:21
+    frame #18: 0x00007ffff75021a3 libc.so.6`.annobin_libc_start.c + 243
+    frame #19: 0x0000000000f251ce node`_start + 46
+```
+If we aquire the mutext look for this we can make sure that only one thread
+accesses this object at a time:
+```c++
+  ~KeyPairGenConfig() {                                                         
+    if (key.get() != nullptr) {                                                 
+      Mutex::ScopedLock priv_lock(*key.mutex());                                
+    }                                                                           
+  }
+```
+I'm not able to reproduce this issue with this change. But I'm still concered
+about the locking DeriveBits. TODO: take a closer look at this next week.
 
 _work in progress_
