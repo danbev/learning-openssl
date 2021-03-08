@@ -831,4 +831,99 @@ accesses this object at a time:
 I'm not able to reproduce this issue with this change. But I'm still concered
 about the locking DeriveBits. TODO: take a closer look at this next week.
 
-_work in progress_
+
+With the above change test-webcrypto-derivebits.js now passes and I've yet to
+been able to reproduce it again. But there is still a refcount issue in
+test-webcrypto-wrap-unwrap.js:
+```console
+=== release test-webcrypto-wrap-unwrap ===                                    
+Path: parallel/test-webcrypto-wrap-unwrap
+crypto/evp/p_lib.c:1604: OpenSSL internal error: refcount error
+Command: out/Release/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-webcrypto-wrap-unwrap.js
+--- CRASHED (Signal: 6) ---
+```
+Unlike test-webcrypto-derivebits.js this only seems to happen upon exit and
+where the refcount becomes negative:
+```console
+[f74d9fc0] EVP_PKEY_free ref: 0x447b010 refcount: 0 
+[f74d9fc0] EVP_PKEY_free ref: 0x7fffe40017d0 refcount: 0 
+[f74d9fc0] EVP_PKEY_free ref: 0x7fffe40017d0 refcount: -1 
+crypto/evp/p_lib.c:1609: OpenSSL internal error: refcount error
+Aborted (core dumped)
+```
+
+Lets set a break point and see if we can figure out where 0x7fffe40017d0 is used
+```console
+(lldb) br s -f p_lib.c -l 1604 -c 'x == 0x7fffe40017d0 && x->references < 1'
+(lldb) br s -f p_lib.c -l 1556 -c 'pkey == 0x7fffe40017d0'
+```
+The first break point will break in EVP_PKEY_free and the second will break in
+EVP_PKEY_up_ref.
+
+The second break point should give us information about where this call is
+coming from.
+```console
+* thread #10, name = 'node', stop reason = breakpoint 3.1
+  * frame #0: 0x00007ffff7d2a838 libcrypto.so.3`EVP_PKEY_up_ref(pkey=0x00007fffe40017d0) at p_lib.c:1556:94
+    frame #1: 0x0000000001270eb2 node`node::crypto::ManagedEVPPKey::operator=(this=0x0000000005d49238, that=0x00007fffef7fdd40) at crypto_keys.cc:565:20
+    frame #2: 0x000000000126116a node`node::crypto::KeyPairGenTraits<node::crypto::RsaKeyGenTraits>::DoKeyGen(env=0x0000000005c84dc0, params=0x0000000005d491e8) at crypto_keygen.h:173:17
+    frame #3: 0x0000000001260aa8 node`node::crypto::KeyGenJob<node::crypto::KeyPairGenTraits<node::crypto::RsaKeyGenTraits> >::DoThreadPoolWork(this=0x0000000005d49100) at crypto_keygen.h:79:35
+    frame #4: 0x000000000101171e node`node::ThreadPoolWork::ScheduleWork(__closure=0x0000000000000000, req=0x0000000005d49148)::'lambda'(uv_work_s*)::operator()(uv_work_s*) const at threadpoolwork-inl.h:39:31
+    frame #5: 0x000000000101173e node`node::ThreadPoolWork::ScheduleWork((null)=0x0000000005d49148)::'lambda'(uv_work_s*)::_FUN(uv_work_s*) at threadpoolwork-inl.h:40:7
+    frame #6: 0x000000000200c5b2 node`uv__queue_work(w=0x0000000005d491a0) at threadpool.c:321:3
+    frame #7: 0x000000000200bdd1 node`worker(arg=0x0000000000000000) at threadpool.c:122:5
+    frame #8: 0x00007ffff76ad4e2 libpthread.so.0`start_thread + 226
+    frame #9: 0x00007ffff75dc6c3 libc.so.6`__GI___clone + 67
+```
+Notice that this is thread 10. This is from the overloaded operator= function
+is ManagedEVPPkey which is used below:
+```c++
+    static KeyGenJobStatus DoKeyGen(                                                 
+        Environment* env,                                                            
+        AdditionalParameters* params) {                                              
+      EVPKeyCtxPointer ctx = KeyPairAlgorithmTraits::Setup(params);                  
+                                                                                     
+      if (!ctx)                                                                      
+        return KeyGenJobStatus::FAILED;                                              
+                                                                                     
+      // Generate the key                                                            
+      EVP_PKEY* pkey = nullptr;                                                      
+      if (!EVP_PKEY_keygen(ctx.get(), &pkey))                                        
+        return KeyGenJobStatus::FAILED;                                              
+                                                                                     
+      params->key = ManagedEVPPKey(EVPKeyPointer(pkey)); <-------------- operator=
+      return KeyGenJobStatus::OK;                                                    
+    } 
+```
+We can find operator= in src/crypto/crypto_keys.cc and we can see the call
+to EVP_PKEY_up_ref:
+```c++
+ManagedEVPPKey& ManagedEVPPKey::operator=(const ManagedEVPPKey& that) {             
+  pkey_.reset(that.get());                                                          
+                                                                                    
+  if (pkey_)                                                                        
+    EVP_PKEY_up_ref(pkey_.get());                                                   
+                                                                                    
+  mutex_ = that.mutex_;                                                             
+                                                                                    
+  return *this;                                                                     
+}
+```
+So calling GetAsymmetricKey will actually modify the underlying EVP_PKEY by
+updating the reference count. When GetAsymmetricKey is called in the following
+example it will call ManagedEVPPKey::operator= which will reset the pkey_
+pointer which in turn will cause EVP_PKEY_free to be called which will decrement
+the refcount. 
+```c++
+  ManagedEVPPKey m_pkey = key_data->GetAsymmetricKey();                             
+  Mutex::ScopedLock lock(*m_pkey.mutex());
+```
+Next in operator= EVP_PKEY_up_ref will  will increment the refcount. If this is
+done from multiple threads, which is the case in the code base there
+will be a race condition where one thread call GetAsymmetric(), without locking
+the mutex, and another thread calling a OpenSSL3 function, with the lock aquired
+that also modifies the refcount (evp_downgrade for example).
+The suggestion I have is that we use aquire the lock in operator= to avoid this
+situation.
+
+
