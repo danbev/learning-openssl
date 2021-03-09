@@ -926,4 +926,121 @@ that also modifies the refcount (evp_downgrade for example).
 The suggestion I have is that we use aquire the lock in operator= to avoid this
 situation.
 
+The above fix caused a deadlock. To figur our the issue I ran the test in lldb
+and then ctrl+c when the dead lock occurs (there is not progress and the
+process just hangs). Then show all the backtrace for all threads:
+```console
+(lldb) bt all
+ thread #8, name = 'node'
+    frame #0: 0x00007ffff76b7610 libpthread.so.0`__lll_lock_wait + 48
+    frame #1: 0x00007ffff76aff53 libpthread.so.0`__GI___pthread_mutex_lock + 227
+    frame #2: 0x0000000002024223 node`uv_mutex_lock(mutex=0x0000000005d556d0) at thread.c:331:7
+    frame #3: 0x0000000000f32346 node`node::LibuvMutexTraits::mutex_lock(mutex=0x0000000005d556d0) at node_mutex.h:164:18
+    frame #4: 0x0000000000f33484 node`node::MutexBase<node::LibuvMutexTraits>::ScopedLock::ScopedLock(this=0x00007ffff4c50bb0, mutex=0x0000000005d556d0) at node_mutex.h:220:21
+    frame #5: 0x00000000012716e4 node`node::crypto::ManagedEVPPKey::operator=(this=0x00007ffff4c50cc0, that=0x0000000005d56260) at crypto_keys.cc:564:38
+    frame #6: 0x000000000127167f node`node::crypto::ManagedEVPPKey::ManagedEVPPKey(this=0x00007ffff4c50cc0, that=0x0000000005d56260) at crypto_keys.cc:558:11
+    frame #7: 0x0000000001272b75 node`node::crypto::KeyObjectData::GetAsymmetricKey(this=0x0000000005d56230) const at crypto_keys.cc:859:10
+    frame #8: 0x0000000001239394 node`node::crypto::SignTraits::DeriveBits(env=0x0000000005c84e00, params=0x0000000005d544f8, out=0x0000000005d54560) at crypto_sig.cc:826:49
+    frame #9: 0x000000000123b991 node`node::crypto::DeriveBitsJob<node::crypto::SignTraits>::DoThreadPoolWork(this=0x0000000005d54410) at crypto_util.h:412:38
+    frame #10: 0x000000000101171e node`node::ThreadPoolWork::ScheduleWork(__closure=0x0000000000000000, req=0x0000000005d54458)::'lambda'(uv_work_s*)::operator()(uv_work_s*) const at threadpoolwork-inl.h:39:31
+    frame #11: 0x000000000101173e node`node::ThreadPoolWork::ScheduleWork((null)=0x0000000005d54458)::'lambda'(uv_work_s*)::_FUN(uv_work_s*) at threadpoolwork-inl.h:40:7
+    frame #12: 0x000000000200c5b2 node`uv__queue_work(w=0x0000000005d544b0) at threadpool.c:321:3
+    frame #13: 0x000000000200bdd1 node`worker(arg=0x0000000000000000) at threadpool.c:122:5
+    frame #14: 0x00007ffff76ad4e2 libpthread.so.0`start_thread + 226
+    frame #15: 0x00007ffff75dc6c3 libc.so.6`__GI___clone + 67
 
+  thread #9, name = 'node'
+    frame #0: 0x00007ffff76b7610 libpthread.so.0`__lll_lock_wait + 48
+    frame #1: 0x00007ffff76aff53 libpthread.so.0`__GI___pthread_mutex_lock + 227
+    frame #2: 0x0000000002024223 node`uv_mutex_lock(mutex=0x0000000005d59700) at thread.c:331:7
+    frame #3: 0x0000000000f32346 node`node::LibuvMutexTraits::mutex_lock(mutex=0x0000000005d59700) at node_mutex.h:164:18
+    frame #4: 0x0000000000f33484 node`node::MutexBase<node::LibuvMutexTraits>::ScopedLock::ScopedLock(this=0x00007fffefffebb0, mutex=0x0000000005d59700) at node_mutex.h:220:21
+    frame #5: 0x00000000012716e4 node`node::crypto::ManagedEVPPKey::operator=(this=0x00007fffefffecc0, that=0x0000000005d5a290) at crypto_keys.cc:564:38
+    frame #6: 0x000000000127167f node`node::crypto::ManagedEVPPKey::ManagedEVPPKey(this=0x00007fffefffecc0, that=0x0000000005d5a290) at crypto_keys.cc:558:11
+    frame #7: 0x0000000001272b75 node`node::crypto::KeyObjectData::GetAsymmetricKey(this=0x0000000005d5a260) const at crypto_keys.cc:859:10
+    frame #8: 0x0000000001239394 node`node::crypto::SignTraits::DeriveBits(env=0x0000000005c84e00, params=0x0000000005d57e38, out=0x0000000005d57ea0) at crypto_sig.cc:826:49
+    frame #9: 0x000000000123b991 node`node::crypto::DeriveBitsJob<node::crypto::SignTraits>::DoThreadPoolWork(this=0x0000000005d57d50) at crypto_util.h:412:38
+    frame #10: 0x000000000101171e node`node::ThreadPoolWork::ScheduleWork(__closure=0x0000000000000000, req=0x0000000005d57d98)::'lambda'(uv_work_s*)::operator()(uv_work_s*) const at threadpoolwork-inl.h:39:31
+    frame #11: 0x000000000101173e node`node::ThreadPoolWork::ScheduleWork((null)=0x0000000005d57d98)::'lambda'(uv_work_s*)::_FUN(uv_work_s*) at threadpoolwork-inl.h:40:7
+    frame #12: 0x000000000200c5b2 node`uv__queue_work(w=0x0000000005d57df0) at threadpool.c:321:3
+    frame #13: 0x000000000200bdd1 node`worker(arg=0x0000000000000000) at threadpool.c:122:5
+    frame #14: 0x00007ffff76ad4e2 libpthread.so.0`start_thread + 226
+    frame #15: 0x00007ffff75dc6c3 libc.so.6`__GI___clone + 67
+
+  thread #10, name = 'node'
+    frame #0: 0x00007ffff76b7610 libpthread.so.0`__lll_lock_wait + 48
+    frame #1: 0x00007ffff76aff53 libpthread.so.0`__GI___pthread_mutex_lock + 227
+    frame #2: 0x0000000002024223 node`uv_mutex_lock(mutex=0x0000000005d4f100) at thread.c:331:7
+    frame #3: 0x0000000000f32346 node`node::LibuvMutexTraits::mutex_lock(mutex=0x0000000005d4f100) at node_mutex.h:164:18
+    frame #4: 0x0000000000f33484 node`node::MutexBase<node::LibuvMutexTraits>::ScopedLock::ScopedLock(this=0x00007fffef7fdbb0, mutex=0x0000000005d4f100) at node_mutex.h:220:21
+    frame #5: 0x00000000012716e4 node`node::crypto::ManagedEVPPKey::operator=(this=0x00007fffef7fdcc0, that=0x0000000005c5d2a0) at crypto_keys.cc:564:38
+    frame #6: 0x000000000127167f node`node::crypto::ManagedEVPPKey::ManagedEVPPKey(this=0x00007fffef7fdcc0, that=0x0000000005c5d2a0) at crypto_keys.cc:558:11
+    frame #7: 0x0000000001272b75 node`node::crypto::KeyObjectData::GetAsymmetricKey(this=0x0000000005c5d270) const at crypto_keys.cc:859:10
+    frame #8: 0x0000000001239394 node`node::crypto::SignTraits::DeriveBits(env=0x0000000005c84e00, params=0x0000000005cdb918, out=0x0000000005cdb980) at crypto_sig.cc:826:49
+    frame #9: 0x000000000123b991 node`node::crypto::DeriveBitsJob<node::crypto::SignTraits>::DoThreadPoolWork(this=0x0000000005cdb830) at crypto_util.h:412:38
+    frame #10: 0x000000000101171e node`node::ThreadPoolWork::ScheduleWork(__closure=0x0000000000000000, req=0x0000000005cdb878)::'lambda'(uv_work_s*)::operator()(uv_work_s*) const at threadpoolwork-inl.h:39:31
+    frame #11: 0x000000000101173e node`node::ThreadPoolWork::ScheduleWork((null)=0x0000000005cdb878)::'lambda'(uv_work_s*)::_FUN(uv_work_s*) at threadpoolwork-inl.h:40:7
+    frame #12: 0x000000000200c5b2 node`uv__queue_work(w=0x0000000005cdb8d0) at threadpool.c:321:3
+    frame #13: 0x000000000200bdd1 node`worker(arg=0x0000000000000000) at threadpool.c:122:5
+    frame #14: 0x00007ffff76ad4e2 libpthread.so.0`start_thread + 226
+    frame #15: 0x00007ffff75dc6c3 libc.so.6`__GI___clone + 67
+
+  thread #11, name = 'node'
+    frame #0: 0x00007ffff76b7610 libpthread.so.0`__lll_lock_wait + 48
+    frame #1: 0x00007ffff76aff53 libpthread.so.0`__GI___pthread_mutex_lock + 227
+    frame #2: 0x0000000002024223 node`uv_mutex_lock(mutex=0x0000000005d5f550) at thread.c:331:7
+    frame #3: 0x0000000000f32346 node`node::LibuvMutexTraits::mutex_lock(mutex=0x0000000005d5f550) at node_mutex.h:164:18
+    frame #4: 0x0000000000f33484 node`node::MutexBase<node::LibuvMutexTraits>::ScopedLock::ScopedLock(this=0x00007fffeeffcbb0, mutex=0x0000000005d5f550) at node_mutex.h:220:21
+    frame #5: 0x00000000012716e4 node`node::crypto::ManagedEVPPKey::operator=(this=0x00007fffeeffccc0, that=0x0000000005d60010) at crypto_keys.cc:564:38
+    frame #6: 0x000000000127167f node`node::crypto::ManagedEVPPKey::ManagedEVPPKey(this=0x00007fffeeffccc0, that=0x0000000005d60010) at crypto_keys.cc:558:11
+    frame #7: 0x0000000001272b75 node`node::crypto::KeyObjectData::GetAsymmetricKey(this=0x0000000005d5ffe0) const at crypto_keys.cc:859:10
+    frame #8: 0x0000000001239394 node`node::crypto::SignTraits::DeriveBits(env=0x0000000005c84e00, params=0x0000000005d5cad8, out=0x0000000005d5cb40) at crypto_sig.cc:826:49
+    frame #9: 0x000000000123b991 node`node::crypto::DeriveBitsJob<node::crypto::SignTraits>::DoThreadPoolWork(this=0x0000000005d5c9f0) at crypto_util.h:412:38
+    frame #10: 0x000000000101171e node`node::ThreadPoolWork::ScheduleWork(__closure=0x0000000000000000, req=0x0000000005d5ca38)::'lambda'(uv_work_s*)::operator()(uv_work_s*) const at threadpoolwork-inl.h:39:31
+    frame #11: 0x000000000101173e node`node::ThreadPoolWork::ScheduleWork((null)=0x0000000005d5ca38)::'lambda'(uv_work_s*)::_FUN(uv_work_s*) at threadpoolwork-inl.h:40:7
+    frame #12: 0x000000000200c5b2 node`uv__queue_work(w=0x0000000005d5ca90) at threadpool.c:321:3
+    frame #13: 0x000000000200bdd1 node`worker(arg=0x0000000000000000) at threadpool.c:122:5
+    frame #14: 0x00007ffff76ad4e2 libpthread.so.0`start_thread + 226
+    frame #15: 0x00007ffff75dc6c3 libc.so.6`__GI___clone + 67
+```
+This was because we first call GetAsymmetricKey at the start of the function
+SignTraits::DeriveBits. But then we call GetAsymmetricKey (while owning the lock)
+instead of using the local variable m_pkey.
+
+I've added some logging in ECDHBitsTraits::DeriveBits so print the private and
+public key that is being locked:
+```console
+(lldb) r
+Process 62380 launched: '/home/danielbevenius/work/nodejs/openssl/out/Release/node' (x86_64)
+[effff700] DeriveBits, locked m_privkey: 0x7fffe001b820, and m_pubkey: 0x7fffe8026530 
+[eeffd700] DeriveBits, locked m_privkey: 0x7fffe8026530, and m_pubkey: 0x7fffe001b820 
+Process 62380 exited with status = 0 (0x00000000) 
+(lldb) 
+```
+But with this log statement I'm not able to reproduce the issue, I was able to
+run it over 40 times with out it locking. But notice that the keys are reversed
+and that there are two different threads.
+
+So the effff700 locks 0x7fffe001b820 and then eeffd700 runs and locks
+0x7fffe8026530 which is fine. Then effff700 tries to lock 0x7fffe8026530 but
+that lock is held by eeffd700 so it was to wait.
+
+eeffd700 then tries to lock 0x7fffe001b820 but that lock is held by effff700, so they are both waiting for
+each other (dead lock).
+
+```
+_ 464   ManagedEVPPKey m_privkey = params.private_->GetAsymmetricKey();               
+  465   ManagedEVPPKey m_pubkey = params.public_->GetAsymmetricKey();                 
++ 466   Mutex::ScopedLock priv_lock(*m_privkey.mutex());                              
+  467   Mutex::ScopedLock pub_lock(*m_pubkey.mutex()); 
+```
+So we need change this code to first aquire the private key and do the work
+needed, then release it before aquiring the public key. That should resolve
+the dead lock.
+
+Just saving this here as it is useful and I seem to forget how to print the
+current thread after awhile.
+```c++
+  pthread_t pt = pthread_self();
+  printf("[%02x] ManagedEVPPKey::operator=, pkey_: %p\n",(unsigned) pt, that.get());
+```
