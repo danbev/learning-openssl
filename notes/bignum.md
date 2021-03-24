@@ -4,11 +4,11 @@ registers. Instead the digits need to be stored in memory. These digits are
 stored in an array, divided into chunks.
 
 Is needed for cryptographic functions that require arithmetic on large numbers
-without loss of preciesion. A BN can hold an arbitary sized integer and
+without loss of precision. A BN can hold an arbitary sized integer and
 implements all operators.
 
 Usage:
-```console
+```c
     BIGNUM* three = BN_new();
     BN_set_word(three, 3);
     BN_free(three);
@@ -39,8 +39,8 @@ struct bignum_st {
 #  define BN_BYTES        4 
 ```
 
-So `d`, the digits will be a pointer to unsigned long or int depeding on the
-processor in use, and it will be divided into chunks the size of BN_BITS2:
+So `d`, the digits will be a pointer to an unsigned long or int depending on the
+processor used, and it will be divided into chunks the size of BN_BITS2:
 ```c
 # define BN_BITS2       (BN_BYTES * 8)                                             
 # define BN_BITS        (BN_BITS2 * 2)
@@ -81,3 +81,18 @@ need one chunk/slot. The slot(s) are then populated in BN_set_word
   flags = 1
 }
 ```
+Now, lets take a look at a more complicated bitnum.
+```console
+(lldb) expr *pub_key
+(BIGNUM) $15 = {
+  d = 0x0000000005b15580
+  top = 24
+  dmax = 24
+  neg = 0
+  flags = 1
+}
+```
+So we can see that the array will have 24 chunks of data in it. And remember
+that d is just a pointer to the first entry.
+
+I was wondering how a comparison is done with BIGNUMs 
