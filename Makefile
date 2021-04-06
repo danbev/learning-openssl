@@ -137,7 +137,7 @@ keymgmt: keymgmt.c
 	$(CC) $(CFLAGS)
 
 evp-pkey: evp-pkey.c
-	$(CC) $(CFLAGS) -I../openssl/include
+	$(CC) -DOPENSSL_API_COMPAT=0x10000000L -DOPENSSL_NO_DEPRECATED $(CFLAGS) -I../openssl/include
 
 x509: x509.c
 	$(CC) $(CFLAGS)
