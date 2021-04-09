@@ -144,8 +144,8 @@ static const unsigned char group_modp18[] = {
   0x80, 0xdd, 0x98, 0xed, 0xd3, 0xdf, 0xff, 0xff, 0xff, 0xff,
   0xff, 0xff, 0xff, 0xff };
 
-EVP_PKEY* generate_dh_key(const unsigned char* prime, int prime_size,
-    int generator, DH* dh) {
+EVP_PKEY* generate_dh_key(const unsigned char* prime,
+    int prime_size, int generator, DH* dh) {
   printf("prime size: %d\n", prime_size);
   BIGNUM* p = BN_bin2bn(prime, prime_size, NULL);
 
@@ -187,19 +187,12 @@ int main(int arc, char *argv[]) {
 
   DH* alice_dh = DH_new();
   DH* bob_dh = DH_new();
-  printf("sizeof group_modp5: %d\n", sizeof(group_modp5));
-  printf("sizeof group_modp18: %d\n", sizeof(group_modp18));
   EVP_PKEY* alice_key = generate_dh_key(group_modp5, sizeof(group_modp5), 2, alice_dh);
-
 
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(alice_key, NULL);
   if (EVP_PKEY_derive_init(ctx) <= 0) {
     error_and_exit("EVP_PKEY_derive_init failed");
   }
-
-  //DH_generate_key(bob_dh);
-  //const BIGNUM* pub_key;
-  //DH_get0_key(bob_dh, bob_key, NULL);
 
   EVP_PKEY* bob_key = generate_dh_key(group_modp18, sizeof(group_modp18), 2, bob_dh);
   if (EVP_PKEY_derive_set_peer(ctx, bob_key) <= 0) {
@@ -211,7 +204,7 @@ int main(int arc, char *argv[]) {
   if (EVP_PKEY_derive(ctx, NULL, &outlen) <= 0) {
     error_and_exit("EVP_PKEY_derive failed");
   }
-  assert(outlen == 192);
+  //assert(outlen == 192);
   printf("outlen: %d\n", outlen);
 
   unsigned char *out;
@@ -220,10 +213,48 @@ int main(int arc, char *argv[]) {
   if (EVP_PKEY_derive(ctx, out, &outlen) <= 0) {
     error_and_exit("EVP_PKEY_derive failed");
   }
-  //printf("%s", out);
 
+  printf("first:\n");
+  for (int i = 0; i < outlen; i++) {
+    printf("%x ", out+i);
+  }
+
+  EVP_PKEY_CTX* bctx = EVP_PKEY_CTX_new(bob_key, NULL);
+  if (EVP_PKEY_derive_init(bctx) <= 0) {
+    error_and_exit("EVP_PKEY_derive_init failed");
+  }
+
+  if (EVP_PKEY_derive_set_peer(bctx, alice_key) <= 0) {
+    error_and_exit("EVP_PKEY_derive_set_peer failed");
+  }
+
+  // Determine the size of the output
+  if (EVP_PKEY_derive(bctx, NULL, &outlen) <= 0) {
+    error_and_exit("EVP_PKEY_derive failed");
+  }
+  //assert(outlen == 192);
+
+  unsigned char *out2;
+  out2 = OPENSSL_malloc(outlen);
+
+  if (EVP_PKEY_derive(bctx, out2, &outlen) <= 0) {
+    error_and_exit("EVP_PKEY_derive failed");
+  }
+
+  printf("\nSecond:\n");
+  for (int i = 0; i < outlen; i++) {
+    printf("%x ", out2+i);
+  }
+  printf("\n");
+
+  DH_free(alice_dh);
+  DH_free(bob_dh);
   EVP_PKEY_free(alice_key);
   EVP_PKEY_free(bob_key);
+  EVP_PKEY_CTX_free(ctx);
+  EVP_PKEY_CTX_free(bctx);
+  OPENSSL_free(out);
+  OPENSSL_free(out2);
   OSSL_PROVIDER_unload(provider);
   exit(EXIT_SUCCESS);
 }
