@@ -44,6 +44,39 @@ OpenSSL 3.0.0-alpha3-dev  (Library: OpenSSL 3.0.0-alpha3-dev )
 
 You can see how this is used the [Makefile](./Makefile).
 
+Building 1.1.1:
+```console
+$ git clean -f -d -X
+$ make clean
+$ ./config -Werror --strict-warnings --debug --prefix=/home/danielbevenius/work/security/openssl_build_1.1.1k
+$ make -j8
+```
+
+Note that is you get the following error:
+```console
+test/buildtest_cmp.c:10:11: fatal error: openssl/cmp.h: No such file or directory
+   10 | # include <openssl/cmp.h>
+      |           ^~~~~~~~~~~~~~~
+compilation terminated.
+make[1]: *** [Makefile:7379: test/buildtest_cmp.o] Error 1
+make[1]: *** Waiting for unfinished jobs....
+test/buildtest_crmf.c:10:11: fatal error: openssl/crmf.h: No such file or directory
+   10 | # include <openssl/crmf.h>
+      |           ^~~~~~~~~~~~~~~~
+compilation terminated.
+make[1]: *** [Makefile:7469: test/buildtest_crmf.o] Error 1
+test/buildtest_configuration.c:10:11: fatal error: openssl/configuration.h: No such file or directory
+   10 | # include <openssl/configuration.h>
+      |           ^~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+make[1]: *** [Makefile:7454: test/buildtest_configuration.o] Error 1
+make[1]: Leaving directory '/home/danielbevenius/work/security/openssl'
+make: *** [Makefile:174: all] Error 2
+```
+it is most likely because there are files left from a different branch which
+are ignored by git (.gitignore) and we have to specify that git clean removes
+ignore files as well using `-X`.
+
 ### Building
 
     $ make
