@@ -18,6 +18,7 @@ $ ./config -Werror --strict-warnings --debug --prefix=/home/danielbevenius/work/
 $ make clean
 $ make -j8 
 $ make install_sw
+$ export LD_LIBRARY_PATH=/home/danielbevenius/work/security/openssl_quic-3.0/lib/
 ```
 
 ### Configure and build Node:
