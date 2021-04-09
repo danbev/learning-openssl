@@ -41,3 +41,4 @@ cprovider.o
 libcprovider.so
 bignum
 dh
+dh_1_1_1

@@ -1,4 +1,4 @@
-OPENSSL_DIR=/home/danielbevenius/work/security/openssl_build_master
+OPENSSL_DIR?=/home/danielbevenius/work/security/openssl_build_master
 OPENSSL_INCLUDE_DIR=$(OPENSSL_DIR)/include
 OPENSSL_LIB_DIR=$(OPENSSL_DIR)/lib
 
@@ -159,6 +159,11 @@ arr-over: src/array-overflow.c
 	$(CC) -g -o $@ $<
 
 dh: dh.c
+	$(CC) $(CFLAGS)
+
+dh_1_1_1: OPENSSL_DIR=/home/danielbevenius/work/security/openssl_build_1_1_1i
+dh_1_1_1: dh_1_1_1.c
+	echo ${OPENSSL_LIB_DIR}
 	$(CC) $(CFLAGS)
 
 .PHONY: clean 
