@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 
 void error_and_exit(const char* msg) {
   printf("%s\n", msg);
@@ -175,7 +174,6 @@ EVP_PKEY* generate_dh_key(const unsigned char* prime,
   if (EVP_PKEY_keygen(ctx, &pkey) <= 0) {
     error_and_exit("EVP_PKEY_keygen failed");
   }
-  //DH_free(dh);
   return pkey;
 }
 
@@ -201,7 +199,6 @@ int main(int arc, char *argv[]) {
   if (EVP_PKEY_derive(ctx, NULL, &outlen) <= 0) {
     error_and_exit("EVP_PKEY_derive failed");
   }
-  //assert(outlen == 192);
   printf("outlen: %d\n", outlen);
 
   unsigned char *out;
@@ -230,7 +227,6 @@ int main(int arc, char *argv[]) {
   if (EVP_PKEY_derive(bctx, NULL, &outlen) <= 0) {
     error_and_exit("EVP_PKEY_derive failed");
   }
-  //assert(outlen == 192);
 
   unsigned char *out2;
   out2 = OPENSSL_malloc(outlen);
