@@ -980,21 +980,27 @@ So, we can see that this is made up of two macros (will the macro in pem_x509 wi
 
 
 ### FIPS
-Download openssl-fips-2.0.16 and unzip:
+Download [openssl-fips-2.0.16](https://www.openssl.org/source/openssl-fips-2.0.16.tar.gz) and unzip:
+(Note that this has to be used with a version of OpenSSL in the 1.0.2 series)
 ```console
-   $ ./Configure darwin64-x86_64-cc --prefix=/Users/danielbevenius/work/security/build_1_0_2k
-   $ make
-   $ make install
+$ mkdir fips
+$ wget https://www.openssl.org/source/openssl-fips-2.0.16.tar.gz
+$ gunzip -dc openssl-fips-2.0.16.tar.gz | tar xvf -
+$ ./config --prefix=/home/danielbevenius/work/security/openssl_build_1_0_2u
+$ make
+$ make install
 ```
+So that was the build process of FIPS, next we need to build OpenSSL with
+FIPS support
 
-This example will install to the `build_1_0_2k` directory so changes this as required.
+This example will install to the `build_1_0_2u` directory so changes this as required.
 
 Next, you'll have to build the OpenSSL library with fips support and specify the installation directory which was used above:
 ```console
-   $ ./Configure fips shared no-ssl2 --debug --prefix=/Users/danielbevenius/work/security/build_1_0_2k darwin64-x86_64-cc --with-fipsdir=/Users/danielbevenius/work/security/build_1_0_2k
-   $ make depend
-   $ make
-   $ make install_sw
+$ ./Configure fips shared no-ssl2 --debug --prefix=/home/danielbevenius/work/security/openssl_build_1_0_2u --with-fipsdir=/home/danielbevenius/work/security/openssl_build_1_0_2u linux-x86_64
+$ make depend
+$ make
+$ make install_sw
 ```
 
 ### Certificates
