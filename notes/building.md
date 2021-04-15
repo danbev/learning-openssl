@@ -516,4 +516,21 @@ $ ./buildinf
 compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -O3 -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBU
 ```
 
-
+### Node OpenSSL 3.0 upgrade issues
+```console
+../deps/openssl/openssl/crypto/info.c: In function ‘OPENSSL_info’:              
+../deps/openssl/openssl/crypto/info.c:175:16: error: ‘MODULESDIR’ undeclared (first use in this function)
+  175 |         return MODULESDIR;                                               
+      |                ^~~~~~~~~~ 
+```
+MODULESDIR is a macro that is defined in the Makefile and is look like this:
+```perl
+MODULESDIR=$(libdir)/ossl-modules
+```
+In our Node build we don't set this. I'm going to try adding it to 
+deps/openssl/openssl.gyp:
+```python
+     'defines': [                                                              
+          'OPENSSL_API_COMPAT=0x10100000L',                                       
+          'MODULESDIR="<(PRODUCT_DIR)/ossl-modules"',
+```
