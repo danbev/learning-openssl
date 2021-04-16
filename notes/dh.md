@@ -5,17 +5,29 @@ Alice                 Public                        Bob
 a (number < n)        g (generator, small prime)    b (number < n)
                       n (big prime number)
 
-g^a mod n ------------> a₁             b₁ <--------- g^b mod n
+A = g^a mod n                                        B =  g^b mod n
+                             A 
+                     ----------------->
+                             B
+                     <-----------------
 
-(b₁)^a mod n                                         (a₁)^b mod n
-is same as:                                          is the same as:
-(g^b)^a mod n                                        (g^a)^b mod n
-(g)^ba mod n                                         (g)^ba mod n
+K_ab = (B)^a mod n                                   K_ab = (A)^b mod n
+
+
+This is same as:                                     This is the same as:
+(g^b)^a mod n  = g^ab mod p                          (g^a)^b mod n = g^ab mod p
 ```
-Notice that they are both calculating the same value which is the secret that
-will be used for encryption. They have been able to communicate this in the
+Notice that they are both calculating the same value which is the secret key
+that will be used for encryption. They have been able to communicate this in the
 open and even if Eve gets a₁ or b₁ she does not have a or b, and to brute force
 this would take a lot of time.
+
+```
+                           y            
+y = AES(x)       --------------------->      AES⁻¹(y) = x
+         K_ab                                       K_ab
+
+```
 
 Example:
 ```
@@ -77,11 +89,12 @@ not enough, only alice knows how many times around the circle (a times) to get
 to the point.
 
 So after the exchange here is a secret key that both parties can use to encrypt
-and decrypt messages.
-
+and decrypt messages and they would use a symmetric cipher like AES for this.
 
 ### MODP groups
 These are predefined prime numbers based on digits of PI, and generator number.
+So these are the values of `n` and `g`.
+
 Remember that both parties must use the same prime (which they use mod p) and
 the generator number, and these are simply precomputed values that both can use.
 They can specify that these should be used.
@@ -162,6 +175,5 @@ For a prime to be safe then for prime `p`, (p-1/2) must also be prime.
 ```
 p = 11
 (11-1)/2 = 5
-So 11 would be a safe prime.
-
 ```
+So 11 would be a safe prime.
