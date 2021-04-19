@@ -123,7 +123,7 @@ Makevars:
 
 ### OpenSSL internal build notes
 
-There are a number of include files in `include/openssl` that are generated
+There are a number of include files in `include/openssl` that are generated.
 These are all the files have a `.in` suffix:
 ```console
 $ ls include/openssl/*.in
@@ -178,24 +178,7 @@ And notice that these headers are .gitignored as well:
 /include/openssl/x509_vfy.h
 ```
 
-include/openssl/asn1.h include/openssl/asn1t.h include/openssl/bio.h include/openssl/cmp.h include/openssl/cms.h include/openssl/conf.h include/openssl/configuration.h include/openssl/crmf.h include/openssl/crypto.h include/openssl/ct.h include/openssl/err.h include/openssl/ess.h include/openssl/fipskey.h include/openssl/lhash.h include/openssl/ocsp.h include/openssl/opensslv.h include/openssl/pkcs12.h include/openssl/pkcs7.h include/openssl/safestack.h include/openssl/srp.h include/openssl/ssl.h include/openssl/ui.h include/openssl/x509.h
-
-
-
-
-apps/progs.h contains a number of function declarations which are extern, for
-example:
-```c
-extern int mac_main(int argc, char *argv[]);                                    
-```
-apps/mac.c "progs.h"
-
-```console
-$ perl -I. -Mconfigdata "apps/progs.pl" "apps/openssl" > apps/progs.h
-Unrecognised option, must be -C or -H
-```
-
-### OpenSSL 3.0 build notes
+### OpenSSL 3.0 Node.js build notes
 In Node OpenSSL 3.0 is a dependency which exists in the deps directory. This
 can be statically linked to node which is the default:
 ```console
@@ -230,7 +213,7 @@ cd ../openssl; CONFIGURE_CHECKER_WARN=1 CC=gcc perl ./Configure no-comp no-share
 So that will generate a `configdata.pm` and a Makefile in the OpenSSL source
 directory. The `.pm` indicates that this is a perl module.
 
-Next the makefile recipe will run a perl script:
+Next the make recipe will run a perl script:
 ```conosle
 perl -w -I../openssl ./generate_gypi.pl asm linux-x86_64
 ```
@@ -241,7 +224,7 @@ without asm enabled using:
 --openssl-no-asm      Do not build optimized assembly for OpenSSL
 ```
 
-The the second arg is the architecture. This will result in the following
+The the second argument is the architecture. This will result in the following
 values:
 ```perl
 my $src_dir = ../openssl
@@ -325,11 +308,44 @@ This will be transformed into include/crypto/bn_conf.h:
 #undef SIXTY_FOUR_BIT
 #undef THIRTY_TWO_BIT
 ```
+TODO: Looking at the providers directory there also seems to be a number of
+headers that get generated there as well. For example providers/common/der/der_ecx.h.in:
+```perl
+"providers/common/include/prov/der_ecx.h" => [                          
+   "providers/common/der/der_ecx.h.in"                                 
+ ],                    
+```
+And this can be found in the generated Makefile:
+```
+providers/common/include/prov/der_ecx.h: providers/common/der/der_ecx.h.in providers/common/der/oids_to_c.pm configdata.pm providers/common/der/oids_to_c.pm
+        $(PERL) "-I." "-Iproviders/common/der" -Mconfigdata -Moids_to_c "util/dofile.pl" "-oMakefile" providers/common/der/der_ecx.h.in > $@
+```
+Listing all the `*.h.in` files in the providers directory gives:
+```console
+$ find providers -name '*.h.in'
+providers/common/der/der_dsa.h.in
+providers/common/der/der_wrap.h.in
+providers/common/der/der_rsa.h.in
+providers/common/der/der_ecx.h.in
+providers/common/der/der_sm2.h.in
+providers/common/der/der_ec.h.in
+providers/common/der/der_digests.h.in
+```
+In Node's build we would need to copy these generated headers to the arch
+directory in question. So a make target that generates those should be called.
+We currently call `build_generated` but this only generates the headers
+in the include directory.
+As a temp solution and seeing that there are not that many files, I'll include
+them manually for now and see if we can add them later to the build_generated
+target:
+```
+providers/common/include/prov/der_dsa.h providers/common/include/prov/der_wrap.h providers/common/include/prov/der_rsa.h providers/common/include/prov/der_ecx.h providers/common/include/prov/der_sm2.h providers/common/include/prov/der_ec.h providers/common/include/prov/der_digests.h
+```
 
 So, all of the listed files in `GENERATED_MANDATORY` will be processed, two
-will be placed in include/crypto and the rest in include/openssl. These are
+will be placed in `include/crypto` and the rest in `include/openssl`. These are
 dependent on the arch that OpenSSL was configured for. So in Node we have to
-copy these files into the config/arch/linux-x86-64 directory. First a few
+copy these files into the `config/arch/linux-x86-64` directory. First a few
 directories are created in config/archs/linux-x86_64/asm:
 ```
 config/archs/linux-x86_64/asm/crypto/include/internal
@@ -337,7 +353,7 @@ config/archs/linux-x86_64/asm/include/openssl
 config/archs/linux-x86_64/asm/include/crypto
 ```
 Next we copy files that were generate by the OpenSSL build into these arch
-specific directories.
+specific directories. TODO: add providers include directory creation.
 ```
 config/archs/linux-x86_64/asm/configdata.pm
 // all the GENERATED_MANDATORY files
@@ -533,4 +549,124 @@ deps/openssl/openssl.gyp:
      'defines': [                                                              
           'OPENSSL_API_COMPAT=0x10100000L',                                       
           'MODULESDIR="<(PRODUCT_DIR)/ossl-modules"',
+```
+
+
+```console
+make[1]: *** No rule to make target 'openssl/crypto/md5/libimplementations-lib-md5-x86_64.o', needed by '/home/danielbevenius/work/nodejs/openssl/out/Release/obj.target/deps/openssl/libopenssl.a'.  Stop.
+make[1]: *** Waiting for unfinished jobs....
+```
+This seems to be caused by a missing copying of source in 
+deps/openssl/config/generate_gypi.pl. There are a few of these blocks where
+we copy over generated source file information from openssl/configdata.md but
+there are new entries that we should be copying.
+```perl
++ foreach my $obj (@{$unified_info{sources}->{'providers/libimplementations.a'}}) {
++   my $src = ${$unified_info{sources}->{$obj}}[0];                               
++   # .S files should be preprocessed into .s                                     
++   if ($unified_info{generate}->{$src}) {                                        
++     # .S or .s files should be preprocessed into .asm for WIN                   
++     $src =~ s\.[sS]$\.asm\ if ($is_win);                                        
++     push(@generated_srcs, $src);                                                
++   } else {                                                                      
++     push(@libcrypto_srcs, $src);                                                
++   }                                                                             
++ }
+```
+I ended up adding a few of the above for example providers/libfips.a, 
+providers/libnonfips.a, providers/liblegacy.a. Inspecting the generated 
+arch/linux-x86-64/openssl.gyp I can see the provider files listed in the
+sources. 
+
+Compiling now produces the following error:
+```
+../deps/openssl/openssl/providers/common/der/der_dsa_sig.c:18:10: fatal error: prov/der_dsa.h: No such file or directory
+   18 | #include "prov/der_dsa.h"
+      |          ^~~~~~~~~~~~~~~~
+compilation terminated.
+```
+Now looking in deps/openssl/openssl/providers/common/include/prov/ I can only
+see the following files:
+```console
+$ ls deps/openssl/openssl/providers/common/include/prov/
+bio.h  proverr.h  providercommon.h  provider_ctx.h  provider_util.h  securitycheck.h
+```
+And I've added this include directory to deps/openssl/openssl_common.gypi:
+```python
+  {                                                                               
+    'include_dirs': [                                                             
+      'openssl/',                                                                 
+      'openssl/include/',                                                         
+      'openssl/crypto/',                                                          
+      'openssl/crypto/include/',                                                  
+      'openssl/crypto/modes/',                                                    
+      'openssl/crypto/ec/curve448',                                               
+      'openssl/crypto/ec/curve448/arch_32',                                       
++     'openssl/providers/common/include',                                         
++     'openssl/providers/implementations/include',                                
+      'config/', 
+```
+If we look in OpenSSL's generated Makefile we can see that `der_dsa.h` is
+generated.
+```
+providers/common/include/prov/der_dsa.h: providers/common/der/der_dsa.h.in providers/common/der/oids_to_c.pm configdata.pm providers/common/der/oids_to_c.pm
+        $(PERL) "-I." "-Iproviders/common/der" -Mconfigdata -Moids_to_c "util/dofile.pl" "-oMakefile" providers/common/der/der_dsa.h.in > $@
+```
+The following generated headers have to be copied:
+```
+der_dsa.h  der_ecx.h  der_sm2.h der_digests.h  der_ec.h   der_rsa.h  der_wrap.h 
+```
+
+After adding the generated providers headers above I get the following compilation
+error:
+```console
+../deps/openssl/openssl/crypto/rsa/rsa_acvp_test_params.c: In function ‘ossl_rsa_acvp_test_gen_params_new’:
+../deps/openssl/openssl/crypto/rsa/rsa_acvp_test_params.c:56:9: warning: implicit declaration of function ‘ossl_rsa_acvp_test_gen_params_free’; did you mean ‘ossl_rsa_acvp_test_gen_params_new’? [-Wimplicit-function-declaration]
+   56 |         ossl_rsa_acvp_test_gen_params_free(alloc);
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |         ossl_rsa_acvp_test_gen_params_new
+```
+```c
+int ossl_rsa_acvp_test_gen_params_new(OSSL_PARAM **dst, const OSSL_PARAM src[]) 
+{
+  ...
+  if (ret == 0) {                                                                
+        ossl_rsa_acvp_test_gen_params_free(alloc);                                 
+        alloc = NULL;                                                              
+  }                 
+```
+This function is declared in include/crypto/rsa.h but has a macro guard around
+it:
+```c
+# if defined(FIPS_MODULE) && !defined(OPENSSL_NO_ACVP_TESTS)                    
+int ossl_rsa_acvp_test_gen_params_new(OSSL_PARAM **dst, const OSSL_PARAM src[]);
+void ossl_rsa_acvp_test_gen_params_free(OSSL_PARAM *dst);
+```
+I think we should be setting the FIPS_MODULE as this will be the default
+(I think) for OpenSSL 3.0. There is a configuration flag in node to enable this
+which is currenlt turned off as 1.1.1 does not support FIPS.
+
+Hmm, looking at this a little closer I see that we list the OpenSSL sources
+in deps/openssl/openssl.gypi. This list includes ssl/ssl_cert.c. What should
+the list of sources include. Looking at the Makefile in openssl (generated) it
+does not have a target for ssl/ssl_cert.o, but instead has seperate targets
+for 
+```
+ssl/libssl-lib-ssl_cert.o: ssl/ssl_cert.c                                       
+        $(CC)  -I. -Iinclude  -DAES_ASM $(LIB_CFLAGS) $(LIB_CPPFLAGS) -MMD -MF ssl/libssl-lib-ssl_cert.d.tmp -MT $@ -c -o $@ ssl/ssl_cert.c
+
+ssl/libssl-shlib-ssl_cert.o: ssl/ssl_cert.c                                     
+        $(CC)  -I. -Iinclude  -DAES_ASM $(LIB_CFLAGS) $(LIB_CPPFLAGS) -MMD -MF ssl/libssl-shlib-ssl_cert.d.tmp -MT $@ -c -o $@ ssl/ssl_cert.c
+```
+
+
+Now, the make file (out/deps/openssl/openssl.target.mk)  generated by gyp will
+look something like:
+```
+$(obj).target/$(TARGET)/deps/openssl/openssl/ssl/ssl_cert.o \  
+```
+
+```console
+$ cd openssl
+$ find providers -name '*.c' | sed -e "s/\(.*\)/'\1',/"
 ```
