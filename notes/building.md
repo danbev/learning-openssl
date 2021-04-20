@@ -122,6 +122,17 @@ Makevars:
 ```
 
 ### OpenSSL internal build notes
+When `Configure` is run (including via `config`) this perl script will gather
+information and use that information to generate a file named configdata.pm
+(perl module) which is based on the template `configdata.pm.in`.
+The information about sources, headers, defines, etc are stored in files named
+build_info in subdirectories. The Configure script will go through them all
+and read infomation from them (a little simplified here as I've only skimmed
+this).
+
+Configure will also generate a Makefile is an similar way using a template,
+on my system this would be `Configurations/unix-Makefile.tmpl`. 
+
 
 There are a number of include files in `include/openssl` that are generated.
 These are all the files have a `.in` suffix:
