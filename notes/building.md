@@ -808,6 +808,150 @@ BIO *ossl_bio_new_from_core_bio(PROV_CTX *provctx, OSSL_CORE_BIO *corebio);
 openssl/crypto/cpuid.c
 './config/archs/linux-x86_64/asm/crypto/x86_64cpuid.s'
 
+##### openssl-binding native addon
+This test fails to compile after upgrading with the following error:
+(actually there is another error related to not being able to find the
+header openssl/configuration.h which I'm looking into as well)
+```console
+$ out/Release/node deps/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --directory=test/addons/openssl-binding --nodedir=../../../
+gyp info it worked if it ends with ok
+gyp info using node-gyp@7.1.2
+gyp info using node@16.0.0-pre | linux | x64
+gyp info chdir test/addons/openssl-binding
+gyp info find Python using Python version 3.7.9 found at "/usr/bin/python3"
+gyp info spawn /usr/bin/python3
+gyp info spawn args [
+gyp info spawn args   '/home/danielbevenius/work/nodejs/openssl/deps/npm/node_modules/node-gyp/gyp/gyp_main.py',
+gyp info spawn args   'binding.gyp',
+gyp info spawn args   '-f',
+gyp info spawn args   'make',
+gyp info spawn args   '-I',
+gyp info spawn args   '/home/danielbevenius/work/nodejs/openssl/test/addons/openssl-binding/build/config.gypi',
+gyp info spawn args   '-I',
+gyp info spawn args   '/home/danielbevenius/work/nodejs/openssl/deps/npm/node_modules/node-gyp/addon.gypi',
+gyp info spawn args   '-I',
+gyp info spawn args   '/home/danielbevenius/work/nodejs/openssl/common.gypi',
+gyp info spawn args   '-Dlibrary=shared_library',
+gyp info spawn args   '-Dvisibility=default',
+gyp info spawn args   '-Dnode_root_dir=../../../',
+gyp info spawn args   '-Dnode_gyp_dir=/home/danielbevenius/work/nodejs/openssl/deps/npm/node_modules/node-gyp',
+gyp info spawn args   '-Dnode_lib_file=../../../$(Configuration)/node.lib',
+gyp info spawn args   '-Dmodule_root_dir=/home/danielbevenius/work/nodejs/openssl/test/addons/openssl-binding',
+gyp info spawn args   '-Dnode_engine=v8',
+gyp info spawn args   '--depth=.',
+gyp info spawn args   '--no-parallel',
+gyp info spawn args   '--generator-output',
+gyp info spawn args   'build',
+gyp info spawn args   '-Goutput_dir=.'
+gyp info spawn args ]
+gyp info spawn make
+gyp info spawn args [ 'BUILDTYPE=Release', '-C', 'build' ]
+make: Entering directory '/home/danielbevenius/work/nodejs/openssl/test/addons/openssl-binding/build'
+  CXX(target) Release/obj.target/binding/binding.o
+In file included from ../../../../deps/openssl/openssl/include/openssl/rand.h:14,
+                 from ../binding.cc:1:
+../../../../deps/openssl/openssl/include/openssl/macros.h:147:4: error: #error "OPENSSL_API_COMPAT expresses an impossible API compatibility level"
+  147 | #  error "OPENSSL_API_COMPAT expresses an impossible API compatibility level"
+      |    ^~~~~
+In file included from ../../../../deps/openssl/openssl/include/openssl/evp.h:30,
+                 from ../../../../deps/openssl/openssl/include/openssl/rand.h:23,
+                 from ../binding.cc:1:
+/usr/include/openssl/bio.h:687:1: error: expected constructor, destructor, or type conversion before ‘DEPRECATEDIN_1_1_0’
+  687 | DEPRECATEDIN_1_1_0(int BIO_get_port(const char *str, unsigned short *port_ptr))
+      | ^~~~~~~~~~~~~~~~~~
+In file included from ../../../../deps/openssl/openssl/include/openssl/objects.h:21,
+                 from ../../../../deps/openssl/openssl/include/openssl/evp.h:43,
+                 from ../../../../deps/openssl/openssl/include/openssl/rand.h:23,
+                 from ../binding.cc:1:
+/usr/include/openssl/asn1.h:555:7: error: expected constructor, destructor, or type conversion before ‘unsigned’
+  555 | const unsigned char *ASN1_STRING_get0_data(const ASN1_STRING *x);
+      |       ^~~~~~~~
+In file included from ../../../../deps/openssl/openssl/include/openssl/evp.h:43,
+                 from ../../../../deps/openssl/openssl/include/openssl/rand.h:23,
+                 from ../binding.cc:1:
+../../../../deps/openssl/openssl/include/openssl/objects.h:66:45: error: ‘OBJ’ has not been declared
+   66 | DECLARE_ASN1_DUP_FUNCTION_name(ASN1_OBJECT, OBJ)
+      |                                             ^~~
+../../../../deps/openssl/openssl/include/openssl/objects.h:67:1: error: expected constructor, destructor, or type conversion before ‘ASN1_OBJECT’
+   67 | ASN1_OBJECT *OBJ_nid2obj(int n);
+      | ^~~~~~~~~~~
+In file included from /usr/include/openssl/x509.h:22,
+                 from ../../../../deps/openssl/openssl/include/openssl/pem.h:23,
+                 from /usr/include/openssl/ssl.h:25,
+                 from ../binding.cc:2:
+../../../../deps/openssl/openssl/include/openssl/ec.h:1334:1: error: expected constructor, destructor, or type conversion before ‘void’
+ 1334 | void ECDSA_SIG_get0(const ECDSA_SIG *sig, const BIGNUM **pr, const BIGNUM **ps);
+      | ^~~~
+In file included from ../../../../deps/openssl/openssl/include/openssl/pem.h:23,
+                 from /usr/include/openssl/ssl.h:25,
+                 from ../binding.cc:2:
+/usr/include/openssl/x509.h:370:20: error: ‘OCSP_REQ_CTX’ was not declared in this scope
+  370 | int X509_http_nbio(OCSP_REQ_CTX *rctx, X509 **pcert);
+      |                    ^~~~~~~~~~~~
+/usr/include/openssl/x509.h:370:34: error: ‘rctx’ was not declared in this scope
+  370 | int X509_http_nbio(OCSP_REQ_CTX *rctx, X509 **pcert);
+      |                                  ^~~~
+/usr/include/openssl/x509.h:370:45: error: expected primary-expression before ‘*’ token
+  370 | int X509_http_nbio(OCSP_REQ_CTX *rctx, X509 **pcert);
+      |                                             ^
+/usr/include/openssl/x509.h:370:47: error: ‘pcert’ was not declared in this scope
+  370 | int X509_http_nbio(OCSP_REQ_CTX *rctx, X509 **pcert);
+      |                                               ^~~~~
+/usr/include/openssl/x509.h:370:52: error: expression list treated as compound expression in initializer [-fpermissive]
+  370 | int X509_http_nbio(OCSP_REQ_CTX *rctx, X509 **pcert);
+      |                                                    ^
+/usr/include/openssl/x509.h:377:24: error: ‘OCSP_REQ_CTX’ was not declared in this scope
+  377 | int X509_CRL_http_nbio(OCSP_REQ_CTX *rctx, X509_CRL **pcrl);
+      |                        ^~~~~~~~~~~~
+/usr/include/openssl/x509.h:377:38: error: ‘rctx’ was not declared in this scope
+  377 | int X509_CRL_http_nbio(OCSP_REQ_CTX *rctx, X509_CRL **pcrl);
+      |                                      ^~~~
+/usr/include/openssl/x509.h:377:53: error: expected primary-expression before ‘*’ token
+  377 | int X509_CRL_http_nbio(OCSP_REQ_CTX *rctx, X509_CRL **pcrl);
+      |                                                     ^
+/usr/include/openssl/x509.h:377:55: error: ‘pcrl’ was not declared in this scope
+  377 | int X509_CRL_http_nbio(OCSP_REQ_CTX *rctx, X509_CRL **pcrl);
+      |                                                       ^~~~
+/usr/include/openssl/x509.h:377:59: error: expression list treated as compound expression in initializer [-fpermissive]
+  377 | int X509_CRL_http_nbio(OCSP_REQ_CTX *rctx, X509_CRL **pcrl);
+      |                                                           ^
+/usr/include/openssl/x509.h:728:1: error: expected constructor, destructor, or type conversion before ‘DEPRECATEDIN_1_1_0’
+  728 | DEPRECATEDIN_1_1_0(ASN1_TIME *X509_CRL_get_nextUpdate(X509_CRL *crl))
+      | ^~~~~~~~~~~~~~~~~~
+In file included from ../binding.cc:2:
+/usr/include/openssl/ssl.h:996:1: error: expected constructor, destructor, or type conversion before ‘typedef’
+  996 | typedef enum {
+      | ^~~~~~~
+/usr/include/openssl/ssl.h:1047:3: error: ‘OSSL_HANDSHAKE_STATE’ does not name a type; did you mean ‘SSL_CB_HANDSHAKE_START’?
+ 1047 | } OSSL_HANDSHAKE_STATE;
+      |   ^~~~~~~~~~~~~~~~~~~~
+      |   SSL_CB_HANDSHAKE_START
+/usr/include/openssl/ssl.h:1883:1: error: expected constructor, destructor, or type conversion before ‘DEPRECATEDIN_1_1_0’
+ 1883 | DEPRECATEDIN_1_1_0(__owur const SSL_METHOD *TLSv1_server_method(void))
+      | ^~~~~~~~~~~~~~~~~~
+/usr/include/openssl/ssl.h:2002:8: error: ‘OSSL_HANDSHAKE_STATE’ does not name a type; did you mean ‘SSL_CB_HANDSHAKE_START’?
+ 2002 | __owur OSSL_HANDSHAKE_STATE SSL_get_state(const SSL *ssl);
+      |        ^~~~~~~~~~~~~~~~~~~~
+      |        SSL_CB_HANDSHAKE_START
+../binding.cc: In function ‘void {anonymous}::Initialize(v8::Local<v8::Object>, v8::Local<v8::Value>, v8::Local<v8::Context>)’:
+../binding.cc:33:30: error: ‘TLSv1_2_server_method’ was not declared in this scope; did you mean ‘TLS_server_method’?
+   33 |   const SSL_METHOD* method = TLSv1_2_server_method();
+      |                              ^~~~~~~~~~~~~~~~~~~~~
+      |                              TLS_server_method
+make: *** [binding.target.mk:121: Release/obj.target/binding/binding.o] Error 1
+make: Leaving directory '/home/danielbevenius/work/nodejs/openssl/test/addons/openssl-binding/build'
+gyp ERR! build error 
+gyp ERR! stack Error: `make` failed with exit code: 2
+gyp ERR! stack     at ChildProcess.onExit (/home/danielbevenius/work/nodejs/openssl/deps/npm/node_modules/node-gyp/lib/build.js:194:23)
+gyp ERR! stack     at ChildProcess.emit (node:events:369:20)
+gyp ERR! stack     at Process.ChildProcess._handle.onexit (node:internal/child_process:290:12)
+gyp ERR! System Linux 5.6.13-200.fc31.x86_64
+gyp ERR! command "/home/danielbevenius/work/nodejs/openssl/out/Release/node" "/home/danielbevenius/work/nodejs/openssl/deps/npm/node_modules/node-gyp/bin/node-gyp.js" "rebuild" "--directory=test/addons/openssl-binding" "--nodedir=../../../"
+gyp ERR! cwd /home/danielbevenius/work/nodejs/openssl/test/addons/openssl-binding
+gyp ERR! node -v v16.0.0-pre
+gyp ERR! node-gyp -v v7.1.2
+```
+
 
 ```console
 $ cd openssl
@@ -838,3 +982,6 @@ ordinals: build_generated
                 $(SSLHEADERS)
 ```
 No the crypto and ssl headers are passed in as arguments
+
+
+
