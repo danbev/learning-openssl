@@ -189,6 +189,86 @@ And notice that these headers are .gitignored as well:
 /include/openssl/x509_vfy.h
 ```
 
+OpenSSL can be built as a non-shared library (statically linked) which will
+produce libcrypto.a, for example:
+```console
+$ ./config -Werror --strict-warnings --debug --prefix=/home/danielbevenius/work/security/openssl_build_master linux-x86_64 no-shared
+```
+
+If we look in the generated configdata.md module we can find the following
+entries in the `unified_info hash (perl hash map/table key/value pairs):
+```perl
+our %unified_info = ( 
+     "sources" => {
+        ...
+        "libcrypto" => [                                                        
+            "crypto/aes/libcrypto-lib-aes-x86_64.o",                            
+            "crypto/aes/libcrypto-lib-aes_cfb.o",                               
+            "crypto/aes/libcrypto-lib-aes_ecb.o",                               
+            "crypto/aes/libcrypto-lib-aes_ige.o", 
+            ...
+        ],
+        "libssl" => [                                                           
+            "crypto/libssl-lib-packet.o",                                       
+            "ssl/libssl-lib-bio_ssl.o",                                         
+            "ssl/libssl-lib-d1_lib.o",  
+            ...
+```
+
+
+In the Makefile we can see the target libcrypto.a which looks like this:
+```console
+libcrypto.a: crypto/aes/libcrypto-lib-aes-x86_64.o \                            
+             crypto/aes/libcrypto-lib-aes_cfb.o \ 
+             ...
+
+crypto/aes/libcrypto-lib-aes_cfb.o: crypto/aes/aes_cfb.c                        
+        $(CC)  -I. -Iinclude -Iproviders/common/include -Iproviders/implementations/include  -DAES_ASM -DBSAES_ASM -DCMLL_ASM -DECP_NISTZ256_ASM -DGHASH_ASM -DKECCAK1600_ASM -DMD5_ASM -DOPENSSL_BN_ASM_GF2m -DOPENSSL_BN_ASM_MONT -DOPENSSL_BN_ASM_MONT5 -DOPENSSL_CPUID_OBJ -DOPENSSL_IA32_SSE2 -DPADLOCK_ASM -DPOLY1305_ASM -DSHA1_ASM -DSHA256_ASM -DSHA512_ASM -DVPAES_ASM -DWHIRLPOOL_ASM -DX25519_ASM $(LIB_CFLAGS) $(LIB_CPPFLAGS) -MMD -MF crypto/aes/libcrypto-lib-aes_cfb.d.tmp -MT $@ -c -o $@ crypto/aes/aes_cfb.c
+```
+Notice that it has a prerequisit `crypto/aes/libcrypto-lib-aes_cfb.o` which
+has a target which is also shown. Notice that the name of the object file and
+the source differ. Having different objectnames for the same source files allows
+different macro values to be passed. 
+
+```
+crypto/aes/libcrypto-lib-aes_cfb.o: crypto/aes/aes_cfb.c                        
+        $(CC)  -I. -Iinclude -Iproviders/common/include -Iproviders/implementations/include  -DAES_ASM -DBSAES_ASM -DCMLL_ASM -DECP_NISTZ256_ASM -DGHASH_ASM -DKECCAK1600_ASM -DMD5_ASM -DOPENSSL_BN_ASM_GF2m -DOPENSSL_BN_ASM_MONT -DOPENSSL_BN_ASM_MONT5 -DOPENSSL_CPUID_OBJ -DOPENSSL_IA32_SSE2 -DPADLOCK_ASM -DPOLY1305_ASM -DSHA1_ASM -DSHA256_ASM -DSHA512_ASM -DVPAES_ASM -DWHIRLPOOL_ASM -DX25519_ASM $(LIB_CFLAGS) $(LIB_CPPFLAGS) -MMD -MF crypto/aes/libcrypto-lib-aes_cfb.d.tmp -MT $@ -c -o $@ crypto/aes/aes_cfb.c
+        @touch crypto/aes/libcrypto-lib-aes_cfb.d.tmp                           
+        @if cmp crypto/aes/libcrypto-lib-aes_cfb.d.tmp crypto/aes/libcrypto-lib-aes_cfb.d > /dev/null 2> /dev/null; then \
+                rm -f crypto/aes/libcrypto-lib-aes_cfb.d.tmp; \                 
+        else \                                                                  
+                mv crypto/aes/libcrypto-lib-aes_cfb.d.tmp crypto/aes/libcrypto-lib-aes_cfb.d; \
+        fi
+```
+
+#### libraries
+In OpenSSL there are the following libraries that can be built:
+
+##### libapp.a
+This library has dependency (in configdata.md that is) to `libssl`. This is for
+the command line openssl application. 
+
+##### libnonfips.a
+
+
+##### libfips.a
+
+
+##### libcommon.a
+
+##### liblegacy.a
+
+##### libimplementations.a
+
+
+### opensslconf.h
+This header is located in `include/openssl/
+```console
+$ cat include/openssl/opensslconf.h 
+# include <openssl/configuration.h>
+# include <openssl/macros.h>
+```
+
 ### OpenSSL 3.0 Node.js build notes
 In Node OpenSSL 3.0 is a dependency which exists in the deps directory. This
 can be statically linked to node which is the default:
@@ -676,8 +756,85 @@ look something like:
 ```
 $(obj).target/$(TARGET)/deps/openssl/openssl/ssl/ssl_cert.o \  
 ```
+This make file is generated, but how are all the source files specified. I
+know that this was done in `deps/openssl/openssl.gypi` but I'm also seeing
+providers object files which I don't think I've specified explicitely as sources, 
+or at least they are not in the list of sources in openssl.gypi.
+Well, this done by deps/openssl/config/generate_gypi.pl where we gather sources
+and those are added to the output of the template.
+So, after running make in deps/openssl/config we can check the generated
+openssl.gypi.	
+
+In configdata.pm, this perl module contains information about the libraries
+and thier dependencies. The dependencies of a library are object files, and
+the object files in turn have dependencies on source files. So we should be
+able to gather all the dependencies for `libcrypto` by inspecting the dependency
+object and then get the source dependencies, add them to the list of source
+files to be compiled (generated by gyp).
+
+
+The OpenSSL archive containing the object files is located in:
+```console
+$ ar t out/Release/obj.target/deps/openssl/libopenssl.a
+```
+
+```console
+file_store.c:(.text+0x911): undefined reference to `ossl_bio_new_from_core_bio'
+/usr/bin/ld: /home/danielbevenius/work/nodejs/openssl/out/Release/obj.target/openssl/deps/openssl/openssl/providers/implementations/storemgmt/file_store_der2obj.o: in function `der2obj_decode':
+file_store_der2obj.c:(.text+0x4e): undefined reference to `ossl_bio_new_from_core_bio'
+collect2: error: ld returned 1 exit status
+make[1]: *** [deps/openssl/openssl-cli.target.mk:320: /home/danielbevenius/work/nodejs/openssl/out/Release/openssl-cli] Error 1
+```
+If we take lool at the symbols in libopenssl.a:
+```console
+$ nm out/Release/obj.target/deps/openssl/libopenssl.a | grep ossl_bio_new_from_core_bio
+                 U ossl_bio_new_from_core_bio
+                 U ossl_bio_new_from_core_bio
+                 U ossl_bio_new_from_core_bio
+                 U ossl_bio_new_from_core_bio
+                 U ossl_bio_new_from_core_bio
+                 U ossl_bio_new_from_core_bio
+                 U ossl_bio_new_from_core_bio
+                 U ossl_bio_new_from_core_bio
+                 U ossl_bio_new_from_core_bio
+                 U ossl_bio_new_from_core_bio
+```
+U stands for undefined. This function can be found in
+providers/common/include/prov/bio.h:
+```c
+BIO *ossl_bio_new_from_core_bio(PROV_CTX *provctx, OSSL_CORE_BIO *corebio);
+```
+
+openssl/crypto/cpuid.c
+'./config/archs/linux-x86_64/asm/crypto/x86_64cpuid.s'
+
 
 ```console
 $ cd openssl
 $ find providers -name '*.c' | sed -e "s/\(.*\)/'\1',/"
 ```
+
+### libssl.num and libcrypto.num
+These two files exist in the util directory and are generated by running:
+```console
+$ make update
+```
+This target has the follow prerequisites:
+```make
+update: generate errors ordinals generate_buildinfo 
+```
+Looking at the ordinals target it seems contain the recipe that generates
+these files:
+```make
+ordinals: build_generated                                                       
+        $(PERL) $(SRCDIR)/util/mknum.pl --version $(VERSION) --no-warnings \    
+                --ordinals $(SRCDIR)/util/libcrypto.num \                       
+                --symhacks $(SRCDIR)/include/openssl/symhacks.h \               
+                $(CRYPTOHEADERS)                                                
+
+        $(PERL) $(SRCDIR)/util/mknum.pl --version $(VERSION) --no-warnings \    
+                --ordinals $(SRCDIR)/util/libssl.num \                          
+                --symhacks $(SRCDIR)/include/openssl/symhacks.h \               
+                $(SSLHEADERS)
+```
+No the crypto and ssl headers are passed in as arguments
