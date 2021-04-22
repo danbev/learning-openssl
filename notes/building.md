@@ -813,12 +813,40 @@ This test fails to compile after upgrading with the following error:
 (actually there is another error related to not being able to find the
 header openssl/configuration.h which I'm looking into as well)
 ```console
-$ out/Release/node deps/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --directory=test/addons/openssl-binding --nodedir=../../../
+$ out/Release/node deps/npm/node_modules/node-gyp/bin/node-gyp.js --verbose rebuild --directory=test/addons/openssl-binding --nodedir=../../../
+$ out/Release/node deps/npm/node_modules/node-gyp/bin/node-gyp.js --verbose rebuild --directory=test/addons/openssl-binding --nodedir=../../../
 gyp info it worked if it ends with ok
+gyp verb cli [
+gyp verb cli   '/home/danielbevenius/work/nodejs/openssl/out/Release/node',
+gyp verb cli   '/home/danielbevenius/work/nodejs/openssl/deps/npm/node_modules/node-gyp/bin/node-gyp.js',
+gyp verb cli   '--verbose',
+gyp verb cli   'rebuild',
+gyp verb cli   '--directory=test/addons/openssl-binding',
+gyp verb cli   '--nodedir=../../../'
+gyp verb cli ]
 gyp info using node-gyp@7.1.2
 gyp info using node@16.0.0-pre | linux | x64
 gyp info chdir test/addons/openssl-binding
+gyp verb command rebuild []
+gyp verb command clean []
+gyp verb clean removing "build" directory
+gyp verb command configure []
+gyp verb find Python Python is not set from command line or npm configuration
+gyp verb find Python Python is not set from environment variable PYTHON
+gyp verb find Python checking if "python3" can be used
+gyp verb find Python - executing "python3" to get executable path
+gyp verb find Python - executable path is "/usr/bin/python3"
+gyp verb find Python - executing "/usr/bin/python3" to get version
+gyp verb find Python - version is "3.7.9"
 gyp info find Python using Python version 3.7.9 found at "/usr/bin/python3"
+gyp verb get node dir compiling against specified --nodedir dev files: ../../../
+gyp verb build dir attempting to create "build" dir: /home/danielbevenius/work/nodejs/openssl/test/addons/openssl-binding/build
+gyp verb build dir "build" dir needed to be created? /home/danielbevenius/work/nodejs/openssl/test/addons/openssl-binding/build
+gyp verb build/config.gypi creating config file
+gyp verb build/config.gypi writing out config file: /home/danielbevenius/work/nodejs/openssl/test/addons/openssl-binding/build/config.gypi
+gyp verb config.gypi checking for gypi file: /home/danielbevenius/work/nodejs/openssl/test/addons/openssl-binding/config.gypi
+gyp verb common.gypi checking for gypi file: /home/danielbevenius/work/nodejs/openssl/test/addons/openssl-binding/common.gypi
+gyp verb gyp gyp format was not specified; forcing "make"
 gyp info spawn /usr/bin/python3
 gyp info spawn args [
 gyp info spawn args   '/home/danielbevenius/work/nodejs/openssl/deps/npm/node_modules/node-gyp/gyp/gyp_main.py',
@@ -844,10 +872,15 @@ gyp info spawn args   '--generator-output',
 gyp info spawn args   'build',
 gyp info spawn args   '-Goutput_dir=.'
 gyp info spawn args ]
+gyp verb command build []
+gyp verb build type Release
+gyp verb architecture x64
+gyp verb node dev dir ../../../
+gyp verb `which` succeeded for `make` /usr/bin/make
 gyp info spawn make
-gyp info spawn args [ 'BUILDTYPE=Release', '-C', 'build' ]
+gyp info spawn args [ 'V=1', 'BUILDTYPE=Release', '-C', 'build' ]
 make: Entering directory '/home/danielbevenius/work/nodejs/openssl/test/addons/openssl-binding/build'
-  CXX(target) Release/obj.target/binding/binding.o
+  g++ -o Release/obj.target/binding/binding.o ../binding.cc '-DNODE_GYP_MODULE_NAME=binding' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DOPENSSL_API_COMPAT=0x10100000L' '-DMODULESDIR="$(builddir)/ossl-modules"' '-DBUILDING_NODE_EXTENSION' -I../../../../include/node -I../../../../src -I../../../../deps/openssl/config -I../../../../deps/openssl/openssl/include -I../../../../deps/uv/include -I../../../../deps/zlib -I../../../../deps/v8/include -I../../../../deps/openssl/openssl/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -Wno-deprecated-declarations -Wno-cast-function-type -O3 -fno-omit-frame-pointer -fno-rtti -fno-exceptions -std=gnu++1y -MMD -MF ./Release/.deps/Release/obj.target/binding/binding.o.d.raw   -c
 In file included from ../../../../deps/openssl/openssl/include/openssl/rand.h:14,
                  from ../binding.cc:1:
 ../../../../deps/openssl/openssl/include/openssl/macros.h:147:4: error: #error "OPENSSL_API_COMPAT expresses an impossible API compatibility level"
@@ -946,11 +979,33 @@ gyp ERR! stack     at ChildProcess.onExit (/home/danielbevenius/work/nodejs/open
 gyp ERR! stack     at ChildProcess.emit (node:events:369:20)
 gyp ERR! stack     at Process.ChildProcess._handle.onexit (node:internal/child_process:290:12)
 gyp ERR! System Linux 5.6.13-200.fc31.x86_64
-gyp ERR! command "/home/danielbevenius/work/nodejs/openssl/out/Release/node" "/home/danielbevenius/work/nodejs/openssl/deps/npm/node_modules/node-gyp/bin/node-gyp.js" "rebuild" "--directory=test/addons/openssl-binding" "--nodedir=../../../"
+gyp ERR! command "/home/danielbevenius/work/nodejs/openssl/out/Release/node" "/home/danielbevenius/work/nodejs/openssl/deps/npm/node_modules/node-gyp/bin/node-gyp.js" "--verbose" "rebuild" "--directory=test/addons/openssl-binding" "--nodedir=../../../"
 gyp ERR! cwd /home/danielbevenius/work/nodejs/openssl/test/addons/openssl-binding
 gyp ERR! node -v v16.0.0-pre
 gyp ERR! node-gyp -v v7.1.2
+gyp ERR! not ok 
 ```
+Looking a this issue it does not seem to be picking up the `OPENSSL_COMPAT_API`
+flage which should allow the functions/types for earlier versions to be
+available.
+Adding some debug statements to openss/include/openssl/macros.h:
+```c
+#define STR_HELPER(x) #x                                                           
+#define STR(x) STR_HELPER(x)                                                       
+
+#pragma message "OPENSSL_API_COMPAT is: " STR(OPENSSL_API_COMPAT)                  
+#pragma message "OPENSSL_API_LEVEL is: " STR(OPENSSL_API_LEVEL) 
+#pragma message "OPENSSL_VERSION_MAJOR is: " STR(OPENSSL_VERSION_MAJOR)
+```
+I found that OPENSSL_VERSION_MAJOR is not set.
+```console
+$ ls deps/openssl/openssl/include/openssl/opensslv*
+deps/openssl/openssl/include/openssl/opensslv.h.in
+```
+I'm pretty sure this file gets generated when we make the arch dependent file
+by running make in deps/openssl/config, but we also remove all the generated
+files that are not copied to the arch specific directory. I think we could
+exlude this file, or perhaps copy it over to the arch directory.
 
 
 ```console
