@@ -20,6 +20,8 @@ zero values would be considered a true value and DER would only allow one
 value. This is especially important for crypto where things like digital
 signatures.
 
+The DER encoded data format is often encoded as base64 which is called PEM.
+
 #### Basic syntax
 * Comments start with '--' and end with a matching '--' or end of line.
 * Is case senstive. 
@@ -30,38 +32,62 @@ signatures.
 Strings can be Character strings "bajja", Binary strings '1010'B or
 Hexadecimal strings '1a'H.
 
-#### Module
-A module is the top level container
-```
-TestModule DEFINITIONS ::= {
-  Age ::= INTEGER (0..120) DEFAULT 45
-  Tired ::= BOOLEAN
-}
-```
-The types we can use in an ans1 module are BOOLEAN, INTEGER, ENUMERATED, REAL
-and NULL (information is missing/absent).
-When we have our type set up we can use tools to turn the abstract data into
-a bit stream. The bit stream can be of different formats, like Basic Encoding
-Rule (BER) for example.
 
-#### Basic Encoding Rule (BER)
+#### INTEGER
+Just like normal integers but they can be any size which is great for things
+like RSA keys.
+
+#### Strings
+There are many types of strings. These are not null terminated.
+
+#### OBJECT IDENTIFIERS
+Are globally unique sequences of integers and are mostly used to identify
+standards, algoritms, certificate extensions, orgs, etc.
+For example:
+```
+2.5 is the "Directory Service"
+```
+There is an online service that can be used to look up what an OID identifies:
+http://oid-info.com/get/1.3.6.1.4.1.11129.
+
+#### SEQUENCE
+This is like struct in c.
+
+#### SEQUENCE OF
+This is like an array in c.
+
+#### OPTIONAL
+Fields of a SEQUENCE or a SET can be marked as option in which case they will
+be missing from the binary stream.
+
+#### DEFAULT
+Fields of a SEQUENCE or a SET can be marked as DEFAULT and given a value which
+will be assigned that value if no value was provided for that field
+
+#### Encoding
 Defines how the values defined in asn1 should be translated into bytes and
 from bytes into asn1 (encoding/decoding).
 
-Identifier:
-```
-{joint-iso-itu-t(2) asn1(1) base-encoding(1)}
-```
+The format is of Tag/Type, Length, Value. So first in the stream there will be
+a type which is called a Tag, followed by the length of the value of that
+type/tag, and that is followed by the value itself:
 ```
 +--------------------------------------------------------+
 | Type   | Length |             Value                    |
 +--------------------------------------------------------+
 ```
-Type (one byte:
+For example an INTGER value of 5 could be encoded as:
 ```
-7        6 5      4                                      0
+Tag  Length  Value
+02   03      01 00 05
+```
+Notice that the value contains more than just the 5, more on this later.
+
+The Type/Tag is one byte (one byte):
+```
+7         5      4                                       0
 +--------------------------------------------------------+
-| Class   | From |             Tag                       |
+| Class   | Form |             Tag                       |
 +--------------------------------------------------------+
 
 Class:
@@ -86,6 +112,21 @@ Tag:
 16 = IASTRING
 1A = VisibleString
 ```
+In OpenSSL these values can be found in include/openssl/asn1.h.
+
+#### Module
+A module is the top level container
+```
+TestModule DEFINITIONS ::= {
+  Age ::= INTEGER (0..120) DEFAULT 45
+  Tired ::= BOOLEAN
+}
+```
+The types we can use in an asn1 module are BOOLEAN, INTEGER, ENUMERATED, REAL
+and NULL (information is missing/absent).
+When we have our type set up we can use tools to turn the abstract data into
+a bit stream. The bit stream can be of different formats, like Basic Encoding
+Rule (BER) for example.
 
 ### Privacy Enhanced Email (PEM)
 Is a base64 (binary-to-text encoding) translation of BER/DER asn1.
