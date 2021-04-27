@@ -1,8 +1,24 @@
 ### Abstract Syntax Notation One (ASN.1)
-It's goal is to describe the interface between two entities exchanging
-information. Is used in X.509 (SSL, HTTPS), LDAP, VoIP, SNMP, LTE (3G, 4G).
+The goal is to describe the interface between two entities exchanging
+information. This enables the files/messages in this format to be used by
+different languages.  Is used in X.509 (SSL, HTTPS), LDAP, VoIP, SNMP, LTE
+(3G, 4G).
 
-Has been a standard since 1984!
+Is similar to ProtoBuf or Thrift which might have been used today but ASN1
+has been a standard since 1984, and when the HTTPS spec, in 1994, was created
+those protocols were not available.
+
+ASN1 also contains serialization formats which specify ways to convert in-mem
+data structures into a series of bytes. And from a series of bytes into
+in-mem data structures.
+
+#### Serialization formats
+Distinguished Encoding Rules (DER) is used which is a variant of Basic Encoding
+Rules (BER) but with restrictions that force the serialization to be identical
+for certain types. For example a Boolean value in BER could be any of 255 non
+zero values would be considered a true value and DER would only allow one
+value. This is especially important for crypto where things like digital
+signatures.
 
 #### Basic syntax
 * Comments start with '--' and end with a matching '--' or end of line.
