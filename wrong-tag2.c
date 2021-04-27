@@ -1,6 +1,7 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
+#include <openssl/trace.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -35,6 +36,7 @@ int main(int arc, char *argv[]) {
   EVP_PKEY* pkey = NULL;
   PKCS8_PRIV_KEY_INFO *p8inf = NULL;
 
+
   // Private key in pem format (DER in base64 format)
   file_bio = BIO_new_file("./rsa_private2.pem", "r");
   
@@ -60,6 +62,8 @@ int main(int arc, char *argv[]) {
   if (p8inf == NULL) {
     error_and_exit("check errors");
   }
+
+  int r = OSSL_trace_set_channel(OSSL_TRACE_CATEGORY_DECODER, BIO_new_fp(stdout, BIO_NOCLOSE));
 
   pkey = EVP_PKCS82PKEY(p8inf);
   if (pkey == NULL) {
