@@ -709,7 +709,7 @@ the type of key and possible options provided.
 ```console
 (node::crypto::WebCryptoKeyFormat) $8 = kWebCryptoKeyFormatSPKI
 ```
-This was actually caused by on of the open PRs we have against OpenSSL.
+This was actually caused by one of the open PRs we have against OpenSSL.
 
 ### test-webcrypto-export-import.js
 This test failes when linked to OpenSSL 3.x (current master which should be
