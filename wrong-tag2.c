@@ -15,19 +15,6 @@ void error_and_exit(const char* msg) {
   exit(EXIT_FAILURE);
 }
 
-static int passwd_callback(char* buf, int size, int rwflag, void* u) {
-  const char* passphrase = (char*) u;
-  if (passphrase != NULL) {
-    size_t buflen = (size_t) size;
-    size_t len = strlen(passphrase);
-    if (buflen < len)
-      return -1;
-    memcpy(buf, passphrase, len);
-    return len;
-  }
-  return -1;
-} 
-
 int main(int arc, char *argv[]) {
   printf("asn1 wrong tag issue (#2)\n");
   BIO *file_bio;
