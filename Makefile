@@ -76,6 +76,9 @@ asn1_prep: asn1.c
 wrong-tag: wrong-tag.c
 	$(CC) $(CFLAGS)
 
+wrong-tag2: wrong-tag2.c
+	$(CC) $(CFLAGS)
+
 bio_ssl: bio_ssl.c
 	clang -O0 -g -I$(OPENSSL_INCLUDE_DIR) $< -o $@ -L$(OPENSSL_LIB_DIR) -lcrypto -lssl
 
