@@ -1,4 +1,10 @@
-## asn1 wrong tag
+## asn1 wrong tag second issue
+This document contains notes about an issue that we discovered when updating
+Node.js to OpenSSL 3.0.0-alpha15.
+
+Reproducer: [wrong-tag2.c](../wrong-tag2.c).
+
+This is the output of the failing test in Node.js
 ```console
 === release test-crypto-async-sign-verify ===                                 
 Path: parallel/test-crypto-async-sign-verify
@@ -39,9 +45,7 @@ originates in `ParsePrivateKey` in crypto_keys.cc.
     pkey->reset(EVP_PKCS82PKEY(p8inf.get()));    
 ```
 
-I've tried to reproduce this issue in [wrong-tag2.c](../wrong-tag2.c).
-
-The example has a private key in a .pem file. This is Privacy-Enhanced Mail
+The reproducer uses  a private key in a .pem file. This is Privacy-Enhanced Mail
 (PEM) is an ASCII endocing of DER using base64 encoding.
 ```c
   PKCS8_PRIV_KEY_INFO *p8inf = NULL;
