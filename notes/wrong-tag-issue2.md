@@ -161,10 +161,10 @@ ASN1_VALUE *ASN1_item_d2i(ASN1_VALUE **pval,
     return NULL;                                                                    
 }
 ```
-Notice that the call `ASN1_item_ex_d2i` passes the pem:
+Notice that the call `ASN1_item_ex_d2i` passes the DER:
 ```console
-(lldb) expr *in
-(const unsigned char *) $5 = 0x0000000000415210 "-----BEGIN RSA PRIVATE KEY-----\nMIIEpQIBAAKCAQE"
+lldb) expr *in
+(const unsigned char *) $2 = 0x0000000000440780 "0\x82\x04\xbf\x02\x01"
 ```
 ASN1_TLC is a cache for the tag and the length.
 The signature of ASN1_item_ex_d2i look like this:
@@ -312,7 +312,7 @@ int ASN1_get_object(const unsigned char **pp,
 ```
 ```console
 (lldb) expr *p
-(const unsigned char) $12 = '-'
+(const unsigned char) $8 = '0'
 (lldb) disassemble -p -c 4 -F att
 libcrypto.so.81.3`ASN1_get_object:
 ->  0x7ffff7bcf6c9 <+152>: movq   -0x30(%rbp), %rax
@@ -329,11 +329,10 @@ And xoring the value of p '-' with this produces 13 which I think is one of
 the universal tags `RELATIVE-IOD`
 ```console
 (lldb) expr *p & 0x1f
-(int) $14 = 13
+(int) $9 = 16
 ```
-But this does not match the expected tag which was set to V_ASN1_SEQUENCE. So
-when we return and then have the following check in asn1_check_tlen we will
-raise this error:
+This matches the expected tag which was set to V_ASN1_SEQUENCE. So this will
+not trigger the error upon returning in the following check in asn1_check_tlen:
 ```c
     
       if (exptag >= 0) {                                                          
@@ -352,6 +351,21 @@ raise this error:
          */                                                                     
         asn1_tlc_clear(ctx);                                                    
     }
+```
+Continuing I now realize that the above led me down the wrong path and that
+error comes from:
+```c
+  pkey = EVP_PKCS82PKEY(p8inf);
+```
+```console
+(lldb) br s -f tasn_dec.c -l 1126
+(lldb) br s -f tasn_dec.c -l 1154
+
+(lldb) expr ptag
+(int) $17 = 2
+(lldb) expr exptag
+(int) $19 = 16
+
 ```
 
 __work in progress__
