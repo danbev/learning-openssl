@@ -190,17 +190,39 @@ And looking at `der2key_decode_p8` we have:
 Notice that first `d2i_X509_SIG`is called and if that function returns NULL the
 else clause will be entered and `d2i_PKCS8_PRIV_KEY_INFO` will be called.
 
-Now, if d2i_X509_SIG` raised any errors those error will be on the stack when
+Now, if `d2i_X509_SIG` raised any errors those error will be on the stack when
 d2i_PKCS8_PRIV_KEY_INFO gets called and if that function returns successfully
 those errors will still be on the error stack. This suggestion here is to
 set an error mark which gets cleared and popped to avoid this.
 
-
-This will call into decoder_lib.c and the function OSSL_DECODER_from_bio
-which call the `decocer_process`.
+The following patch is a suggestion for this issue:
 ```console
-(lldb) br s -f decode_der2key.c -l 127
+diff --git a/providers/implementations/encode_decode/decode_der2key.c b/providers/implementations/encode_decode/decode_der2key.c
+index 73acf527c1..6f06a0a896 100644
+--- a/providers/implementations/encode_decode/decode_der2key.c
++++ b/providers/implementations/encode_decode/decode_der2key.c
+@@ -124,7 +124,9 @@ static void *der2key_decode_p8(const unsigned char **input_der,
+ 
+     ctx->flag_fatal = 0;
+ 
++    ERR_set_mark();
+     if ((p8 = d2i_X509_SIG(NULL, input_der, input_der_len)) != NULL) {
++        ERR_clear_last_mark();
+         char pbuf[PEM_BUFSIZE];
+         size_t plen = 0;
+ 
+@@ -136,6 +138,8 @@ static void *der2key_decode_p8(const unsigned char **input_der,
+             ctx->flag_fatal = 1;
+         X509_SIG_free(p8);
+     } else {
++        // Pop any errors that might have been raised by d2i_X509_SIG.
++        ERR_pop_to_mark();
+         p8inf = d2i_PKCS8_PRIV_KEY_INFO(NULL, input_der, input_der_len);
+     }
+     if (p8inf != NULL
 ```
+Using this I was able get the reproducer and the tests in Node to pass, and
+there are no test failures in openssl.
 
 
 
