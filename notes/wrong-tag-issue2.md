@@ -225,4 +225,10 @@ Using this I was able get the reproducer and the tests in Node to pass, and
 there are no test failures in openssl.
 
 
+This [pull request](https://github.com/openssl/openssl/pull/15067) was opened
+for this issue.
 
+The added test can be run using:
+```console
+$ ./test/evp_extra_test --test test_EVP_PKCS82PKEY_wrong_tag
+ok 1 - test_EVP_PKCS82PKEY_wrong_tag
