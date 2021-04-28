@@ -72,7 +72,7 @@ int main(int arc, char *argv[]) {
 
   BIO_free(key_bio);
   EVP_PKEY_free(pkey);
-  error_and_exit("check errors");
+  error_and_exit("Finished. Check errors and exit");
 
   exit(EXIT_SUCCESS);
 }
