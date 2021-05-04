@@ -1,6 +1,6 @@
 ### Errors in OpenSSL
 
-Each thread thread local struct which look like this:
+Each thread has a thread local struct which look like this:
 ```c
 #define ERR_NUM_ERRORS  16                                                       
 
@@ -17,7 +17,7 @@ struct err_state_st {
 };                                                                              
 # endif
 ```
-So there can be a maximum of 16 errors. And each error can have flags, 
+So there can be a maximum of 16 errors. And each error can have flags. 
 
 ```c
   ERR_STATE *es;

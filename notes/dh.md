@@ -177,3 +177,16 @@ p = 11
 (11-1)/2 = 5
 ```
 So 11 would be a safe prime.
+
+### OpenSSL implementation
+We can find the Diffie-Hellman struct in `crypto/dh/dh_local.h`.
+```c
+struct dh_st {
+    ...
+    BIGNUM *pub_key;            /* g^x % p */                                      
+    BIGNUM *priv_key;           /* x */  
+    ...
+}
+```
+`openssl/crypto/dh/dh_key.c`
+

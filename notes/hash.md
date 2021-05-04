@@ -2,7 +2,7 @@
 Most hashing functions take a variable input and produce a fixed length output.
 ```
            +-----------------------------------+
-           |          Message M                |   (any lenght)
+           |          Message M                |   (any length)
            +-----------------------------------+
                             |
                             ↓
@@ -14,16 +14,16 @@ Most hashing functions take a variable input and produce a fixed length output.
                             |
                             ↓
                    +-----------------+
-	           |   Hash value    |              (fixed lengt)
+	           |   Hash value    |              (fixed length)
                    +-----------------+
 ```
 
 One usage of hashing is where we want to create a digital signature of a
-message or a file (something larger than the size that our signature algorighm
+message or a file (something larger than the size than our signature algorighm
 key) it would have to be split into blocks and encrypted separately. If this
 is a large file that would take some time, and the same thing would have to be
 done on the receiving side. What can be done instead is pass the message/file
-through the hash function and get back a fixed lenght output, which we can then
+through the hash function and get back a fixed length output, which we can then
 sign using our signature algorighm. The signature is also sent with the message
 and if we did not sign just the hash but the entire message we would double the
 size of the data to be sent, perhaps over a network.
@@ -44,7 +44,7 @@ sig_kpub(Z) = true/false
 
 ```
            +-----------------------------------+
-           |          Message M                |   (any lenght)
+           |          Message M                |   (any length)
            +-----------------------------------+
                             |
                             ↓

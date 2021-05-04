@@ -41,7 +41,7 @@ Remember that confusion is about making the relationship between the key and
 the ciphertext as complex and involved as possible.
 
 ### Diffusion
-Diffusion refers to how each bit in the plaintext influences many of the bits
+Diffusion refers to how each bit in the plaintext influences many of the bits.
 
 Combining confusion/diffusion multiple times can build a strong block cipher:
 (called a product cipher principal)
