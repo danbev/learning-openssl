@@ -178,7 +178,7 @@ if (!DH_check_pub_key(dh, pub_key, &check_result) || check_result) {
    goto err;
 }
 
-The code that is causing this issue can is the following:
+The code that is causing this issue is the following:
 ```js
   for (const [params1, params2] of [
     // Same generator, but different primes.
@@ -420,6 +420,7 @@ int EVP_PKEY_derive_set_peer(EVP_PKEY_CTX *ctx, EVP_PKEY *peer)
       }
 ```
 So we can see that this check is only present if the legacy code path is taken.
+
 Should this check also exist in the provider path, something like this:
 ```c
     if (provkey == NULL)
