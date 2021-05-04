@@ -1,6 +1,8 @@
 [fipsinstall]
 activate = 1
 install-version = 1
-module-mac = 82:9D:D6:BA:64:93:28:8A:78:C6:0B:BB:63:A7:9C:A8:E4:FC:24:E7:7F:E0:EA:1F:97:BB:C4:3F:9A:E1:6E:2B
-install-mac = FE:10:13:5A:D3:B4:C7:82:1B:1E:17:4C:AC:84:0C:0A:EF:5F:06:96:AE:6E:2C:85:0E:8E:55:28:86:D6:2A:D9
+conditional-errors = 1
+security-checks = 1
+module-mac = C2:B3:E8:E4:CB:F9:DF:4F:AC:1F:80:7A:10:1C:83:7D:01:E7:9B:54:65:7C:B0:4A:25:08:C4:1F:4F:51:F1:B8
+install-mac = 41:9C:38:C2:8F:59:09:43:2C:AA:2F:58:36:2D:D9:04:F9:6C:56:8B:09:E0:18:3A:2E:D6:CC:69:05:04:E1:11
 install-status = INSTALL_SELF_TEST_KATS_RUN

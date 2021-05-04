@@ -1850,7 +1850,58 @@ The version will be FIPS module 3.0 when OpenSSL 3.0 is released but the FIPS
 module might not be updated with each OpenSSL release so that will most likely
 drift apart with regards to the version.
 
-To enable FIPS by default modify the openssl configuration file::
+First configure and compile OpenSSL 3.0 with `enable-fips`:
+```console
+$ ./config --strict-warnings --debug enable-fips --prefix=/home/danielbevenius/work/security/openssl_build_master linux-x86_64
+$ make clean
+$ make -j8
+$ make install_sw
+$ make install_fips
+```
+Note that `install_fips` will run the `fipsinstall` command and generate
+the fips configuration file in the location specified by prefix.
+
+```console
+$ make install_fips
+make depend && make _build_sw
+/usr/bin/perl ./util/wrap.pl apps/openssl fipsinstall -module providers/fips.so -provider_name fips -mac_name HMAC -section_name fips_sect > providers/fipsmodule.cnf
+HMAC : (Module_Integrity) : Pass
+SHA1 : (KAT_Digest) : Pass
+SHA2 : (KAT_Digest) : Pass
+SHA3 : (KAT_Digest) : Pass
+TDES : (KAT_Cipher) : Pass
+AES_GCM_Encrypt : (KAT_Cipher) : Pass
+AES_ECB_Decrypt : (KAT_Cipher) : Pass
+RSA : (KAT_Signature) : RNG : (Continuous_RNG_Test) : Pass
+Pass
+ECDSA : (KAT_Signature) : Pass
+DSA : (KAT_Signature) : Pass
+TLS12_PRF : (KAT_KDF) : Pass
+PBKDF2 : (KAT_KDF) : Pass
+SSHKDF : (KAT_KDF) : Pass
+KBKDF : (KAT_KDF) : Pass
+HKDF : (KAT_KDF) : Pass
+SSKDF : (KAT_KDF) : Pass
+X963KDF : (KAT_KDF) : Pass
+X942KDF : (KAT_KDF) : Pass
+HASH : (DRBG) : Pass
+CTR : (DRBG) : Pass
+HMAC : (DRBG) : Pass
+DH : (KAT_KA) : Pass
+ECDH : (KAT_KA) : Pass
+RSA_Encrypt : (KAT_AsymmetricCipher) : Pass
+RSA_Decrypt : (KAT_AsymmetricCipher) : Pass
+RSA_Decrypt : (KAT_AsymmetricCipher) : Pass
+INSTALL PASSED
+*** Installing FIPS module
+install providers/fips.so -> /home/danielbevenius/work/security/openssl_build_master/lib/ossl-modules/fips.so
+*** Installing FIPS module configuration
+install providers/fipsmodule.cnf -> /home/danielbevenius/work/security/openssl_build_master/ssl/fipsmodule.cnf
+```
+The target `install_fips` will run the fips self test which generates the conf.
+
+
+To enable FIPS by default modify the openssl configuration file:
 ```console
 .include fips.cnf
 
@@ -1871,7 +1922,8 @@ if (fips == NULL) {
   ...
 }
 ```
-The fips provider is implemented in `providers/fips/fipsprov.c`.
+Note that one still needs a fips configuration file as the properties in this
+file are requred.
 
 There is an example of loading the fips provider in [fips-provider](./fips-provider.c).
 If you just compile this using
@@ -1883,7 +1935,7 @@ errno: 251658310, error:0F000046:common libcrypto routines::init fail
 ```
 This will most likley happen if you have forgotten to run the post install task:
 ```console
-$ ~/work/security/openssl_build_master/bin/openssl fipsinstall -module ~/work/security/openssl_build_master/lib/ossl-modules/fips.so -out fips.cnf -provider_name fips -section_name fipsinstall -mac_name HMAC -macopt digest:SHA256 -macopt hexkey:1
+$ ~/work/security/openssl_build_master/bin/openssl fipsinstall -module ~/work/security/openssl_build_master/lib/ossl-modules/fips.so -out fips.cnf -provider_name fips -section_name fipsinstall
 HMAC : (Module_Integrity) : Pass
 SHA1 : (KAT_Digest) : Pass
 SHA2 : (KAT_Digest) : Pass
@@ -1903,7 +1955,7 @@ ECDH : (KAT_KA) : Pass
 INSTALL PASSED
 ```
 
-If you look in fips-provider.c you will find:
+If you look in [fips-provider.c](./fips-provider.c) you will find:
 ```c
   CONF_modules_load_file("./openssl.cnf", "openssl_conf", 0);
 ```
@@ -1911,6 +1963,11 @@ If you look in fips-provider.c you will find:
 This allows us to run the program using simply:
 ```console
 $ ./fips-provider
+```
+Another option is to set OPENSSL_CONF to point to the configuration file to
+be used:
+```console
+$ env OPENSSL_CONF=./openssl.cnf  ./fips-provider
 ```
 
 The default OPENSSL configuration file on my local build is:
@@ -1927,6 +1984,12 @@ int FIPS_mode(void);
 ```
 The above will set/get the global property. But these are depracated and just
 provided for legacy code. New code should use EVP_set_default_alg_properties.
+Instead the following functions are available:
+```c
+  int r = EVP_default_properties_enable_fips(NULL, 1);
+  int r = EVP_default_properties_is_fips_enabled(NULL);
+```
+
 
 #### OpenSSL installation info
 Show the directory where the configuration file is:
@@ -3951,7 +4014,7 @@ if that is successful ret (EVP_PKEY) will be set to that value:
     return NULL;
 ```
 
-The suggestiong/idea I have is to mark and pop the error:
+The suggestion/idea I have is to mark and pop the error:
 ```
 diff --git a/crypto/asn1/d2i_pr.c b/crypto/asn1/d2i_pr.c
 index fcf8d2f8d0..de392d2b82 100644
@@ -4049,16 +4112,17 @@ Is not like I thought a standard but a complete set of standards all with the
 same name but with different versions.
 
 #### PKCS#1
-Is for RSA encryption/decryption, encoding/padding, verifying/signing signatures.
+Is for `RSA` encryption/decryption, encoding/padding, verifying/signing
+signatures.
 
 #### PKCS#2
-Was withdrawn
+Was withdrawn.
 
 #### PKCS#3
-Diffie-Hellman Key Agreement Standard
+Diffie-Hellman Key Agreement Standard.
 
 #### PKCS#4
-Was withdrawn
+Was withdrawn.
 
 #### PKCS#5
 Password-based Encryption Standard like PBKDF1 and PBKDF2.
@@ -4074,10 +4138,12 @@ messages under a Public Key Infrastructure.
 #### PKCS#8
 Private-Key Information Syntax Specifiction which is used to carry private
 certificate keypairs (encrypted/unencrypted).
+
 Is a standard for storing private key information and the key may be encrypted
 with a passphrase using PKCS#5 above.
 These private keys are typcially exchanged in PEM base-64-encoded format.
 
+Spec: https://tools.ietf.org/html/rfc5208
 
 
 ### evp_pkey_downgrade
@@ -4653,3 +4719,108 @@ So in this case we can see that the above digests will be added when this
 call to OPENSSL_init_crypto is called.
 
 
+### PEM_read_bio_PrivateKey
+```c
+  EVP_PKEY* pkey = NULL;
+  BIO* key_bio = NULL;
+  unsigned char key[4096];
+
+  int key_len = BIO_read(file_bio, key, sizeof(key));
+  printf("RSA Private Key pem (%d):\n %s\n", key_len, key);
+
+  key_bio = BIO_new_mem_buf(key, key_len);
+  pkey = PEM_read_bio_PrivateKey(key_bio, NULL, passwd_callback, ""); 
+```
+First thing is to simply read in the file which will get the lenght and the
+content into the key buffer.
+Next, PEM_read_bio_PrivateKey is called...
+
+
+
+```c
+  PKCS8_PRIV_KEY_INFO *p8inf = NULL;
+  ...
+  BIO* b = BIO_new(BIO_s_mem());
+  // Internal (pkey) to DER PKCS#8 Private Key to BIO
+  int err = i2d_PKCS8PrivateKey_bio(b, pkey, NULL, NULL, 0, NULL, NULL);
+```
+Will land in crypto/pem/pem_pk8.c:
+```c
+int i2d_PKCS8PrivateKey_bio(BIO *bp,
+                            const EVP_PKEY *x,
+                            const EVP_CIPHER *enc,  // NULL
+                            const char *kstr,       // NULL
+                            int klen,               // 0      
+                            pem_password_cb *cb,    // NULL
+                            void *u)                // NULL   
+{                                                                                  
+    return do_pk8pkey(bp, x, 1, -1, enc, kstr, klen, cb, u, NULL);                 
+}
+```
+And do_pk8pkey can be found in the same file:
+```c
+static int do_pk8pkey(BIO *bp,
+                      const EVP_PKEY *x,
+                      int isder,
+                      int nid,           
+                      const EVP_CIPHER *enc,
+                      const char *kstr,
+                      int klen,        
+                      pem_password_cb *cb,
+                      void *u,
+                      const char *propq)          
+```
+
+Now, PKCS8_PRIV_KEY_INFO is a c struct with ASN1 
+```c
+struct pkcs8_priv_key_info_st {                                                 
+    ASN1_INTEGER *version;                                                      
+    X509_ALGOR *pkeyalg;                                                        
+    ASN1_OCTET_STRING *pkey;                                                    
+    STACK_OF(X509_ATTRIBUTE) *attributes;                                       
+};
+```
+This is simlar to what we do in the [asn1.c](asn1.c) example where we are
+populating this struct with data from the bio.
+
+
+```console
+(lldb) expr *p8
+(PKCS8_PRIV_KEY_INFO) $7 = {
+  version = 0x0000000000441e10
+  pkeyalg = 0x000000000043cf20
+  pkey = 0x0000000000409040
+  attributes = 0x0000000000000000
+}
+```
+
+```c
+  EVP_PKCS82PKEY_ex(p8, NULL, NULL);
+```
+
+evp_pkey.c
+```c
+EVP_PKEY *EVP_PKCS82PKEY_ex(const PKCS8_PRIV_KEY_INFO *p8, OSSL_LIB_CTX *libctx,
+                            const char *propq)
+{
+  EVP_PKEY *pkey = NULL;
+  const unsigned char *p8_data = NULL;
+  unsigned char *encoded_data = NULL;
+  int encoded_len;
+  if ((encoded_len = i2d_PKCS8_PRIV_KEY_INFO(p8, &encoded_data)) <= 0 || encoded_data == NULL)
+    return NULL;
+  ...
+}
+```
+Notice that this is similar to what we have in the asn1.c example:
+```c
+  const something s = { asn1_name, 46 };
+  unsigned char* out = NULL;
+  // internal C structure to DER binary format
+  int len = i2d_something(&s, &out);
+```
+We can inspect the encoded data using:
+```console
+(lldb) expr encoded_data
+(unsigned char *) $2 = 0x000000000042a900 "0\x82\x04\xbf\x02\x01"
+```
