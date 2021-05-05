@@ -2,6 +2,7 @@
 There are different providers for different algorithm implementations. These
 can be configured programatically or via a configuration file.
 There are currently 4 provider implementations:
+
 * Default
 
 * Legacy
@@ -21,7 +22,7 @@ OSSL_PROVIDER_load(NULL, "default");
 
 OSSL_PROVIDER struct can be found in crypto/provider_core.c:
 ```c
-truct ossl_provider_st {
+struct ossl_provider_st {
     /* Flag bits */
     unsigned int flag_initialized:1;
     unsigned int flag_activated:1;
@@ -72,5 +73,9 @@ truct ossl_provider_st {
     void *provctx;
 };
 ```
+Notice that some of the unsigned in fields are being declared with a specific
+bit field size.
 
 There is an example of a custom provider in [provider.c](../provider.c).
+
+The provider implementation is in [cprovider.c](../cprovider.c)
