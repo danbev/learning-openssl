@@ -23,8 +23,9 @@ void error_and_exit(const char* msg) {
 int main(int argc, char** argv) {
   printf("FIPS Provider example\n");
   OSSL_PROVIDER* fips;
+  EVP_MD* sha256 = NULL;
 
-  //CONF_modules_load_file("./openssl.cnf", "openssl_conf", 0);
+  CONF_modules_load_file("./openssl.cnf", "openssl_conf", 0);
 
   fips = OSSL_PROVIDER_load(NULL, "fips");
   if (fips == NULL) {
@@ -45,6 +46,9 @@ int main(int argc, char** argv) {
   // EVP_default_properties_is_fips_enabled return 1 if FIPS is enabled
   int r = EVP_default_properties_is_fips_enabled(NULL);
   printf("FIPS is enabled: %s\n", r == 1 ? "true": "false");
+
+  sha256 = EVP_MD_fetch(NULL, "SHA2-256", NULL);
+  printf("Provider name for sha256: %s\n", OSSL_PROVIDER_name(EVP_MD_provider(sha256)));
 
   OSSL_PROVIDER_unload(fips);
   exit(EXIT_SUCCESS);
