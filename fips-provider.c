@@ -18,14 +18,14 @@ void error_and_exit(const char* msg) {
  * This needs to be run using OPENSSL_CONF so that the OpenSSL configuration
  * file in this directory is used:
  *
- * $ env OPENSSL_CONF=./openssl.cnf  ./fips-provider
+ * $ env OPENSSL_CONF=$PWD/openssl.cnf  ./fips-provider
  */ 
 int main(int argc, char** argv) {
   printf("FIPS Provider example\n");
   OSSL_PROVIDER* fips;
   EVP_MD* sha256 = NULL;
 
-  CONF_modules_load_file("./openssl.cnf", "openssl_conf", 0);
+  //CONF_modules_load_file("./openssl.cnf", "openssl_conf", 0);
 
   fips = OSSL_PROVIDER_load(NULL, "fips");
   if (fips == NULL) {
