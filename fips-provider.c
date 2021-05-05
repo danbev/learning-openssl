@@ -14,6 +14,12 @@ void error_and_exit(const char* msg) {
   exit(EXIT_FAILURE);
 }
 
+/*
+ * This needs to be run using OPENSSL_CONF so that the OpenSSL configuration
+ * file in this directory is used:
+ *
+ * $ env OPENSSL_CONF=./openssl.cnf  ./fips-provider
+ */ 
 int main(int argc, char** argv) {
   printf("FIPS Provider example\n");
   OSSL_PROVIDER* fips;
@@ -30,18 +36,15 @@ int main(int argc, char** argv) {
     exit(EXIT_FAILURE);
   }
 
-
   if (EVP_default_properties_enable_fips(NULL, 1)) {
     printf("enabled fips\n");
   } else {
     error_and_exit("Failed to enable fips\n");
   }
 
-  if (EVP_default_properties_is_fips_enabled(NULL)) {
-    printf("FIPS is enabled!\n");
-  } else {
-    printf("FIPS is not enabled!\n");
-  }
+  // EVP_default_properties_is_fips_enabled return 1 if FIPS is enabled
+  int r = EVP_default_properties_is_fips_enabled(NULL);
+  printf("FIPS is enabled: %s\n", r == 1 ? "true": "false");
 
   OSSL_PROVIDER_unload(fips);
   exit(EXIT_SUCCESS);
