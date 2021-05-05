@@ -406,7 +406,161 @@ static int fips_get_params_from_core(FIPS_GLOBAL *fgbl)
   [7] = (key = 0x0000000000000000, data_type = 0, data = 0x0000000000000000, data_size = 0, return_size = 0)
 }
 ```
-After returning the selftest_params module_filename will be been set.
+After returning the selftest_params module_filename will be been set:
+```console
+(lldb) expr *fgbl
+(FIPS_GLOBAL) $3 = {
+  handle = 0x00000000004165a0
+  selftest_params = {
+    module_filename = 0x0000000000414830 "/home/danielbevenius/work/security/openssl_build_master/lib/ossl-modules/fips.so"
+    module_checksum_data = 0x0000000000414530 "C2:B3:E8:E4:CB:F9:DF:4F:AC:1F:80:7A:10:1C:83:7D:01:E7:9B:54:65:7C:B0:4A:25:08:C4:1F:4F:51:F1:B8"
+    indicator_version = 0x0000000000416810 "1"
+    indicator_data = 0x00000000004167a0 "INSTALL_SELF_TEST_KATS_RUN"
+    indicator_checksum_data = 0x0000000000414620 "41:9C:38:C2:8F:59:09:43:2C:AA:2F:58:36:2D:D9:04:F9:6C:56:8B:09:E0:18:3A:2E:D6:CC:69:05:04:E1:11"
+    conditional_error_check = 0x0000000000416870 "1"
+    bio_new_file_cb = 0x00007ffff7bf3857 (libcrypto.so.3`ossl_core_bio_new_file at core_bio.c:85:1)
+    bio_new_buffer_cb = 0x00007ffff7bf3884 (libcrypto.so.3`ossl_core_bio_new_mem_buf at core_bio.c:90:1)
+    bio_read_ex_cb = 0x00007ffff7bf38ae (libcrypto.so.3`ossl_core_bio_read_ex at core_bio.c:96:1)
+    bio_free_cb = 0x00007ffff7bf372c (libcrypto.so.3`ossl_core_bio_free at core_bio.c:44:1)
+    cb = 0x0000000000000000
+    cb_arg = 0x0000000000000000
+    libctx = 0x0000000000415010
+  }
+  fips_security_checks = 1
+  fips_security_check_option = 0x00000000004168d0 "1"
+}
+```
+Also notice that `module_checksum_data` matches the value fips.cnf:
+```
+module-mac = 82:9D:D6:BA:64:93:28:8A:78:C6:0B:BB:63:A7:9C:A8:E4:FC:24:E7:7F:E0:EA:1F:97:BB:C4:3F:9A:E1:6E:2B
+```
+
+Next we have the following function call:
+```c
+  ossl_prov_cache_exported_algorithms(fips_ciphers, exported_fips_ciphers);
+```
+Now, `fips_ciphers` are the ciphers that are allowed in FIPS:
+```c
+static const OSSL_ALGORITHM_CAPABLE fips_ciphers[] = {                          
+      /* Our primary name[:ASN.1 OID name][:our older names] */                   
+      ALG(PROV_NAMES_AES_256_ECB, ossl_aes256ecb_functions),                      
+      ALG(PROV_NAMES_AES_192_ECB, ossl_aes192ecb_functions),                      
+      ALG(PROV_NAMES_AES_128_ECB, ossl_aes128ecb_functions), 
+      ...
+};
+
+static OSSL_ALGORITHM exported_fips_ciphers[OSSL_NELEM(fips_ciphers)];
+```
+OSSL_NELEM is a macro to get the number of elements in the array `fips_ciphers`.
+So these are the algorithms that are availabe with FIPS?
+
+After that `SELF_TEST_post` will be called which is the Power On Self Test:
+```c
+      if (!SELF_TEST_post(&fgbl->selftest_params, 0)) {                           
+          ERR_raise(ERR_LIB_PROV, PROV_R_SELF_TEST_POST_FAILURE);                 
+          goto err;                                                               
+      }
+```
+And selftest_params looks like this before calling:
+```console
+(lldb) expr fgbl->selftest_params 
+```
+The second argument which is '0' (false) indicates that this not an on-demand
+test but part of the loading of the fips module. This will land in
+providers/fips/self_test.c:
+```c
+int SELF_TEST_post(SELF_TEST_POST_PARAMS *st, int on_demand_test)                  
+{                                                                                  
+    int ok = 0;                                                                    
+    int kats_already_passed = 0;                                                   
+    long checksum_len;                                                             
+    OSSL_CORE_BIO *bio_module = NULL, *bio_indicator = NULL;                       
+    unsigned char *module_checksum = NULL;                                         
+    unsigned char *indicator_checksum = NULL;                                      
+    int loclstate;                                                                 
+    OSSL_SELF_TEST *ev = NULL;                                                     
+                                                                                   
+    if (!RUN_ONCE(&fips_self_test_init, do_fips_self_test_init))                   
+        return 0;
+
+    ...
+}
+
+static CRYPTO_ONCE fips_self_test_init = CRYPTO_ONCE_STATIC_INIT;               
+DEFINE_RUN_ONCE_STATIC(do_fips_self_test_init)                                  
+{                                                                               
+    /*                                                                          
+     * These locks get freed in platform specific ways that may occur after we  
+     * do mem leak checking. If we don't know how to free it for a particular   
+     * platform then we just leak it deliberately.                              
+     */                                                                         
+    self_test_lock = CRYPTO_THREAD_lock_new();                                  
+    fips_state_lock = CRYPTO_THREAD_lock_new();                                 
+    return self_test_lock != NULL;                                              
+}
+```
+We can see that `do_fips_self_test_init` is creating new locks. These locks
+are the used to aquire locks so that the state can be updated.
+Next, we have 
+```c
+    ev = OSSL_SELF_TEST_new(st->cb, st->cb_arg);
+
+    module_checksum = OPENSSL_hexstr2buf(st->module_checksum_data,
+                                         &checksum_len);
+```
+And recall that module_checksum_data is the value from fips.cnf which was
+generated by apps/fipsinstall.c.
+
+Next, file fips.so module will be loaded, and the integrity will be verified
+by using the module_checksum:
+```c
+    bio_module = (*st->bio_new_file_cb)(st->module_filename, "rb");             
+                                                                                
+    /* Always check the integrity of the fips module */                         
+    if (bio_module == NULL                                                      
+            || !verify_integrity(bio_module, st->bio_read_ex_cb,                
+                                 module_checksum, checksum_len, st->libctx,     
+                                 ev, OSSL_SELF_TEST_TYPE_MODULE_INTEGRITY)) {   
+        ERR_raise(ERR_LIB_PROV, PROV_R_MODULE_INTEGRITY_FAILURE);               
+        goto end;                                                               
+    }
+```
+So that was checking that the module is the same as it was when the command
+`openssl fipsinstall` was run. 
+Next, we have the following:
+```
+        bio_indicator =                                                            
+            (*st->bio_new_buffer_cb)(st->indicator_data,                           
+                                     strlen(st->indicator_data));                  
+        if (bio_indicator == NULL                                                  
+                || !verify_integrity(bio_indicator, st->bio_read_ex_cb,            
+                                     indicator_checksum, checksum_len,             
+                                     st->libctx, ev,                               
+                                     OSSL_SELF_TEST_TYPE_INSTALL_INTEGRITY)) {     
+            ERR_raise(ERR_LIB_PROV, PROV_R_INDICATOR_INTEGRITY_FAILURE);           
+            goto end;                                                           
+        } else {                                                                
+            kats_already_passed = 1;                                            
+        }                                                                
+```
+Now, this was a little surprising to me to see the value of st->indicator_data:
+```console
+(lldb) expr st->indicator_data 
+(const char *) $10 = 0x00000000004167a0 "INSTALL_SELF_TEST_KATS_RUN"
+```
+and then st->indicator_checksum_data is the checksum for indicator_data. So this
+is checking that this value has not been tampered with.
+
+I was expecting the Know Answer Tests (KAT) to also have been run but I've
+either missed it or it was not run. Lets set a break point and see:
+```console
+(lldb) br s -n SELF_TEST_kats
+Breakpoint 2: where = fips.so`SELF_TEST_kats + 16 at self_test_kats.c:703:9, address = 0x00007ffff76879b7
+```
+Ah wait, I think this is done as part of fipsinstall and will not be run
+if they have already been.
+
+
 
 
 ```console
