@@ -558,40 +558,46 @@ either missed it or it was not run. Lets set a break point and see:
 Breakpoint 2: where = fips.so`SELF_TEST_kats + 16 at self_test_kats.c:703:9, address = 0x00007ffff76879b7
 ```
 Ah wait, I think this is done as part of fipsinstall and will not be run
-if they have already been.
-
-
-
-
+if they have already been:
 ```console
-(lldb) expr fgbl->selftest_params
-(SELF_TEST_POST_PARAMS) $17 = {
-  module_filename = 0x00000000004148b0 "/home/danielbevenius/work/security/openssl_build_master/lib/ossl-modules/fips.so"
-  module_checksum_data = 0x0000000000000000
-  indicator_version = 0x0000000000000000
-  indicator_data = 0x0000000000000000
-  indicator_checksum_data = 0x0000000000000000
-  conditional_error_check = 0x0000000000000000
-  bio_new_file_cb = 0x00007ffff7bf3857 (libcrypto.so.3`ossl_core_bio_new_file at core_bio.c:85:1)
-  bio_new_buffer_cb = 0x00007ffff7bf3884 (libcrypto.so.3`ossl_core_bio_new_mem_buf at core_bio.c:90:1)
-  bio_read_ex_cb = 0x00007ffff7bf38ae (libcrypto.so.3`ossl_core_bio_read_ex at core_bio.c:96:1)
-  bio_free_cb = 0x00007ffff7bf372c (libcrypto.so.3`ossl_core_bio_free at core_bio.c:44:1)
-  cb = 0x0000000000000000
-  cb_arg = 0x0000000000000000
-  libctx = 0x0000000000415090
-}
+/usr/bin/perl ./util/wrap.pl apps/openssl fipsinstall -module providers/fips.so -provider_name fips -mac_name HMAC -section_name fips_sect > providers/fipsmodule.cnf
+HMAC : (Module_Integrity) : Pass
+SHA1 : (KAT_Digest) : Pass
+SHA2 : (KAT_Digest) : Pass
+SHA3 : (KAT_Digest) : Pass
+TDES : (KAT_Cipher) : Pass
+AES_GCM_Encrypt : (KAT_Cipher) : Pass
+AES_ECB_Decrypt : (KAT_Cipher) : Pass
+RSA : (KAT_Signature) : RNG : (Continuous_RNG_Test) : Pass
+Pass
+ECDSA : (KAT_Signature) : Pass
+DSA : (KAT_Signature) : Pass
+TLS12_PRF : (KAT_KDF) : Pass
+PBKDF2 : (KAT_KDF) : Pass
+SSHKDF : (KAT_KDF) : Pass
+KBKDF : (KAT_KDF) : Pass
+HKDF : (KAT_KDF) : Pass
+SSKDF : (KAT_KDF) : Pass
+X963KDF : (KAT_KDF) : Pass
+X942KDF : (KAT_KDF) : Pass
+HASH : (DRBG) : Pass
+CTR : (DRBG) : Pass
+HMAC : (DRBG) : Pass
+DH : (KAT_KA) : Pass
+ECDH : (KAT_KA) : Pass
+RSA_Encrypt : (KAT_AsymmetricCipher) : Pass
+RSA_Decrypt : (KAT_AsymmetricCipher) : Pass
+RSA_Decrypt : (KAT_AsymmetricCipher) : Pass
+INSTALL PASSED
 ```
+This is where the KAT test are executed.
 
 
 #### FIPS 3.0 in Node.js
 In Node.js FIPS support is currently disabled as 1.1.1 does not support it but
 for 3.0 we can re-enable FIPS support. 
 
-For the default build of 
 
 1) Enable the ./configure --openssl-fips
-   This could be used to point to the openssl configuration file, and in addition
-   set the `enable-fips` build time property.
 2) Create a gyp action that runs openssl fipsinstall to the module location.
-3) 
 
