@@ -597,7 +597,100 @@ This is where the KAT test are executed.
 In Node.js FIPS support is currently disabled as 1.1.1 does not support it but
 for 3.0 we can re-enable FIPS support. 
 
+There are three use cases as which I can think of.
 
-1) Enable the ./configure --openssl-fips
-2) Create a gyp action that runs openssl fipsinstall to the module location.
+#### 1) Node user
+Follow the instructions in
+[README-FIPS.md](https://github.com/openssl/openssl/blob/master/README-FIPS.md)
+to install the FIPS module.
+
+Then the they will need to enable fips via a openssl configuration file or 
+using --enable-fips or --force-fips command line options to the Node.js
+executable.
+
+#### 2) Node provider (build and distributes Node)
+An example of this would be a Linux distribution which wants to build their
+own Node and enable FIPS.
+
+They would need to configure their Node build to enable fips and then enable
+FIPS support either using the OpenSSL config file or using flags when starting
+node.
+
+#### 3) Node development/CI
+For Node development and CI servers there will also be a need to install and
+test fips.
+
+__This is very much a work in progress and I'm just trying to do the simplest
+thing possible to try this out__
+
+Perhaps an option would be to build the fips.so manually and not be part of the
+Node.js build. We have the OpenSSL sources in the deps directory and could use
+that directory to build fips.so.
+
+For example:
+```console
+$ cd deps/openssl/openssl
+$ ./config enable-fips --prefix=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl linux-x86_64
+$ make -j8 providers/fips.so
+$ mkdir ../../../out/Release/openssl/ssl
+$ cp providers/fipsmodule.cnf ../../../out/Release/openssl/ssl
+$ export LD_LIBRARY_PATH=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib
+$ export PATH=/home/danielbevenius/work/nodejs/openssl/deps/openssl/openssl/apps:$PATH
+$ make install_fips
+$ openssl fipsinstall -module /home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/fips.so -out /home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/fips.so.cnf
+enssl/out/Release/openssl/lib/ossl-modules/fips.so.cnf
+HMAC : (Module_Integrity) : Pass
+SHA1 : (KAT_Digest) : Pass
+SHA2 : (KAT_Digest) : Pass
+SHA3 : (KAT_Digest) : Pass
+TDES : (KAT_Cipher) : Pass
+AES_GCM_Encrypt : (KAT_Cipher) : Pass
+AES_ECB_Decrypt : (KAT_Cipher) : Pass
+RSA : (KAT_Signature) : RNG : (Continuous_RNG_Test) : Pass
+Pass
+ECDSA : (KAT_Signature) : Pass
+DSA : (KAT_Signature) : Pass
+TLS12_PRF : (KAT_KDF) : Pass
+PBKDF2 : (KAT_KDF) : Pass
+SSHKDF : (KAT_KDF) : Pass
+KBKDF : (KAT_KDF) : Pass
+HKDF : (KAT_KDF) : Pass
+SSKDF : (KAT_KDF) : Pass
+X963KDF : (KAT_KDF) : Pass
+X942KDF : (KAT_KDF) : Pass
+HASH : (DRBG) : Pass
+CTR : (DRBG) : Pass
+HMAC : (DRBG) : Pass
+DH : (KAT_KA) : Pass
+ECDH : (KAT_KA) : Pass
+RSA_Encrypt : (KAT_AsymmetricCipher) : Pass
+RSA_Decrypt : (KAT_AsymmetricCipher) : Pass
+RSA_Decrypt : (KAT_AsymmetricCipher) : Pass
+INSTALL PASSED
+```
+So that will generate ../../../out/Release/openssl/lib/ossl-modules/fips.so.cnf
+which we can then use by including it in a openssl.cnf file.
+
+$ cat <<- HERE > ../../../out/Release/openssl/lib/ossl-modules/openssl.cnf
+openssl_conf = openssl_init
+
+.include fips.so.cnf
+
+[openssl_init]
+providers = prov
+
+[prov]
+fips = fips_sect
+HERE
+```
+When we want to use this configation file instead of the default we need to
+specify the environment variable `OPENSSL_CONF` to point to the openssl.cnf
+file above.
+```console
+$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf ./node --enable-fips -p 'require("crypto").getFips()'
+```
+Well that turned out to be anything but simple :( 
+
+I also noticed a few differences between alpha15 and openssl/master with
+regard to the install_fips make target. 
 
