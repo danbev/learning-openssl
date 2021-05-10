@@ -687,6 +687,8 @@ When we want to use this configation file instead of the default we need to
 specify the environment variable `OPENSSL_CONF` to point to the openssl.cnf
 file above.
 
+### Enabling FIPS in Node.js
+
 For FIPS we also need to make sure that the FIPS provider is laoded before
 the default provider is FIPS is enabled. This can be done upon startup but
 what if FIPS is available but not enabled, and later a user enables FIPS support
