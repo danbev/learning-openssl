@@ -18,7 +18,7 @@ void error_and_exit(const char* msg) {
  * This needs to be run using OPENSSL_CONF so that the OpenSSL configuration
  * file in this directory is used:
  *
- * $ env OPENSSL_CONF=$PWD/openssl.cnf  ./fips-provider
+ * $ env OPENSSL_CONF=$PWD/openssl.cnf OPENSSL_MODULES=path/to/ossl-modules ./fips-provider
  */ 
 int main(int argc, char** argv) {
   printf("FIPS Provider example\n");
