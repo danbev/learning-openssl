@@ -670,7 +670,7 @@ INSTALL PASSED
 ```
 So that will generate ../../../out/Release/openssl/lib/ossl-modules/fips.so.cnf
 which we can then use by including it in a openssl.cnf file.
-
+```console
 $ cat <<- HERE > ../../../out/Release/openssl/lib/ossl-modules/openssl.cnf
 openssl_conf = openssl_init
 
@@ -706,3 +706,32 @@ Well that turned out to be anything but simple :(
 I also noticed a few differences between alpha15 and openssl/master with
 regard to the install_fips make target.
 
+
+#### Enablig FIPS using Node's --enable-fips option
+This example shows that using the Node runtime option `--enable-fips` can
+be used to load the FIPS provider and that FIPS is enabled:
+```console
+$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node --enable-fips -p 'require("crypto").getFips()'
+FIPS provider
+1
+FIPS provider unloaded
+```
+
+#### Enabling FIPS using OpenSSL config
+This example show that using OpenSSL's configuration file, FIPS can be enabled
+without specifying the `--enable-fips` or `--force-fips` options:
+
+For this we need to update the configuration file that is currently being used
+for these examples (out/Release/openssl/lib/ossl-modules/openssl.cnf):
+```text
+base = base_sect
+
+[base_sect]
+activate = 1
+
+```
+
+```console
+$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node  -p 'require("crypto").getFips()'
+
+```
