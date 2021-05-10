@@ -686,11 +686,23 @@ HERE
 When we want to use this configation file instead of the default we need to
 specify the environment variable `OPENSSL_CONF` to point to the openssl.cnf
 file above.
+
+For FIPS we also need to make sure that the FIPS provider is laoded before
+the default provider is FIPS is enabled. This can be done upon startup but
+what if FIPS is available but not enabled, and later a user enables FIPS support
+programmatically, how do we hanle that case?
+
+The following shows an example of loading the FIPS provider early and with
+the above mentioned locations for the FIPS module (in the Node output directory
+`out`):
 ```console
-$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf ./node --enable-fips -p 'require("crypto").getFips()'
+$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node --enable-fips -p 'require("crypto").getFips()'
+FIPS provider
+1
+FIPS provider unloaded
 ```
 Well that turned out to be anything but simple :( 
 
 I also noticed a few differences between alpha15 and openssl/master with
-regard to the install_fips make target. 
+regard to the install_fips make target.
 
