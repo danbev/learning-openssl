@@ -763,5 +763,7 @@ activate = 1
 
 ```console
 $ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node  -p 'require("crypto").getFips()'
-
 ```
+This does not actually enable FIPS. I've created a section named
+[Configuring FIPS](#configuring_fips) to reproduce this with a standalone
+example and try to figure out the reason for this.
