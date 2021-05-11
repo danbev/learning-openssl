@@ -628,8 +628,8 @@ There are three use cases as which I can think of.
 
 #### 1) Node user
 Follow the instructions in
-[README-FIPS.md](https://github.com/openssl/openssl/blob/master/README-FIPS.md)
-to install the FIPS module.
+[README-FIPS.md](https://github.com/openssl/openssl/blob/master/README-FIPS.md#installing-the-fips-module)
+to install the FIPS module and FIPS configuration file.
 
 FIPS support can then be enable fips via a openssl configuration file or 
 using `--enable-fips` or `--force-fips` command line options to the Node.js
@@ -648,8 +648,8 @@ An example of this would be a Linux distribution which wants to build their
 own Node and enable FIPS.
 
 Follow the instructions in
-[README-FIPS.md](https://github.com/openssl/openssl/blob/master/README-FIPS.md)
-to install the FIPS module.
+[README-FIPS.md](https://github.com/openssl/openssl/blob/master/README-FIPS.md#installing-the-fips-module)
+to install the FIPS module and FIPS configuration file..
 
 Configure their Node build to enable fips:
 ```console
@@ -747,7 +747,7 @@ file above.
 This example just shows that without any options specified FIPS is not
 enabled:
 ```console
-$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node -p 'require("crypto").getFips()'
+$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node -p 'crypto.getFips()'
 0
 ```
 
@@ -755,7 +755,7 @@ $ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/
 This example shows that using the Node runtime option `--enable-fips` can
 be used to load the FIPS provider and that FIPS is enabled:
 ```console
-$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node --enable-fips -p 'require("crypto").getFips()'
+$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node --enable-fips -p 'crypto.getFips()'
 FIPS provider
 1
 FIPS provider unloaded
@@ -763,7 +763,7 @@ FIPS provider unloaded
 
 #### Enabling FIPS using Node's --force-fips option
 ```console
-$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node -p --force-fips -p 'require("crypto").getFips()'
+$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node -p --force-fips -p 'crypto.getFips()'
 1
 ```
 
@@ -796,6 +796,6 @@ default_properties = fips=yes
 And we can then run the same example without the `--enable-fips` or
 `--force-fips` options:
 ```console
-$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node -p 'require("crypto").getFips()'
+$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node -p 'crypto.getFips()'
 1
 ```
