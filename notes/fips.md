@@ -606,19 +606,19 @@ configuration file.
 This can be configured by following the
 [steps](https://github.com/openssl/openssl/blob/master/README-FIPS.md#making-all-applications-use-the-fips-module-by-default)
 and this can be tested in this repository by using the
-[fips-provider.c](../fips-provider.c) example. To try this one need to uncomment
-the following lines in [openssl.cnf](../openssl.cnf):
+[fips-provider.c](../fips-provider.c) example. The example uses the FIPS
+config file [fips.cnf](../fips.cnf) which has activated FIPS:
 ```text
-[prov]
-fips = fipsinstall
-#base = base_sect
-
-#[base_sect]
-#activate = 1
+[fipsinstall]
+activate = 1
 ```
-Running the example with those commented in I was expecting FIPS to be enabled
-but that is not the case.
-_work in progress_
+If we remove this line (setting the value to zero is not enough) then if we
+call OSSL_PROVIDER_name(EVP_MD_provider(sha256))) it will show the `default`
+provider instread of `fips`. But that alone will not cause 
+`EVP_default_properties_is_fips_enabled()` to return true. To have it return
+true we would also need to set `default_properties = fips=yes` in the
+configuration file.
+
 
 
 #### FIPS 3.0 in Node.js
@@ -633,7 +633,7 @@ Follow the instructions in
 to install the FIPS module.
 
 Then the they will need to enable fips via a openssl configuration file or 
-using --enable-fips or --force-fips command line options to the Node.js
+using `--enable-fips` or `--force-fips` command line options to the Node.js
 executable.
 
 #### 2) Node provider (build and distributes Node)
@@ -717,27 +717,15 @@ file above.
 
 ### Enabling FIPS in Node.js
 
-For FIPS we also need to make sure that the FIPS provider is laoded before
-the default provider is FIPS is enabled. This can be done upon startup but
-what if FIPS is available but not enabled, and later a user enables FIPS support
-programmatically, how do we hanle that case?
-
-The following shows an example of loading the FIPS provider early and with
-the above mentioned locations for the FIPS module (in the Node output directory
-`out`):
+#### No Node options
+This example just shows that without any options specified FIPS is not
+enabled:
 ```console
-$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node --enable-fips -p 'require("crypto").getFips()'
-FIPS provider
-1
-FIPS provider unloaded
+$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node -p 'require("crypto").getFips()'
+0
 ```
-Well that turned out to be anything but simple :( 
 
-I also noticed a few differences between alpha15 and openssl/master with
-regard to the install_fips make target.
-
-
-#### Enablig FIPS using Node's --enable-fips option
+#### Enabling FIPS using Node's --enable-fips option
 This example shows that using the Node runtime option `--enable-fips` can
 be used to load the FIPS provider and that FIPS is enabled:
 ```console
@@ -747,23 +735,41 @@ FIPS provider
 FIPS provider unloaded
 ```
 
+#### Enabling FIPS using Node's --force-fips option
+```console
+$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node -p --force-fips -p 'require("crypto").getFips()'
+1
+```
+
 #### Enabling FIPS using OpenSSL config
 This example show that using OpenSSL's configuration file, FIPS can be enabled
-without specifying the `--enable-fips` or `--force-fips` options:
+without specifying the `--enable-fips` or `--force-fips` options by setting
+`default_properties = fips=yes` in the FIPS configuration file. See
+[link](https://github.com/openssl/openssl/blob/master/README-FIPS.md#loading-the-fips-module-at-the-same-time-as-other-providers)
+for details.
+```console
+$ cat out/Release/openssl/lib/ossl-modules/openssl.cnf 
+openssl_conf = openssl_init
 
-For this we need to update the configuration file that is currently being used
-for these examples (out/Release/openssl/lib/ossl-modules/openssl.cnf):
-```text
-base = base_sect
+.include /home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/fips.cnf
+                                                                                
+[openssl_init]
+providers = prov
+alg_section = algorithm_sect
 
-[base_sect]
+[prov]
+fips = fips_sect
+default = default_sect
+
+[default_sect]
 activate = 1
 
+[algorithm_sect]
+default_properties = fips=yes
 ```
-
+And we can then run the same example without the `--enable-fips` or
+`--force-fips` options:
 ```console
-$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node  -p 'require("crypto").getFips()'
+$ env OPENSSL_CONF=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/nodejs/openssl/out/Release/openssl/lib/ossl-modules ./node -p 'require("crypto").getFips()'
+1
 ```
-This does not actually enable FIPS. I've created a section named
-[Configuring FIPS](#configuring-fips) to reproduce this with a standalone
-example and try to figure out the reason for this.
