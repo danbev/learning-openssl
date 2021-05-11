@@ -614,11 +614,10 @@ activate = 1
 ```
 If we remove this line (setting the value to zero is not enough) then if we
 call OSSL_PROVIDER_name(EVP_MD_provider(sha256))) it will show the `default`
-provider instread of `fips`. But that alone will not cause 
+provider instead of `fips`. But that alone will not cause 
 `EVP_default_properties_is_fips_enabled()` to return true. To have it return
 true we would also need to set `default_properties = fips=yes` in the
 configuration file.
-
 
 
 #### FIPS 3.0 in Node.js
@@ -632,17 +631,44 @@ Follow the instructions in
 [README-FIPS.md](https://github.com/openssl/openssl/blob/master/README-FIPS.md)
 to install the FIPS module.
 
-Then the they will need to enable fips via a openssl configuration file or 
+FIPS support can then be enable fips via a openssl configuration file or 
 using `--enable-fips` or `--force-fips` command line options to the Node.js
 executable.
+
+If OpenSSL is not installed in the default location two environment variables
+need to be set, `OPENSSL_CONF`, and `OPENSSL_MODULES` which should point to the
+OpenSSL configuration file and the directory where OpenSSL modules are located.
+```console
+$ export OPENSSL_CONF=/path/to/openssl.cnf
+$ export OPENSSL_MODULES=/path/to/directory/of/fips/module
+```
 
 #### 2) Node provider (build and distributes Node)
 An example of this would be a Linux distribution which wants to build their
 own Node and enable FIPS.
 
-They would need to configure their Node build to enable fips and then enable
-FIPS support either using the OpenSSL config file or using flags when starting
-node.
+Follow the instructions in
+[README-FIPS.md](https://github.com/openssl/openssl/blob/master/README-FIPS.md)
+to install the FIPS module.
+
+Configure their Node build to enable fips:
+```console
+$ ./configure --openssl-is-fips
+```
+
+Node can then be built using the normal make target. 
+
+FIPS support can then be enable fips via a openssl configuration file or 
+using `--enable-fips` or `--force-fips` command line options to the Node.js
+executable.
+
+If OpenSSL is not installed in the default location two environment variables
+need to be set, `OPENSSL_CONF`, and `OPENSSL_MODULES` which should point to the
+OpenSSL configuration file and the directory where OpenSSL modules are located.
+```console
+$ export OPENSSL_CONF=/path/to/openssl.cnf
+$ export OPENSSL_MODULES=/path/to/directory/of/fips/module
+```
 
 #### 3) Node development/CI
 For Node development and CI servers there will also be a need to install and
