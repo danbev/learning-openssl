@@ -20,13 +20,30 @@ int main(int argc, char** argv) {
   //CONF_modules_load_file("./openssl.cnf", "openssl_conf", 0);
 
   // EVP_default_properties_is_fips_enabled should return 1 if FIPS is enabled
+  OPENSSL_INIT_SETTINGS* settings = OPENSSL_INIT_new();
+  OPENSSL_INIT_set_config_file_flags(settings, CONF_MFLAGS_DEFAULT_SECTION);
+  OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CONFIG, settings); 
+
   int r = EVP_default_properties_is_fips_enabled(NULL);
+  int e = ERR_peek_error();
+  if (ERR_SYSTEM_ERROR(e)) {
+    printf("ERR_GET_REASON(e): %d\n", ERR_GET_REASON(e));
+    exit(EXIT_FAILURE);
+  }
   if (errno) {
     int error_num = errno;
     printf("errno: %d\n", error_num);
     printf("Error opening file: %s\n", strerror(error_num));
     exit(EXIT_FAILURE);
   }
+  const char* data = NULL;
+  int flags = 0;
+  int err = ERR_peek_last_error_data(&data, &flags);
+  if (data != NULL) {
+    printf("OpenSSL error: %s\n", ERR_reason_error_string(err));
+    exit(EXIT_FAILURE);
+  }
+
   printf("Fips is enabled: %s\n", r == 1 ? "true" : "false");
 
   exit(EXIT_SUCCESS);
