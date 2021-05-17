@@ -42,3 +42,4 @@ libcprovider.so
 bignum
 dh
 dh_1_1_1
+is_fips_enabled
