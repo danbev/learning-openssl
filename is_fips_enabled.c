@@ -25,9 +25,10 @@ int main(int argc, char** argv) {
   OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CONFIG, settings); 
 
   int r = EVP_default_properties_is_fips_enabled(NULL);
-  int e = ERR_peek_error();
+  unsigned long e = ERR_peek_error();
   if (ERR_SYSTEM_ERROR(e)) {
     printf("ERR_GET_REASON(e): %d\n", ERR_GET_REASON(e));
+    ERR_print_errors_fp(stderr);
     exit(EXIT_FAILURE);
   }
   if (errno) {
@@ -38,7 +39,7 @@ int main(int argc, char** argv) {
   }
   const char* data = NULL;
   int flags = 0;
-  int err = ERR_peek_last_error_data(&data, &flags);
+  unsigned long err = ERR_peek_last_error_data(&data, &flags);
   if (data != NULL) {
     printf("OpenSSL error: %s\n", ERR_reason_error_string(err));
     exit(EXIT_FAILURE);
