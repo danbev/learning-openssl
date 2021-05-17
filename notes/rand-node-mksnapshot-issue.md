@@ -131,10 +131,22 @@ static BIO *process_include(char *include, OPENSSL_DIR_CTX **dirctx,
         return NULL;
 ```
 `stat` will fail and an error will be raised on the OpenSSL error stack and
-NULL returned:
+NULL returned. If we step into `ERR_set_error` we can inspect the reason (int)
+that is being passed which I think is the value of `errno`
+```console
+(lldb) expr reason
+(int) $0 = 2
+```
+And we can look that error number up with the following command:
+```console
+$ errno 2
+ENOENT 2 No such file or directory
+```
+
 Notice that this is a system error so we cannot use `ERR_reason_error_string`
 to see the error reason:
 ```console
+(lldb) br s -n ERR_reason_error_string
 (lldb) expr -i false -- ERR_reason_error_string(ERR_peek_error())
 ```
 But we can see the library string:
@@ -142,8 +154,75 @@ But we can see the library string:
 (lldb) call ERR_lib_error_string(ERR_peek_error())
 (const char *) $15 = 0x00007ffff7eb6367 "system library"
 ```
+The above information was while being in the `process_include` function, but
+when the 
+```c
+int CONF_modules_load_file_ex(OSSL_LIB_CTX *libctx, const char *filename,          
+                              const char *appname, unsigned long flags)         
+{                                                                               
+    char *file = NULL;                                                          
+    CONF *conf = NULL;                                                          
+    int ret = 0, diagnostics = 0;                                               
+                                                                                
+    if (filename == NULL) {                                                     
+        file = CONF_get1_default_config_file();                                 
+        if (file == NULL)                                                       
+            goto err;                                                           
+    } else {                                                                    
+        file = (char *)filename;                                                
+    } 
+
+
+    ERR_set_mark();
+    ...
+    conf = NCONF_new_ex(libctx, NULL);                                             
+    if (conf == NULL)                                                              
+        goto err;                                                                  
+                                                                                   
+    if (NCONF_load(conf, file, NULL) <= 0) {                                       
+        if ((flags & CONF_MFLAGS_IGNORE_MISSING_FILE) &&                           
+            (ERR_GET_REASON(ERR_peek_last_error()) == CONF_R_NO_SUCH_FILE)) {   
+            ret = 1;                                                               
+        }                                                                          
+        goto err;                                                                  
+    }                  
+    
+    ret = CONF_modules_load(conf, appname, flags);                                 
+    diagnostics = conf_diagnostics(conf);                                          
+                                                                                   
+  err:                                                                              
+    if (filename == NULL)                                                          
+        OPENSSL_free(file);                                                        
+    NCONF_free(conf);                                                              
+                                                                                   
+    if ((flags & CONF_MFLAGS_IGNORE_RETURN_CODES) != 0 && !diagnostics)            
+        ret = 1;                                                                   
+                                                                                   
+    if (ret > 0)                                                                   
+        ERR_pop_to_mark();                                                         
+    else                                                                           
+        ERR_clear_last_mark();                                                     
+                                                                                   
+    return ret;                                                                    
+}                  
+```
+`NCONF` is what is calling `process_include` and notice that there the
+error mark is being set before this call. This will then call ERR_pop_to_mark()
+which will clear the error.
+```
+"If CONF_MFLAGS_IGNORE_RETURN_CODES is set the function unconditionally returns
+success. This is used by default in OPENSSL_init_crypto(3) to ignore any errors
+in the default system-wide configuration file, as having all OpenSSL
+applications fail to start when there are potentially minor issues in the file
+is too risky. Applications calling CONF_modules_load_file explicitly should not
+generally set this flag."
+```
+
+We can specify this flag by calling OPENSSL_init_crypto and an example can
+be found in [is_fips_enabled.c](../is_fips_enabled.c).
+
 What can be done if check `errno` (there is an example if 
-[is_fips_enabled](../is_fips_enabled.c).
+[is_fips_enabled](../is_fips_enabled.c)).
 
 
 __wip__
