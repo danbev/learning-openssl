@@ -28,7 +28,14 @@ int main(int argc, char** argv) {
   unsigned long e = ERR_peek_error();
   if (ERR_SYSTEM_ERROR(e)) {
     printf("ERR_GET_REASON(e): %d\n", ERR_GET_REASON(e));
-    ERR_print_errors_fp(stderr);
+    //ERR_print_errors_fp(stderr);
+
+    unsigned long e = 0;
+    const char* data;
+    int line, flags;
+    while ((e = ERR_get_error_all(NULL, NULL, NULL, &data, NULL)) != 0) {
+      printf("Error nr: %d, reason: %s\n", ERR_GET_REASON(e), data);
+    }
     exit(EXIT_FAILURE);
   }
   if (errno) {
