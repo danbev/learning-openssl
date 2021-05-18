@@ -225,6 +225,108 @@ What can be done if check `errno` (there is an example if
 [is_fips_enabled](../is_fips_enabled.c)).
 
 
+In Node.js the problem is that the default behaviour is causing CheckEntropy
+to enter an endless loop because `RAND_status()` will call OPENSSL_init_crypto
+with the default settings which will ignore any .include file errors (like in
+our case when it is not found). This will lead to RAND_get0_primary(NULL) not
+being able to fetch a RAND provider.
+
+```console
+-> 635 	    ret = dgbl->primary = rand_new_drbg(ctx, dgbl->seed,
+   636 	                                        PRIMARY_RESEED_INTERVAL,
+   637 	                                        PRIMARY_RESEED_TIME_INTERVAL);
+
+   556 	    name = dgbl->rng_name != NULL ? dgbl->rng_name : "CTR-DRBG";
+-> 557 	    rand = EVP_RAND_fetch(libctx, name, dgbl->rng_propq);
+   558 	    if (rand == NULL) {
+   559 	        ERR_raise(ERR_LIB_RAND, RAND_R_UNABLE_TO_FETCH_DRBG);
+   560 	        return NULL;
+   561 	    }
+```
+This will be checked by the calling code and 0 returned. 
+
+I can see that the fips provider, providers/fips/fipsprov.c, has:
+```c
+static const OSSL_ALGORITHM fips_rands[] = {                                    
+    { PROV_NAMES_CTR_DRBG, FIPS_DEFAULT_PROPERTIES, ossl_drbg_ctr_functions },  
+    { PROV_NAMES_HASH_DRBG, FIPS_DEFAULT_PROPERTIES, ossl_drbg_hash_functions },
+    { PROV_NAMES_HMAC_DRBG, FIPS_DEFAULT_PROPERTIES, ossl_drbg_ossl_hmac_functions },
+    { PROV_NAMES_TEST_RAND, FIPS_UNAPPROVED_PROPERTIES, ossl_test_rng_functions },
+    { NULL, NULL, NULL }                                                        
+};
+```
+And PROV_NAMES_CTR_DRBG is defined in
+providers/implementations/include/prov/names.h:
+```c
+#define PROV_NAMES_CTR_DRBG "CTR-DRBG"
+```
+
+But providers/defltprov.c also has an implementation for:
+```c
+static const OSSL_ALGORITHM deflt_rands[] = {                                      
+    { PROV_NAMES_CTR_DRBG, "provider=default", ossl_drbg_ctr_functions },          
+    { PROV_NAMES_HASH_DRBG, "provider=default", ossl_drbg_hash_functions },        
+    { PROV_NAMES_HMAC_DRBG, "provider=default", ossl_drbg_ossl_hmac_functions },
+    { PROV_NAMES_SEED_SRC, "provider=default", ossl_seed_src_functions },          
+    { PROV_NAMES_TEST_RAND, "provider=default", ossl_test_rng_functions },         
+    { NULL, NULL, NULL }                                                           
+};
+```
+TODO: look into why this does not work as my impression was that this should
+be possible with just the default provider. Just a note that might be something
+to investigate is that in openssl.cnf if I comment out the fips sect in the
+providers section, it does work.
+```text
+fips = fips_sect
+```
+
+A suggestion is to not specify CONF_MFLAGS_IGNORE_RETURN_CODES so that errors
+can be handled. This would generate the following error upon Node startup:
+```console
+$ ./out/Debug/node --enable-fips -p 'crypto.getFips()'
+OpenSSL configuration error:
+00400511147F0000:error:80000002:system library:process_include:No such file or directory:crypto/conf/conf_def.c:803:calling stat(/bogus/file)
+00400511147F0000:error:07800069:common libcrypto routines:provider_conf_load:provider section error:crypto/provider_conf.c:122:section=fips_sect not found
+00400511147F0000:error:0700006D:configuration file routines:module_run:module initialization error:crypto/conf/conf_mod.c:242:module=providers, value=provider_sect retcode=-1      
+```
+And with a proper .include path:
+$ ./out/Debug/node --enable-fips -p 'crypto.getFips()'
+1
+$ ./out/Debug/node --enable-fips -p 'crypto.getFips(); process.report.getReport().sharedObjects'
+[
+  'linux-vdso.so.1',
+  '/home/danielbevenius/work/security/openssl_quic-3.0/lib/libcrypto.so.81.3',
+  '/home/danielbevenius/work/security/openssl_quic-3.0/lib/libssl.so.81.3',
+  '/usr/lib64/libdl.so.2',
+  '/usr/lib64/libstdc++.so.6',
+  '/usr/lib64/libm.so.6',
+  '/usr/lib64/libgcc_s.so.1',
+  '/usr/lib64/libpthread.so.0',
+  '/usr/lib64/libc.so.6',
+  '/lib64/ld-linux-x86-64.so.2',
+  '/home/danielbevenius/work/security/openssl_quic-3.0/lib/ossl-modules/fips.so'
+]
+```
+Note that my /work/security/openssl_quic-3.0/ssl/fipsmodule.cnf has activate = 1
+specified which is why the fips modules is loaded. If I remove that line and
+rerun the command we see:
+```console
+$ ./out/Debug/node -p 'crypto.getFips(); process.report.getReport().sharedObjects'
+[
+  'linux-vdso.so.1',
+  '/home/danielbevenius/work/security/openssl_quic-3.0/lib/libcrypto.so.81.3',
+  '/home/danielbevenius/work/security/openssl_quic-3.0/lib/libssl.so.81.3',
+  '/usr/lib64/libdl.so.2',
+  '/usr/lib64/libstdc++.so.6',
+  '/usr/lib64/libm.so.6',
+  '/usr/lib64/libgcc_s.so.1',
+  '/usr/lib64/libpthread.so.0',
+  '/usr/lib64/libc.so.6',
+  '/lib64/ld-linux-x86-64.so.2'
+]
+```
+
+
 __wip__
 
 
