@@ -22,9 +22,11 @@ int main(int argc, char** argv) {
   // EVP_default_properties_is_fips_enabled should return 1 if FIPS is enabled
   OPENSSL_INIT_SETTINGS* settings = OPENSSL_INIT_new();
   OPENSSL_INIT_set_config_file_flags(settings, CONF_MFLAGS_DEFAULT_SECTION);
-  OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CONFIG, settings); 
+  int r = OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CONFIG, settings);
+  printf("Result from OPENSSL_init_crypto: %d\n", r);
+  OPENSSL_INIT_free(settings);
 
-  int r = EVP_default_properties_is_fips_enabled(NULL);
+  r = EVP_default_properties_is_fips_enabled(NULL);
   unsigned long e = ERR_peek_error();
   if (ERR_SYSTEM_ERROR(e)) {
     printf("ERR_GET_REASON(e): %d\n", ERR_GET_REASON(e));
