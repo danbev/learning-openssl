@@ -122,6 +122,9 @@ fips-provider: fips-provider.c
 is_fips_enabled: is_fips_enabled.c
 	$(CC) $(CFLAGS)
 
+rand_status: rand_status.c
+	$(CC) $(CFLAGS)
+
 rand: rand.c
 	$(CC) $(CFLAGS)
 
