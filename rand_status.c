@@ -20,6 +20,7 @@ int main(int argc, char** argv) {
 
   int r = RAND_status();
   printf("rand_status: %d\n", r);
+  ERR_print_errors_fp(stderr);
 
   exit(EXIT_SUCCESS);
 }
