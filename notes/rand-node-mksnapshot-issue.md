@@ -139,6 +139,7 @@ $ ldd rand_status
 	libdl.so.2 => /usr/lib64/libdl.so.2 (0x00007ff2719db000)
 	/lib64/ld-linux-x86-64.so.2 (0x00007ff27218a000)
 $ env OPENSSL_CONF=/home/danielbevenius/work/security/openssl_quic-3.0/ssl/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/security/openssl_quic-3.0/lib/ossl-modules ./rand_status
+rand_status: 0
 ```
 Linking against openssl/openssl:
 ```
