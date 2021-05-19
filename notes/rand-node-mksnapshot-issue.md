@@ -222,8 +222,8 @@ But we can see the library string:
 (lldb) call ERR_lib_error_string(ERR_peek_error())
 (const char *) $15 = 0x00007ffff7eb6367 "system library"
 ```
-The above information was while being in the `process_include` function, but
-when the 
+The above information was while being in the `process_include` function which
+is called by CONF_modules_load_file_ex:
 ```c
 int CONF_modules_load_file_ex(OSSL_LIB_CTX *libctx, const char *filename,          
                               const char *appname, unsigned long flags)         
@@ -242,6 +242,7 @@ int CONF_modules_load_file_ex(OSSL_LIB_CTX *libctx, const char *filename,
 
 
     ERR_set_mark();
+    conf = NCONF_new_ex(libctx, NULL);
     ...
     conf = NCONF_new_ex(libctx, NULL);                                             
     if (conf == NULL)                                                              
@@ -274,7 +275,7 @@ int CONF_modules_load_file_ex(OSSL_LIB_CTX *libctx, const char *filename,
     return ret;                                                                    
 }                  
 ```
-`NCONF` is what is calling `process_include` and notice that there the
+`NCONF_load` is what is calling `process_include` and notice that there the
 error mark is being set before this call. This will then call ERR_pop_to_mark()
 which will clear the error.
 ```
@@ -292,6 +293,8 @@ be found in [is_fips_enabled.c](../is_fips_enabled.c).
 What can be done if check `errno` (there is an example if 
 [is_fips_enabled](../is_fips_enabled.c)).
 
+Also notice that after the configuration file has been parsed and the `conf`
+object has been populated `CONF_modules_load`.
 
 In Node.js the problem is that the default behaviour is causing CheckEntropy
 to enter an endless loop because `RAND_status()` will call OPENSSL_init_crypto
@@ -347,6 +350,109 @@ providers section, it does work.
 ```text
 fips = fips_sect
 ```
+When a section is loaded by `CONF_modules_load` provider_conf_init will be
+called which has the following for loop that will iterate over the providers
+in openssl.cnf:
+```c
+static int provider_conf_init(CONF_IMODULE *md, const CONF *cnf)                   
+{
+    ...
+    for (i = 0; i < sk_CONF_VALUE_num(elist); i++) {                               
+        cval = sk_CONF_VALUE_value(elist, i);                                      
+        if (!provider_conf_load(cnf->libctx, cval->name, cval->value, cnf))        
+            return 0;                                                              
+    }          
+    ...
+    return 1;
+}
+```
+We can break when we are about to load the `fips_sect`:
+```console
+(lldb) br s -f provider_conf.c -l 202 -c '(int)strcmp(cval->value, "fips_sect") == 0'
+(lldb) r
+(lldb) expr *cval
+(CONF_VALUE) $41 = (section = "provider_sect", name = "fips", value = "fips_sect")
+```
+So this will land us in provider_conf_load:
+```c
+static int provider_conf_load(OSSL_LIB_CTX *libctx, const char *name,              
+                              const char *value, const CONF *cnf)                  
+{
+    ...
+    ecmds = NCONF_get_section(cnf, value);                                         
+    ...
+    if (!ecmds) {                                                                  
+        ERR_raise_data(ERR_LIB_CRYPTO, CRYPTO_R_PROVIDER_SECTION_ERROR,            
+                       "section=%s not found", value);                             
+        return 0;                                                                  
+    }
+}
+```
+The above call to NCONF_get_section is going to try to get the secion that the
+value `fips_sect` belongs to. This section exists in fipsmodule.cnf but recall
+that we have specified an invalid path so it would not have been parsed and
+not available. This call will end up in conf_api.c and `_CONF_get_section` which
+will try to retrieve the section but it will return NULL because the section
+cannot be found. This will cause the error above to be raised.
+So this will retun back in `provider_conf_init` where we are currently
+iterating over all the providers. The check in that function will cause the
+processing to stop and return 0. In our case this is the last section but if
+it was not then those would not be loaded I guess?
+
+
+This will cause -1 to be returned from module_init which will be checked in
+`module_run` and it will raise and error:
+```c
+static int module_run(const CONF *cnf, const char *name, const char *value,        
+                      unsigned long flags)                                         
+{
+    ....
+    ret = module_init(md, name, value, cnf);                                    
+                                                                                
+    if (ret <= 0) {                                                             
+        if (!(flags & CONF_MFLAGS_SILENT))                                      
+            ERR_raise_data(ERR_LIB_CONF, CONF_R_MODULE_INITIALIZATION_ERROR,    
+                           "module=%s, value=%s retcode=%-8d",                  
+                           name, value, ret);                                   
+    }                                                                           
+                                                                                
+    return ret;   
+}
+```
+This will return to `CONF_modules_load` which will check the returned value:
+```c
+    if (ret <= 0)                                                              
+        if (!(flags & CONF_MFLAGS_IGNORE_ERRORS)) {                            
+            ERR_clear_last_mark();                                          
+            return ret;                                                     
+        }                                                                   
+    ERR_pop_to_mark();  
+```
+In our case this we will enter the inner if statement and clear the last mark
+(but not the errors raised), and then return -1. That will return to
+`CONF_modules_load_file_ex`:
+```c
+    ret = CONF_modules_load(conf, appname, flags);                              
+    diagnostics = conf_diagnostics(conf);                                       
+                                                                                
+ err:                                                                           
+    if (filename == NULL)                                                       
+        OPENSSL_free(file);                                                     
+    NCONF_free(conf);                                                           
+                                                                                
+    if ((flags & CONF_MFLAGS_IGNORE_RETURN_CODES) != 0 && !diagnostics)         
+        ret = 1;                                                                
+                                                                                
+    if (ret > 0)                                                                
+        ERR_pop_to_mark();                                                      
+    else                                                                        
+        ERR_clear_last_mark();                                                  
+                                                                                
+    return ret;                                                                 
+}                            
+```
+This will enter the else block and tne clear the last mark and return -1.
+
 
 A suggestion is to not specify CONF_MFLAGS_IGNORE_RETURN_CODES so that errors
 can be handled. This would generate the following error upon Node startup:
