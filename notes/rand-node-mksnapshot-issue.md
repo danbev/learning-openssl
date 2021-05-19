@@ -5,8 +5,6 @@ with quictls/openssl 3.0.0-alpha16.
 The issue occurs as part of the Node.js build and the running of node_mksnapshot
 or if Node has already been built running a Node process will appears to "hang".
 
-
-
 ## Steps to reproduce:
 First `OPENSSL_MODULES`, `OPENSSL_CONF`, and `LD_LIBRARY_PATH` need to be
 specified as a environment variables, and they can be exported or set for the
@@ -78,13 +76,82 @@ void CheckEntropy() {
 ```
 Stepping into RAND_status() will land us in crypto/rand/rand_lib.c:
 ```c
-int RAND_status(void)                                                           
-{                                                                               
-    EVP_RAND_CTX *rand;                                                         
-# ifndef OPENSSL_NO_DEPRECATED_3_0                                              
-    const RAND_METHOD *meth = RAND_get_rand_method();
-    ...
+int RAND_status(void)                                                              
+{                                                                                  
+    EVP_RAND_CTX *rand;                                                            
+# ifndef OPENSSL_NO_DEPRECATED_3_0                                                 
+    const RAND_METHOD *meth = RAND_get_rand_method();                              
+                                                                                   
+    if (meth != NULL && meth != RAND_OpenSSL())                                    
+        return meth->status != NULL ? meth->status() : 0;                          
+# endif                                                                            
+                                                                                   
+    if ((rand = RAND_get0_primary(NULL)) == NULL)                                  
+        return 0;                                                                  
+    return EVP_RAND_state(rand) == EVP_RAND_STATE_READY;                           
+}           
+```
+`RAND_get_rand_method` can also be found in rand_lib.c:
+```c
+const RAND_METHOD *RAND_get_rand_method(void)                                   
+{
+  ...
+  if ((e = ENGINE_get_default_RAND()) != NULL                                
+                && (tmp_meth = ENGINE_get_RAND(e)) != NULL) {                      
+            funct_ref = e;                                                         
+            default_RAND_meth = tmp_meth;   
 }
+```
+ENGINE_get_default_RAND:
+```c
+ENGINE *ENGINE_get_default_RAND(void)
+{
+    return engine_table_select(&rand_table, dummy_nid);
+}
+```
+Which will end up in eng_table.c:
+```c
+ENGINE *engine_table_select_int(ENGINE_TABLE **table, int nid, const char *f,   
+                                int l)                                          
+{                                                                               
+    ENGINE *ret = NULL;                                                         
+    ENGINE_PILE tmplate, *fnd = NULL;                                           
+    int initres, loop = 0;                                                      
+                                                                                
+    /* Load the config before trying to check if engines are available */       
+    OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CONFIG, NULL); 
+    ...
+```
+There is a simple example that just calls RAND_status in
+[rand_status](../rand_status.c) and when linking this against quictls/openssl
+I see the behaviour as above where it always returns 0, but have verified that
+this also happend with openssl/openssl (master) (this is with an incorrect
+.include path for the FIPS configuration file that is):
+
+Linking against quictls/openssl:
+```console
+$ ldd rand_status
+	linux-vdso.so.1 (0x00007ffe3c7b4000)
+	libcrypto.so.81.3 => /home/danielbevenius/work/security/openssl_quic-3.0/lib/libcrypto.so.81.3 (0x00007ff271cb5000)
+	libpthread.so.0 => /usr/lib64/libpthread.so.0 (0x00007ff271c6e000)
+	libssl.so.81.3 => /home/danielbevenius/work/security/openssl_quic-3.0/lib/libssl.so.81.3 (0x00007ff271bab000)
+	libc.so.6 => /usr/lib64/libc.so.6 (0x00007ff2719e2000)
+	libdl.so.2 => /usr/lib64/libdl.so.2 (0x00007ff2719db000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007ff27218a000)
+$ env OPENSSL_CONF=/home/danielbevenius/work/security/openssl_quic-3.0/ssl/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/security/openssl_quic-3.0/lib/ossl-modules ./rand_status
+```
+Linking against openssl/openssl:
+```
+$ ldd rand_status
+	linux-vdso.so.1 (0x00007fff257a5000)
+	libcrypto.so.3 => /home/danielbevenius/work/security/openssl_build_master/lib/libcrypto.so.3 (0x00007f4289dee000)
+	libpthread.so.0 => /usr/lib64/libpthread.so.0 (0x00007f4289da7000)
+	libssl.so.3 => /home/danielbevenius/work/security/openssl_build_master/lib/libssl.so.3 (0x00007f4289ce8000)
+	libc.so.6 => /usr/lib64/libc.so.6 (0x00007f4289b1f000)
+	libdl.so.2 => /usr/lib64/libdl.so.2 (0x00007f4289b18000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007f428a2c7000)
+$ env OPENSSL_CONF=/home/danielbevenius/work/security/openssl_build_master/ssl/openssl.cnf OPENSSL_MODULES=/home/danielbevenius/work/security/openssl_build_master/lib/ossl-modules ./rand_status
+rand_status: 0
 ```
 
 So when is the OpenSSL configuration file read?  
@@ -330,3 +397,6 @@ $ ./out/Debug/node -p 'crypto.getFips(); process.report.getReport().sharedObject
 __wip__
 
 
+```console
+$ ./out/Debug/node --expose-internals -p "require('internal/test/binding').internalBinding('crypto').testFipsCrypto();process.report.getReport().sharedObjects"
+```
