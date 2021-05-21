@@ -311,4 +311,35 @@ y³ = 3
 
 And the gives us (x₃, y₃) = (6, 3)
 ```
+
+### Elliptic Curve Discrete Logarithm Problem (ECDLP)
+We have an eliptic curve and a primite element (generator), and remember that
+this is required for a cyclic group, and we have another element T.
+The generator is able to generate all points in the group/curve which includes
+the element T, so T can be expressed as:
+```text
+    [ d number of times]
+T = P + P + ... + P      = dP 
+```
+Now the DL problem is about finding the value of `d`, the number of times we
+did P + P to get to T. So we would know `P` and `T` and want to find out how
+many times P was added to get to T.
+T is the public key in crypto, and d, the number of jumps, group operations, on
+the curve is the private key.
+```text
+P = (5, 1)                  primitive element/generator
+T = (16, 4) = d * P         there exists an integer d that produces (16, 4)
+  = (16, 4) = d(5, 1)       d = ?
+```
+In this case d is 13 but that was by looking at the table above in this doc:
+```text
+13P = (16, 4)
+```
+So the private key, d is just a simple integer which is the number of
+hops/jumps/group operations. This is true for all DL problems regardles of the
+group used. In contrast T, the public key, is a point on the curve
+(group element) and in general for any DL T is the type of the group element
+type.
+
+
 __wip__
