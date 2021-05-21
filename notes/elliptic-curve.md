@@ -118,16 +118,18 @@ Q = (x₂, y₂)
 
 y = sx + m
 
-Where s is the slope we can get by taking:
- (y₂ - y₁)
- --------- = s
- (x₂ - x₁) 
+Where s is the slope we can get by taking (for point addition):
 
-So then would become:
-    (y₂ - y₁)
-y = --------- x + m
-    (x₂ - y1)
+    y₂ - y₁
+s = -------- mod p
+    x₂ - x₁ 
 
+And for point doubling:
+ 
+    3x₁² + a
+s = -------- mod p
+      2y₁
+```
 
 Now we need to find the intersection with the curve after finding the line.
 E: y² = x³ + ax + b
@@ -159,8 +161,10 @@ y₃ = x(x₁ - x₃) - y₁ mod p
 
 To be a group we need to fulfill the requirements that the group operation
 is closed, associative. 
+
 There also has to be an identity element such that a + 1 = 1 + a = a. What is
 this identity value of this group?  
+
 So P + (some point) = P
 It turns out that there is no point that we can calculate using the above steps
 and get this 0/NUll point, instead one has been defined.
@@ -173,23 +177,138 @@ P + ó = P
 ```
 
 ### EC Discrete Logarithm Problem (EC-DLP)
-Elliptic curve as a cyclic group (not all curves form a cyclic group:
+Elliptic curve as a cyclic group (not all curves form a cyclic group, for
+example:
 ```
 E: y² = x³ +2x + 2 mod 17
 ```
 For the group to be cyclic we need a generator/primitive element which can
-generate points on the curve. An example of a primitive element is:
+generate points on the curve. An example of a generator/primitive element is:
 ```
 Primitive Element P = (5, 1)    // (x, y)
 
-2P  = (5, 1) + (5, 1)  = (formula from above) = (6, 3)
-3P  = 2P + P           = (formula from above) = (10, 6)
-...
+       +------------------------------------------------+
+       ↓                                                |
+2P  = (5, 1) + (5, 1)  = (formula from above) = (6, 3)  |
+3P  = 2P + P           = (formula from above) = (10, 6) |
+                      ...                        +------+
+                                                 ↓
 18P = 17P + P          = (formula from above) = (5, 16)
 ```
-Notice that for 18P we have the same x coordinate 5 as the primitive element,
-and 16 is the inverse mod p of 1:
-18P =(5, 16) = (5, -1)
+Notice that for `18P` we have the same x coordinate, `5` as the primitive
+element. And the `16` is the inverse mod p of 1:
+```
+-1 ≡ 16 mod 17
+
+18P = (5, 16) = (5, -1)
+```
+And `(5, -1)` is then `-P`, the inverse of P.
+```text
+19P = 18P + P = (5, 16) + (5, 1)
+```
+But we have to check that the `y` coordinates are the inverse of each other.
+```text
+19P = 18P + P = (5, 16) + (5, 1)
+              =   -p    + p      = ó the neutral element for the group.
+```
+The neutral element (or point of infinity) can be thought of as 1 in a
+multiplicative group, or 0 in an additive group.
+```text
+20P = 19P + P = ó  + P           = P
+```
+So just like adding 0 an integer does not affect the integer.
+```test
+21P = 20P + P  = P   + P  = 2P     = (6, 3)
+22P = 21P + P  = 2P  + P  = 3P     = (10, 6)
+```
+And notice that we are cycling through the group.
+
+Notice that the order (number of elements in the group) are 19 in this case
+```text
+2P  = (6, 3)
+3P  = (10, 6)
+4P  = (3, 1)
+5P  = (9, 16)
+6P  = (16, 13)
+7P  = (0, 6)
+8P  = (13, 7)
+9P  = (7, 6)
+10P = (7, 11)
+11P = (13, 10)
+12P = (0, 11)
+13P = (16, 4)
+14P = (9, 1)
+15P = (3, 16)
+16P = (10, 11)
+17P = (6, 14)
+18P = (5, 16)
+19P = ó
+
+20P = 2P
+21P = 3P
+23P = 4P
+24P = 5P
+```
+
+Lets take a concrete example of point doubling, so we want to do 2P, or P + P:
+```
+Point P: (5, 1)
+
+   y² = x³ + a*x + b mod p
+
+E: y² = x³ + 2*x  + 2 mod 17
+
+Lets start by getting x₃ (which is R(x₃, y₃))
+x₃ = s² - x₁ - x₂ mod p
+
+For this we need to calculate the slope using:
+
+    3x₁² + a
+s = -------- mod p
+      2y₁
+
+So we plug in the values:
+
+     (3 * 5)² + 2
+s = ------------- = (3*5²+2)(2*1)⁻¹ = (77)(2)⁻¹
+       2 * 1       
+
+s = (77)(2⁻¹) = (77 mod 17)(2⁻¹ mod 17)
+s = (77)(2⁻¹) = (9)(2⁻¹ mod 17)
+Now we have to find the modular inverse of 2⁻¹ mod 17
+Recall that 2⁻¹ mod 17 is asking for a number k such that 2k = 1 (mod 17)
+{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+2 * 0 mod 17 = 0
+2 * 1 mod 17 = 2
+2 * 2 mod 17 = 4
+2 * 3 mod 17 = 6
+2 * 4 mod 17 = 8
+2 * 5 mod 17 = 10
+2 * 6 mod 17 = 12
+2 * 7 mod 17 = 14
+2 * 8 mod 17 = 16
+2 * 9 mod 17 = 1  <------- Found the inverse
+
+s = (9)(9) = (81) = (13 + 4 * 17) ≡ 13 mod 17
+
+So we can now use the value s, which is 13 in the following equiation:
+x₃ = s² - x₁ - x₂ mod p
+
+x₃ = 13² - 5 - 5 mod 17
+x₃ = 13² - 5 - 5 mod 17
+x₃ = 169 - 10    mod 17
+x₃ = 159         mod 17 = 6
+x₃ = 6
+```
+
+So that gives us x₃, now we need to find y₃ using x₃ and s:
+```text
+y³ = s(x₁ - x₃) - y₁ mod p
+y³ = 13(5 - 6)  - 1  mod 17
+y³ = 65 - 78    - 1  mod 17
+y³ = -14             mod 17
+y³ = 3
+
+And the gives us (x₃, y₃) = (6, 3)
+```
 __wip__
-
-
