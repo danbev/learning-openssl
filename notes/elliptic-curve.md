@@ -225,6 +225,7 @@ And notice that we are cycling through the group.
 
 Notice that the order (number of elements in the group) are 19 in this case
 ```text
+1P  = (5, 1)
 2P  = (6, 3)
 3P  = (10, 6)
 4P  = (3, 1)
@@ -341,5 +342,9 @@ group used. In contrast T, the public key, is a point on the curve
 (group element) and in general for any DL T is the type of the group element
 type.
 
+The number of elements in the group is called the cardinality/order of the
+group.
+In our example we have 18 actual points, but the cardinatlity is 19! This
+additional point is the point of infinity.
 
 __wip__
