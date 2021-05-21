@@ -110,6 +110,8 @@ static int test_store_attach(void)
 
 (lldb) expr ERR_reason_error_string($1)
 (const char *) $2 = 0x00000000006c2024 "unregistered scheme"
+
+(lldb) expr ERR_reason_error_string(ERR_peek_error())
 ```
 
 ### md-nits
