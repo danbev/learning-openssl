@@ -82,14 +82,22 @@ $ cat test.s
                                                                                 
 .globl  .bn_mul_mont_fixed_n6                                                   
 .bn_mul_mont_fixed_n6:
+        mr      9,3                                                             
+                                                                                
+        mtvsrd  32,14                                                           
+        mtvsrd  33,15                                                           
+        mtvsrd  34,20   
 ```
-
 ```console
 as -v test.s
 as V7.2
 Assembler:
 test.s: line 4: Error In Syntax 
 ```
+Notice that this Assembler is not amoung the ones assembler versions mentioned
+to be [supported](https://github.com/openssl/openssl/blob/master/INSTALL.md#notes-on-assembler-modules-compilation).
+
+
 We can enable warnings to be reported using `-w`:
 ```console
 as -w -v test.s
@@ -99,5 +107,14 @@ test.s: line 3: Warning - The alignment of the current csect is
                 less than the alignment specified with the .align pseudo-op.
 test.s: line 4: Error In Syntax 
 ```
+
+Compile Node.js on aix:
+```console
+$ export PATH=/opt/ccache-3.7.4/libexec:/opt/freeware/bin:/usr/bin:/etc:/usr/sbin:/usr/ucb:/home/iojs/bin:/usr/bin/X11:/sbin:.
+$ export CC=gcc CXX=g++ CXX_host=g++
+$ ./configure --verbose  --dest-cpu=ppc64
+$ gmake -C out BUILDTYPE=Release V=0
+```
+
 
 __work in progress__
