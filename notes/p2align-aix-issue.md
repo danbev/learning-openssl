@@ -76,7 +76,7 @@ assembler is
 ```assembly
 $ cat test.s
 .machine        "any"                                                           
-.csect  .text[PR],7                                                             
+.csect  .text[PR],7        ;; csect=Control Section, PR=Program Code, 7=alignment(2⁷=128)
 .align  5                                                                       
 .p2align        5,,31                                                           
                                                                                 
@@ -97,6 +97,8 @@ test.s: line 4: Error In Syntax
 Notice that this Assembler is not amoung the ones assembler versions mentioned
 to be [supported](https://github.com/openssl/openssl/blob/master/INSTALL.md#notes-on-assembler-modules-compilation).
 
+Is it important for us Red Hat/IBM to be able to build using the default
+Assembler of could we make GAS a prerequisite perhaps?
 
 We can enable warnings to be reported using `-w`:
 ```console
