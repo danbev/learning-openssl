@@ -98,7 +98,15 @@ Notice that this Assembler is not amoung the ones assembler versions mentioned
 to be [supported](https://github.com/openssl/openssl/blob/master/INSTALL.md#notes-on-assembler-modules-compilation).
 
 Is it important for us Red Hat/IBM to be able to build using the default
-Assembler of could we make GAS a prerequisite perhaps?
+Assembler of could we make GAS a prerequisite perhaps?  
+After asking around at work apparently there have been issues with GAS on aix
+and this is the reason for preferring AIX Assembler (as). It is about installing
+GAS and get on with it which I thought. The current idea we have at the moment
+is to either add a configuration flag to OpenSSL Configure or perhaps add a
+new arch like aix64-gcc-as which would hopefully enable us to add a check in
+the perl script which generates the source file. We also need to make sure that
+the alignment is correct as the aix version will not be able to have the
+p2align directive.
 
 We can enable warnings to be reported using `-w`:
 ```console
@@ -117,6 +125,7 @@ $ export CC=gcc CXX=g++ CXX_host=g++
 $ ./configure --verbose  --dest-cpu=ppc64
 $ gmake -C out BUILDTYPE=Release V=0
 ```
+Commenting out the .p2align diretive enable the build to pass successfully.
 
 
 __work in progress__
