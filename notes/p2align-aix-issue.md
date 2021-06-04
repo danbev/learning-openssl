@@ -127,5 +127,16 @@ $ gmake -C out BUILDTYPE=Release V=0
 ```
 Commenting out the .p2align diretive enable the build to pass successfully.
 
+When we configure OpenSSL specifiying the arch as `aix64-gcc`:
+```console
+$ ./Configure aix64-gcc
+```
+Lets take a look at the recipe for crypto/bn/ppc64-mont-fixed:
+```console
+$ make -n crypto/bn/ppc64-mont-fixed.s
+CC="gcc" /usr/bin/perl crypto/bn/asm/ppc64-mont-fixed.pl "aix64" -I. -Iinclude -Iproviders/common/include -Iproviders/implementations/include -maix64 -pthread -Wa,--noexecstack -O --help -DB_ENDIAN -DOPENSSL_PIC -DOPENSSLDIR="\"/usr/local/ssl\"" -DENGINESDIR="\"/usr/local/lib/engines-3\"" -DMODULESDIR="\"/usr/local/lib/ossl-modules\"" -DOPENSSL_BUILDING_OPENSSL -DNDEBUG  -DAES_ASM -DECP_NISTP521_ASM -DECP_NISTZ256_ASM -DKECCAK1600_ASM -DOPENSSL_BN_ASM_MONT -DOPENSSL_CPUID_OBJ -DPOLY1305_ASM -DSHA1_ASM -DSHA256_ASM -DSHA512_ASM -DVPAES_ASM -DX25519_ASM  crypto/bn/ppc64-mont-fixed.s
+```
+Running this will generate crypto/bn/ppc64-mont-fixed.s.
+
 
 __work in progress__
