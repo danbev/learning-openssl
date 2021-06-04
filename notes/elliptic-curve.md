@@ -9,10 +9,6 @@ same level of actual security. But with greater key sizes the computations
 become more compute intensive and less efficient (like more power on devices
 and CPU time). 
 
-TODO: add table
-```
-```
-
 We can do public key exchange, encryption, and digital signatures with EC.
 
 The idea is to find another cyclic group where the discrete logarithm problem
@@ -68,7 +64,7 @@ y  = √1
 y  = +- 1
 ```
 And if we look at the graph we can see that (1, 1) and (1, -1) are both valid
-points on the curve. The +- shows the symmetry of the curve, the points are
+points on the curve. The `+-` shows the symmetry of the curve, the points are
 reflected.
 
 Now, we need a cyclic group for the descrete logarithm problem.
@@ -79,7 +75,7 @@ This is the group operation and previously we used multiplication.
 We need to be able to `add` points together which is the group operation.
 
 ### Group operation
-This is the add points, the group elememts, on the curve.
+This is the addition of points, the group elememts, on the curve.
 
 So how do we add points:
 ```
@@ -172,6 +168,7 @@ This is "point at infinity" which uses the symbol ó.
 ```
 P + ó = P
 ```
+The negative (opposite) of `P` is:
 ```
 -P  of P(x, y) is -P = (x, -y)
 ```
@@ -276,7 +273,7 @@ s = ------------- = (3*5²+2)(2*1)⁻¹ = (77)(2)⁻¹
 
 s = (77)(2⁻¹) = (77 mod 17)(2⁻¹ mod 17)
 s = (77)(2⁻¹) = (9)(2⁻¹ mod 17)
-Now we have to find the modular inverse of 2⁻¹ mod 17
+Now we have to find the modular inverse 2⁻¹ mod 17
 Recall that 2⁻¹ mod 17 is asking for a number k such that 2k = 1 (mod 17)
 {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 2 * 0 mod 17 = 0
@@ -292,7 +289,7 @@ Recall that 2⁻¹ mod 17 is asking for a number k such that 2k = 1 (mod 17)
 
 s = (9)(9) = (81) = (13 + 4 * 17) ≡ 13 mod 17
 
-So we can now use the value s, which is 13 in the following equiation:
+So we can now use the value s, which is 13 in the following equation:
 x₃ = s² - x₁ - x₂ mod p
 
 x₃ = 13² - 5 - 5 mod 17
@@ -302,7 +299,7 @@ x₃ = 159         mod 17 = 6
 x₃ = 6
 ```
 
-So that gives us x₃, now we need to find y₃ using x₃ and s:
+So that gives us `x₃`, now we need to find `y₃` using `x₃` and `s`:
 ```text
 y³ = s(x₁ - x₃) - y₁ mod p
 y³ = 13(5 - 6)  - 1  mod 17
@@ -314,7 +311,7 @@ And the gives us (x₃, y₃) = (6, 3)
 ```
 
 ### Elliptic Curve Discrete Logarithm Problem (ECDLP)
-We have an eliptic curve and a primite element (generator), and remember that
+We have an eliptic curve and a primitive element (generator), and remember that
 this is required for a cyclic group, and we have another element T.
 The generator is able to generate all points in the group/curve which includes
 the element T, so T can be expressed as:
@@ -323,23 +320,23 @@ the element T, so T can be expressed as:
 T = P + P + ... + P      = dP 
 ```
 Now the DL problem is about finding the value of `d`, the number of times we
-did P + P to get to T. So we would know `P` and `T` and want to find out how
-many times P was added to get to T.
-T is the public key in crypto, and d, the number of jumps, group operations, on
-the curve is the private key.
+did `P + P` to get to `T`. So we would know `P` and `T` and want to find out how
+many times `P` was added to get to `T`.
+`T` is the public key in crypto, and `d`, the number of jumps, group operations,
+on the curve is the private key.
 ```text
 P = (5, 1)                  primitive element/generator
 T = (16, 4) = d * P         there exists an integer d that produces (16, 4)
   = (16, 4) = d(5, 1)       d = ?
 ```
-In this case d is 13 but that was by looking at the table above in this doc:
+In this case `d` is 13 but that was by looking at the table above in this doc:
 ```text
 13P = (16, 4)
 ```
-So the private key, d is just a simple integer which is the number of
-hops/jumps/group operations. This is true for all DL problems regardles of the
-group used. In contrast T, the public key, is a point on the curve
-(group element) and in general for any DL T is the type of the group element
+So the private key, `d` is just a simple integer which is the number of
+hops/jumps/group operations. This is true for all DL problems regardless of the
+group used. In contrast `T`, the public key, is a point on the curve
+(group element) and in general for any DL `T` is the type of the group element
 type.
 
 The number of elements in the group is called the cardinality/order of the
