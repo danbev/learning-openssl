@@ -137,6 +137,29 @@ $ make -n crypto/bn/ppc64-mont-fixed.s
 CC="gcc" /usr/bin/perl crypto/bn/asm/ppc64-mont-fixed.pl "aix64" -I. -Iinclude -Iproviders/common/include -Iproviders/implementations/include -maix64 -pthread -Wa,--noexecstack -O --help -DB_ENDIAN -DOPENSSL_PIC -DOPENSSLDIR="\"/usr/local/ssl\"" -DENGINESDIR="\"/usr/local/lib/engines-3\"" -DMODULESDIR="\"/usr/local/lib/ossl-modules\"" -DOPENSSL_BUILDING_OPENSSL -DNDEBUG  -DAES_ASM -DECP_NISTP521_ASM -DECP_NISTZ256_ASM -DKECCAK1600_ASM -DOPENSSL_BN_ASM_MONT -DOPENSSL_CPUID_OBJ -DPOLY1305_ASM -DSHA1_ASM -DSHA256_ASM -DSHA512_ASM -DVPAES_ASM -DX25519_ASM  crypto/bn/ppc64-mont-fixed.s
 ```
 Running this will generate crypto/bn/ppc64-mont-fixed.s.
+Looking at the command we can see that the make recipe is calling the perl
+script and passing in `aix64`
 
+When crypto/bn/asm/ppc64-mont-fixed.pl is called it will generate the assembler
+code and in the process the .p2align directive is added. This directive is
+not available in the AIX assembler hence the error we are seeing. A suggestion
+is to add an achitecture to OpenSSL's configuration named something like
+`aix64-gcc-as' which is supposed to specify that one want to use the AIX
+as Assembler and not GAS (gas).
+
+For this a callback could be added to crypto/perlasm/ppc-xlate.pl which check
+if the architecture is aix64-as and remove this directive:
+```perl
+  my $p2align = sub {                                                             
+      my $ret = ($flavour =~ /aix64-as/) ? "" : ".p2align $line";                 
+      $ret;                                                                       
+  }; 
+```
+This [pull request](https://github.com/openssl/openssl/pull/15638) contains a
+suggestion and can be tested manually using the following commands:
+```console
+$ ./Configure aix64-gcc-as
+$ make -B crypto/bn/ppc64-mont-fixed.s
+```
 
 __work in progress__
