@@ -117,7 +117,17 @@ standalone pthreads
 
 
 What if we have a separate control value for these?
-
+With separate control values I get the following errors:
+```console
+$ env OPENSSL_CONF=./out/Release/obj.target/deps/openssl/openssl.cnf OPENSSL_MODULES=./out/Release/obj.target/deps/openssl/lib/openssl-modules ./out/Release/node --enable-fips -p 'process.versions.openssl'
+OpenSSL configuration error:
+C0F734BA5E7F0000:error:0700006D:configuration file routines:module_run:module initialization error:../deps/openssl/openssl/crypto/conf/conf_mod.c:242:module=providers, value=provider_sect retcode=-1      
+C0F734BA5E7F0000:error:0308010C:digital envelope routines:inner_evp_generic_fetch:unsupported:../deps/openssl/openssl/crypto/evp/evp_fetch.c:332:Non-default library context, Algorithm (HMAC : 0), Properties (<null>)
+C0F734BA5E7F0000:error:1C8000D6:Provider routines:SELF_TEST_post:module integrity failure:../deps/openssl/openssl/providers/fips/self_test.c:295:
+C0F734BA5E7F0000:error:1C8000D8:Provider routines:OSSL_provider_init:self test post failure:../deps/openssl/openssl/providers/fips/fipsprov.c:690:
+C0F734BA5E7F0000:error:078C0105:common libcrypto routines:provider_init:init fail:../deps/openssl/openssl/crypto/provider_core.c:657:name=fips
+C0F734BA5E7F0000:error:0700006D:configuration file routines:module_run:module initialization error:../deps/openssl/openssl/crypto/conf/conf_mod.c:242:module=providers, value=provider_sect retcode=-1   
+```
 
 __work in progress__
 
