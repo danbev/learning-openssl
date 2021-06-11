@@ -341,7 +341,84 @@ type.
 
 The number of elements in the group is called the cardinality/order of the
 group.
-In our example we have 18 actual points, but the cardinatlity is 19! This
-additional point is the point of infinity.
+In our example we have 18 actual points, but the cardinatlity is 19 which is
+written as `#E=19`. The additional point is the point of infinity.
+
+Hasses theorem gives as an upper and lower bound for `E`.
+```text
+#E ≈ p
+
+#E    p+1 +-2√p
+
+         160 bits
+  +------------------------
+p |                       |
+  +-----------------------+
+           ||             |
+            +-------------+
+           1 +   80 bits
+```
+This is an approximation and  is helpful but to get the exact value the
+computation is quite complex/expensive. This is one reason that standard curves
+are defind. For exaple NIST defines standard curves and these specify the number
+of points on the curve as part of the standard.
+
+How hard is it to break ECDLP?  
+Currently known attacks require about √p steps.
+For example:
+```text
+p ≈ 2¹⁶⁰
+√2¹⁶⁰ = 2¹⁶⁰/² = 2⁸⁰
+```
+2⁸⁰ is estimated to take 1 million years with the currently existing computers,
+and it is though that these will remain unbreakable for about 15-20 years. For
+this reason a larger prime number is choses, perhaps with 196 or 256 bits to
+me hopefully be secure for longer than that.
+
+So with ECDLP we can now take a look at the Diffie-Hellman key exchange and this
+time use ECDLP for it:
+```text
+Setup phase:
+  E: y² = x³ + ax + b mod p         We chose the curve
+  P = (x_p, y_p)                    We choose the primitive element
+```
+This could also be done by choosing a standard curve.
+```text
+Protocol phase:
+Alice                                      Bob
+a = Kpiv = A ∈ {2, 3,...,#E-1}             b = Kpiv = B ∈ {2, 3,...,#E-1}
+A = Kpub = aP = (x_A, y_A)                 B = Kpub = bP = (x_B, y_B)
+                                 A
+                          ---------------->
+                                 B
+                          <----------------
+a*B = (x_AB, y_AB)                         b*A = (x_AB, y_AB)
+```
+Now they both have a session key which notice is (x_AB, y_AB) which is a point
+on the curve. They can now use either the x or the y value for encryption, for
+example as the key in AES.
+
+Notice that they are both calculating the same thing:
+```
+a * B = a(b*P) = a*b*p
+b * A = b(a*P) = a*b*p
+
+```
+a and b are the private keys, and A and B are the public keys.
+
+Recall that the private key is an integer and the public keys are points on
+the curve. So a*B is a scalar multiplication and not point addition or point
+doubling which mentioned earlier in this document.
+```
+a * P                          P = point on curve
+```
+But there is no such multiplication operator to multiply a scalar by a point.
+This is just a shorthand notation for:
+```
+a * P = P + P + P + P (a times)
+```
+For very large numbers (private keys) we can use square-and-multiply but in EC
+the squaring becomes `P+P`, point doubling, so instead of square-and-multiply
+double-and-add.
 
 __wip__
