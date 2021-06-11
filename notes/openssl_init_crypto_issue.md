@@ -88,7 +88,7 @@ We can verify that fips module gets loaded:
 ```
 
 If we look in `crypto/init.c` we can see that there is a call using
-the ONCE_ALT macro which is using `config` control value. Notice that the
+the RUN_ONCE_ALT macro which is using `config` control value. Notice that the
 same control value is also used for both of the following calls to 
 `ossl_init_config`:
 ```c
@@ -111,8 +111,12 @@ same control value is also used for both of the following calls to
             return 0;                                                           
     }                           
 ```
-This will/might cause a deadlock/issue. What if we have a separate control
-value for these?
+This will/might cause a deadlock/issue. This can be simulated using a
+standalone pthreads
+[example](https://github.com/danbev/learning-c/blob/master/pthreads-once-deadlock.c)
+
+
+What if we have a separate control value for these?
 
 
 __work in progress__
