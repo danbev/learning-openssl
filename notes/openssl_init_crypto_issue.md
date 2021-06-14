@@ -4,6 +4,8 @@ of the fips.so library in Node.js. Node.js uses Generate Your Project (GYP) to
 generate build files for different architectures and was developed by Google
 but then later abandoned in favour of Generate Ninja (GN).
 
+In this case OpenSSL is being statically linked with Node.js but the FIPS
+module is a shared object that gets dynamically loaded.
 
 ### Reproducinng the issue
 Node.js is first build using the following configuration options:
@@ -127,6 +129,43 @@ C0F734BA5E7F0000:error:1C8000D6:Provider routines:SELF_TEST_post:module integrit
 C0F734BA5E7F0000:error:1C8000D8:Provider routines:OSSL_provider_init:self test post failure:../deps/openssl/openssl/providers/fips/fipsprov.c:690:
 C0F734BA5E7F0000:error:078C0105:common libcrypto routines:provider_init:init fail:../deps/openssl/openssl/crypto/provider_core.c:657:name=fips
 C0F734BA5E7F0000:error:0700006D:configuration file routines:module_run:module initialization error:../deps/openssl/openssl/crypto/conf/conf_mod.c:242:module=providers, value=provider_sect retcode=-1   
+```
+
+```console
+(lldb) br s -f self_test.c -l 169
+```
+```c
+#define MAC_NAME    "HMAC"
+
+static int verify_integrity(OSSL_CORE_BIO *bio, OSSL_FUNC_BIO_read_ex_fn read_ex_cb,
+                            unsigned char *expected, size_t expected_len,          
+                            OSSL_LIB_CTX *libctx, OSSL_SELF_TEST *ev,           
+                            const char *event_type)                             
+{
+
+    int ret = 0, status;                                                        
+    unsigned char out[MAX_MD_SIZE];                                             
+    unsigned char buf[INTEGRITY_BUF_SIZE];                                      
+    size_t bytes_read = 0, out_len = 0;                                         
+    EVP_MAC *mac = NULL;                                                        
+    EVP_MAC_CTX *ctx = NULL;                                                    
+    OSSL_PARAM params[2], *p = params;                                          
+                                                                                
+    OSSL_SELF_TEST_onbegin(ev, event_type, OSSL_SELF_TEST_DESC_INTEGRITY_HMAC); 
+                                                                                
+    mac = EVP_MAC_fetch(libctx, MAC_NAME, NULL);                                
+    if (mac == NULL)                                                            
+        goto err;                                   
+
+```
+The algorithm being fetched `MAC_NAME` is:
+(lldb) expr algorithm
+(const char *) $0 = 0x00007ffff7a0fc80 "HMAC"
+```
+And this is not being found which will raise the error we are seeing:
+```console
+(lldb) expr ERR_reason_error_string(ERR_peek_error())
+(const char *) $2 = 0x00000000039f4e45 "module initialization error"
 ```
 
 __work in progress__
