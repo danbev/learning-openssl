@@ -182,7 +182,7 @@ $ nm ~/work/nodejs/openssl/out/Debug/obj.target/deps/openssl/lib/openssl-modules
 00000000000af7cc T evp_keymgmt_util_export_to_provider
 00000000000b2de3 T EVP_MAC_provider
 ```
-The `T` means that these symbols are in the `text` segment.
+The `T` means that these symbols are in the `text` segment and they are global.
 
 And we know that the dynamically linked objet (DSO) has been loaded:
 ```console
@@ -252,7 +252,9 @@ So what we have is the following situation:
    |    Node.js        |  +--->|    fips.so         |
    |-------------------|  |    |--------------------+
    | DSO_load('fips')  |--+    | OSSL_provider_init |
-   | EVP_MAC_fetch     |       | EVP_MAC_fetch      |
+   |                   |   +---| verify_integrity   |
+   |                   |   |   |                    |
+   | EVP_MAC_fetch     |<--+   | EVP_MAC_fetch      |
    | ...               |       | ...                |
    +-------------------+       +--------------------+
 ```
@@ -273,5 +275,9 @@ And SELF_TEST_post will `verify_integrity` is where `EVP_MAC_fetch` is called.
 In our case this will not call EVP_MAC_fetch in fips.so but instead call the
 one in the statically linked library. 
 
+Hmm, there is a linker script the fips provider named fips.ld which only
+declares OPENSSL_provider_init as global and the rest as local. But notice
+that the output of `nm` above has `EVP_MAC_fetch` as `T`, that is in the text
+segment and global. This should have been a `t` if the linker script was used.
 
 __work in progress__
