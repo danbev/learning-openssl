@@ -168,6 +168,63 @@ And this is not being found which will raise the error we are seeing:
 (const char *) $2 = 0x00000000039f4e45 "module initialization error"
 ```
 
+So why can't the HMAC algorithm be found?  
+Which provider is it part of?
+
+```console
+$ nm ~/work/nodejs/openssl/out/Debug/obj.target/deps/openssl/lib/openssl-modules/fips.so | grep provider
+00000000000a052c T EVP_ASYM_CIPHER_provider
+00000000000a9b5f T EVP_CIPHER_provider
+00000000000ad9f4 T EVP_KDF_provider
+00000000000af29d T EVP_KEM_provider
+00000000000accb8 T EVP_KEYEXCH_provider
+00000000000b118a T EVP_KEYMGMT_provider
+00000000000af7cc T evp_keymgmt_util_export_to_provider
+00000000000b2de3 T EVP_MAC_provider
+```
+The `T` means that these symbols are in the `text` segment.
+
+And we know that the dynamically linked objet (DSO) has been loaded:
+```console
+lldb) target modules list
+[  0] 12199017-28DF-E7F4-EC20-CDD7D2E6762F-DCCD3EAD 0x0000000000400000 /home/danielbevenius/work/nodejs/openssl/out/Debug/node 
+[  1] 40DA7ABE-89F6-31F6-0538-A17686A7D65C-6A02ED31 0x00007ffff7fd1000 /usr/lib64/ld-2.30.so 
+[  2] 095EDA92-DFC4-1E6A-43B3-8ECCFDF07FB5-A78ED616 [vdso][0x0000000000000000] [vdso] (0x00007ffff7fcf000)
+[  3] 3E9B81E4-1BAF-6B90-DDA5-3FD73F265D2B-E469E3BA 0x00007ffff7f9d000 /usr/lib64/libdl.so.2 
+[  4] 1455764B-F748-129D-D38A-0D7ED9E3A8F4-C0261C65 0x00007ffff7da4000 /usr/lib64/libstdc++.so.6 
+      /usr/lib/debug/.build-id/14/55764bf748129dd38a0d7ed9e3a8f4c0261c65.debug
+[  5] 7DB607D9-F2DE-8986-0D96-39712DA64C8B-ACD31E4B 0x00007ffff7c5e000 /usr/lib64/libm.so.6 
+[  6] 6A953947-0B81-AFF2-D133-71D376B4DB10-F0A6143F 0x00007ffff7c44000 /usr/lib64/libgcc_s.so.1 
+      /usr/lib/debug/.build-id/6a/9539470b81aff2d13371d376b4db10f0a6143f.debug
+[  7] 94569566-D4EA-C7E9-C87B-A029D43D4E21-58F9527E 0x00007ffff7c22000 /usr/lib64/libpthread.so.0 
+[  8] 559B9702-BEBE-31C6-D132-C8DC5CC88767-3D65D5B5 0x00007ffff7a59000 /usr/lib64/libc.so.6 
+[  9] 40DA7ABE-89F6-31F6-0538-A17686A7D65C-6A02ED31 0x00007ffff7fd1000 /usr/lib64/ld-2.30.so 
+[ 10] 095EDA92-DFC4-1E6A-43B3-8ECCFDF07FB5-A78ED616 0x00007ffff7fcf000 [vdso] (0x00007ffff7fcf000)
+[ 11] 661B2902-B85D-80B9-D396-2AA90A761893-6CB697FC 0x00007ffff7862000 out/Debug/obj.target/deps/openssl/lib/openssl-modules/fips.so
+```
+
+One thing to take notice of it that when `EVP_MAC_fetch` is in the fips.so
+module when running [fips-provider](../fips-provider.c):
+```console
+frame #9: 0x00007ffff7712b4b fips.so`EVP_MAC_fetch(libctx=0x000000000041c1c0, algorithm="HMAC", properties=0x0000000000000000) at mac_meth.c:163:12
+    frame #10: 0x00007ffff7672dde fips.so`verify_integrity(bio=0x000000000041d140, read_ex_cb=(libcrypto.so.3`ossl_core_bio_read_ex at core_bio.c:96:1), expected="��\x85\x9b(��(���Pg\xa7\x85\xb3��mð�T\xa3\x1c{�*\x0e\x98�z", expected_len=32, libctx=0x000000000041c1c0, ev=0x000000000041cf60, event_type="Module_Integrity") at self_test.c:196:11
+    frame #11: 0x00007ffff767338e fips.so`SELF_TEST_post(st=0x00000000004163f8, on_demand_test=0) at self_test.c:309:17
+    frame #12: 0x00007ffff7672566 fips.so`OSSL_provider_init_int(handle=0x00000000004151d0, in=0x00007ffff7faef10, out=0x00007fffffffc850, provctx=0x00007fffffffc848) at fipsprov.c:703:10
+    frame #13: 0x00007ffff76710e9 fips.so`OSSL_provider_init(handle=0x00000000004151d0, in=0x00007ffff7faec40, out=0x00007fffffffc850, provctx=0x00007fffffffc848) at fips_entry.c:18:12
+    frame #14: 0x00007ffff7d48c09 libcrypto.so.3`provider_init(prov=0x00000000004151d0, flag_lock=1) at provider_core.c:656:13
+```
+But when the is run from Node.js the back trace looks like this:
+```console
+(lldb) bt
+* thread #1, name = 'node', stop reason = step over
+  * frame #0: 0x0000000002a0724b node`inner_evp_generic_fetch(libctx=0x0000000006138570, operation_id=3, name_id=0, name="HMAC", properties=0x0000000000000000, new_method=(node`evp_mac_from_algorithm at mac_meth.c:54:1), up_ref_method=(node`evp_mac_up_ref at mac_meth.c:11:1), free_method=(node`evp_mac_free at mac_meth.c:20:1)) at evp_fetch.c:231:14
+    frame #1: 0x0000000002a0767f node`evp_generic_fetch(libctx=0x0000000006138570, operation_id=3, name="HMAC", properties=0x0000000000000000, new_method=(node`evp_mac_from_algorithm at mac_meth.c:54:1), up_ref_method=(node`evp_mac_up_ref at mac_meth.c:11:1), free_method=(node`evp_mac_free at mac_meth.c:20:1)) at evp_fetch.c:350:12
+    frame #2: 0x0000000002a166b4 node`EVP_MAC_fetch(libctx=0x0000000006138570, algorithm="HMAC", properties=0x0000000000000000) at mac_meth.c:163:12
+    frame #3: 0x00007ffff797726b fips.so`verify_integrity(bio=0x0000000006139580, read_ex_cb=(node`ossl_core_bio_read_ex at core_bio.c:96:1), expected="\xbf4\x82L�4\xa6�\x87qI\xab\xa0-\x8dT\x19\x06\\k��Z�-\xbd�H:�;, expected_len=32, libctx=0x0000000006138570, ev=0x00000000061393a0, event_type="Module_Integrity") at self_test.c:179:11
+    frame #4: 0x00007ffff79777f9 fips.so`SELF_TEST_post(st=0x00000000061391b8, on_demand_test=0) at self_test.c:292:17
+    frame #5: 0x00007ffff7976a85 fips.so`OSSL_provider_init(handle=0x0000000006131420, in=0x0000000003a2d7b0, out=0x00007fffffffc870, provctx=0x00007fffffffc868) at fipsprov.c:689:10
+```
+
 __work in progress__
 
 
