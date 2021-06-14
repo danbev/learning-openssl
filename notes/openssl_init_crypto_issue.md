@@ -217,8 +217,6 @@ But when the is run from Node.js the back trace looks like this:
 ```console
 (lldb) bt
 * thread #1, name = 'node', stop reason = step over
-  * frame #0: 0x0000000002a0724b node`inner_evp_generic_fetch(libctx=0x0000000006138570, operation_id=3, name_id=0, name="HMAC", properties=0x0000000000000000, new_method=(node`evp_mac_from_algorithm at mac_meth.c:54:1), up_ref_method=(node`evp_mac_up_ref at mac_meth.c:11:1), free_method=(node`evp_mac_free at mac_meth.c:20:1)) at evp_fetch.c:231:14
-    frame #1: 0x0000000002a0767f node`evp_generic_fetch(libctx=0x0000000006138570, operation_id=3, name="HMAC", properties=0x0000000000000000, new_method=(node`evp_mac_from_algorithm at mac_meth.c:54:1), up_ref_method=(node`evp_mac_up_ref at mac_meth.c:11:1), free_method=(node`evp_mac_free at mac_meth.c:20:1)) at evp_fetch.c:350:12
     frame #2: 0x0000000002a166b4 node`EVP_MAC_fetch(libctx=0x0000000006138570, algorithm="HMAC", properties=0x0000000000000000) at mac_meth.c:163:12
     frame #3: 0x00007ffff797726b fips.so`verify_integrity(bio=0x0000000006139580, read_ex_cb=(node`ossl_core_bio_read_ex at core_bio.c:96:1), expected="\xbf4\x82L�4\xa6�\x87qI\xab\xa0-\x8dT\x19\x06\\k��Z�-\xbd�H:�;, expected_len=32, libctx=0x0000000006138570, ev=0x00000000061393a0, event_type="Module_Integrity") at self_test.c:179:11
     frame #4: 0x00007ffff79777f9 fips.so`SELF_TEST_post(st=0x00000000061391b8, on_demand_test=0) at self_test.c:292:17
@@ -241,10 +239,39 @@ $ nm --print-file-name ~/work/nodejs/openssl/out/Debug/obj.target/deps/openssl/l
 
 $ nm --print-file-name ~/work/nodejs/openssl/out/Debug/node | grep EVP_MAC_fetch
 /home/danielbevenius/work/nodejs/openssl/out/Debug/node:0000000002a16672 T EVP_MAC_fetch
+
+$ nm --print-file-name ~/work/security/openssl_build_master/lib/libcrypto.so.3 | grep EVP_MAC_fetch
+/home/danielbevenius/work/security/openssl_build_master/lib/libcrypto.so.3:00000000002253c8 T EVP_MAC_fetch
 ```
+
+So what we have is the following situation:
+```
+
+   Statically linked           Dynamically shared object
+   +-------------------+       +--------------------+
+   |    Node.js        |  +--->|    fips.so         |
+   |-------------------|  |    |--------------------+
+   | DSO_load('fips')  |--+    | OSSL_provider_init |
+   | EVP_MAC_fetch     |       | EVP_MAC_fetch      |
+   | ...               |       | ...                |
+   +-------------------+       +--------------------+
+```
+Now, the FIPS provider will call `SELF_TEST_post` from OSSL_provider_init:
+```c
+int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,                          
+                       const OSSL_DISPATCH *in,                                 
+                       const OSSL_DISPATCH **out,                               
+                       void **provctx)                                          
+{
+   ...
+   if (!SELF_TEST_post(&fgbl->selftest_params, 0)) {                              
+        ERR_raise(ERR_LIB_PROV, PROV_R_SELF_TEST_POST_FAILURE);                    
+        goto err;                                                                  
+    }    
+```
+And SELF_TEST_post will `verify_integrity` is where `EVP_MAC_fetch` is called.
+In our case this will not call EVP_MAC_fetch in fips.so but instead call the
+one in the statically linked library. 
 
 
 __work in progress__
-
-
-
