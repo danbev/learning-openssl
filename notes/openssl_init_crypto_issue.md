@@ -225,6 +225,25 @@ But when the is run from Node.js the back trace looks like this:
     frame #5: 0x00007ffff7976a85 fips.so`OSSL_provider_init(handle=0x0000000006131420, in=0x0000000003a2d7b0, out=0x00007fffffffc870, provctx=0x00007fffffffc868) at fipsprov.c:689:10
 ```
 
+```console
+(lldb) target  modules lookup --symbol EVP_MAC_fetch
+1 symbols match 'EVP_MAC_fetch' in /home/danielbevenius/work/nodejs/openssl/out/Debug/node:
+        Address: node[0x0000000002a16672] (node.PT_LOAD[1]..text + 27264626)
+        Summary: node`EVP_MAC_fetch at mac_meth.c:162:1
+1 symbols match 'EVP_MAC_fetch' in out/Debug/obj.target/deps/openssl/lib/openssl-modules/fips.so:
+        Address: fips.so[0x00000000000b4d61] (fips.so.PT_LOAD[1]..text + 441697)
+        Summary: fips.so`EVP_MAC_fetch at mac_meth.c:162:1
+```
+
+```console
+$ nm --print-file-name ~/work/nodejs/openssl/out/Debug/obj.target/deps/openssl/lib/openssl-modules/fips.so | grep EVP_MAC_fetch
+/home/danielbevenius/work/nodejs/openssl/out/Debug/obj.target/deps/openssl/lib/openssl-modules/fips.so:00000000000b4d61 T EVP_MAC_fetch
+
+$ nm --print-file-name ~/work/nodejs/openssl/out/Debug/node | grep EVP_MAC_fetch
+/home/danielbevenius/work/nodejs/openssl/out/Debug/node:0000000002a16672 T EVP_MAC_fetch
+```
+
+
 __work in progress__
 
 
