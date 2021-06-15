@@ -275,9 +275,13 @@ And SELF_TEST_post will `verify_integrity` is where `EVP_MAC_fetch` is called.
 In our case this will not call EVP_MAC_fetch in fips.so but instead call the
 one in the statically linked library. 
 
-Hmm, there is a linker script the fips provider named fips.ld which only
+Hmm, there is a linker script the fips provider named `fips.ld` which only
 declares OPENSSL_provider_init as global and the rest as local. But notice
 that the output of `nm` above has `EVP_MAC_fetch` as `T`, that is in the text
 segment and global. This should have been a `t` if the linker script was used.
+
+Adding the linker script using `-Wl,--version-script` causes the type to be
+local and EVP_MAC_fetch will called on the function in fipo.so
+
 
 __work in progress__
