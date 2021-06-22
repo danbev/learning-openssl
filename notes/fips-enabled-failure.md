@@ -142,6 +142,16 @@ out/Release/node[3936588]: ../src/crypto/crypto_cipher.cc:373:void node::crypto:
 Command: out/Release/node /home/danielbevenius/work/nodejs/openssl/test/parallel/test-crypto-cipher-decipher.js
 --- CRASHED (Signal: 6) ---
 ```
+Looking at the test we can find the following line:
+```js
+if (common.hasFipsCrypto)
+  common.skip('not supported in FIPS mode');
+```
+So it seems that this test is not intended to be run when in FIPS mode but it
+is getting run just the same. This could be an issue with some kindof recent
+changes to how FIPS detection is done.
+
+
 
 ### test-crypto-getcipherinfo
 ```console
