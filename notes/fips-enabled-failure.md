@@ -8,6 +8,11 @@ and chances are that some of these issues are simply not meant to work when FIPS
 is enabled but they could have been added when there was no way to check this
 and they need to be skipped.
 
+Actually, after looking into this it was because by default the OpenSSL
+configuration file (openssl.cnf) does not activate the default provider which
+is causing the failures. Enabling the default provider allows the tests to
+pass successfully.
+
 ### test-crypto
 
 ```console
