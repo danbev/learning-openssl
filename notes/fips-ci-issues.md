@@ -84,6 +84,68 @@ confdata.pm module we can find it:
 Could it be that file is not getting addes to the source list when we generate
 arch specific files?
 
+In the make file there is a target for this:
+```console
+crypto/bn/asm/libcrypto-shlib-s390x.o: crypto/bn/asm/s390x.S
+```
+In crypto/bn/build.info we have:
+```console
+IF[{- ($target{perlasm_scheme} // '') eq '31' -}]
+    $BNASM_s390x=bn_asm.c s390x-mont.S
+  ELSE
+    $BNASM_s390x=asm/s390x.S s390x-mont.S
+```
+This look right and the source asm/s390x.S is included in the generated
+configdata.pm module. But this is not part of the sources that are generated
+in the arch specific openssl.gypi file.
+If I add crypto/bn/asm/s390x.S to the sources will that allow the these
+symbols to be resolved?  
+Yes, that worked and compiled without error.
+
+```python
+    'openssl_sources_linux64-s390x': [
+      './config/archs/linux64-s390x/asm/crypto/aes/aes-s390x.S',
+      './config/archs/linux64-s390x/asm/crypto/bn/s390x-gf2m.s',
+      './config/archs/linux64-s390x/asm/crypto/bn/s390x-mont.S',
+      './config/archs/linux64-s390x/asm/crypto/chacha/chacha-s390x.S',
+      './config/archs/linux64-s390x/asm/crypto/s390xcpuid.S',
+      './config/archs/linux64-s390x/asm/crypto/modes/ghash-s390x.S',
+      './config/archs/linux64-s390x/asm/crypto/poly1305/poly1305-s390x.S',
+      './config/archs/linux64-s390x/asm/crypto/rc4/rc4-s390x.s',
+      './config/archs/linux64-s390x/asm/crypto/sha/keccak1600-s390x.S',
+      './config/archs/linux64-s390x/asm/crypto/sha/sha1-s390x.S',
+      './config/archs/linux64-s390x/asm/crypto/sha/sha256-s390x.S',
+      './config/archs/linux64-s390x/asm/crypto/sha/sha512-s390x.S',
+      './config/archs/linux64-s390x/asm/providers/common/der/der_sm2_gen.c',
+      './config/archs/linux64-s390x/asm/providers/common/der/der_digests_gen.c',
+      './config/archs/linux64-s390x/asm/providers/common/der/der_dsa_gen.c',
+      './config/archs/linux64-s390x/asm/providers/common/der/der_ec_gen.c',
+      './config/archs/linux64-s390x/asm/providers/common/der/der_ecx_gen.c',
+      './config/archs/linux64-s390x/asm/providers/common/der/der_rsa_gen.c',
+      './config/archs/linux64-s390x/asm/providers/common/der/der_wrap_gen.c',
+      './config/archs/linux64-s390x/asm/crypto/bn/s390x-gf2m.s',
+      './config/archs/linux64-s390x/asm/crypto/bn/s390x-mont.S',
+      './config/archs/linux64-s390x/asm/providers/fips.ld',
+      'openssl/crypto/bn/asm/s390x.S',
+    ],
+```
+
+Note that these files are not generated so they don't have to be placed in
+config/arch directories.
+
+These are the files in question:
+```console
+$ ls -Cw1 crypto/bn/asm/*.S
+crypto/bn/asm/ia64.S
+crypto/bn/asm/s390x.S
+crypto/bn/asm/sparcv8plus.S
+crypto/bn/asm/sparcv8.S
+```
+I think the others are generated, __TODO__: double check that this is the case.
+
+So we need to figure out how these are best added.
+
+__work in progress__
 
 ### Troubleshooting on s390x
 ```
