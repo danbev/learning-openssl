@@ -1,4 +1,4 @@
-## nodes=win-vs2019-arm64 build issue
+## win-vs2019-arm64 build issue
 This document containes notes about a build issue when updating Node.js
 to OpenSSL 3.0-beta1 and statically linking with Node.js.
 
