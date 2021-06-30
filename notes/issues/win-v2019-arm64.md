@@ -65,11 +65,11 @@ The following header is not being found:
 18:59:43   filterednormalizer2.cpp
 ```
 
-This here is that when we generate the platform specific headers for OpenSSL
-the no-asm headers template was incorrect, actually it was not used at all and
-the asm header template was used which did not include VC-WIN64-ARM. This should
-only be in the no-asm headers template. I've updated the template and updated
-generate_headers.pl in an attempt to fix this. 
+The issue here is that when we generate the platform specific headers for
+OpenSSL the no-asm headers template was incorrect, actually it was not used at
+all and the asm header template was used which does not include VC-WIN64-ARM.
+This should only be in the no-asm headers template. I've updated the template
+and updated generate_headers.pl in an attempt to fix this. 
 Did that work?  
 
 
