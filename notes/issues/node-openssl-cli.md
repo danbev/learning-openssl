@@ -11,4 +11,5 @@ make[1]: *** [node.target.mk:26: /home/danielbevenius/work/nodejs/openssl/out/Re
 rm 2bd3ca31970f82ed30158c22940143b927724ad7.intermediate
 make: *** [Makefile:110: node] Error 2
 ```
+Simply running `make -j8` again will allow this issue to be worked around.
 TODO: investigate the cause of this.
