@@ -171,3 +171,65 @@ e = 3
 e = 2¹⁶-1
 ```
 And this make verification very fast.
+
+
+### Existential forgery attack against RSA DS
+```
+Alice              Eve                       Bob
+                         
+                                             Kpub=(n, e), Kpr=d
+                  <----(n, e)-----------     s = sig(x, Kpr)
+
+                  <----(x, s)-----------
+Verification:
+s^e ≡ x' mod n
+x == x'
+```
+In this case Eve would like to generate a message with a signature that is
+a valid signature from Bob. That way she would be able to forge a message
+which looks like comes from Bob. The example gives it that if Alice is bank
+then Eve could generate a message that transfers money from Bob's account into
+Eve's account and if Eve can generate a valid signature of Bob's then the bank
+would allow the transfer.
+
+Eve:
+```
+1) Chooses a number s ∈ Zn
+2) x ≡ s^e mod n  <--------------------------------------------------------------+
+3) Sends x to Alice (personating Bob) ------(x, s)----> Alice                    |
+                                                        x' ≡ s^e mod n           |
+                                                        x == x'                  |
+                                                        s^e mod n == s^e mod n <-+
+
+```
+So Alice verifies the signature to be correct. But it is not a simple task for
+Eve to choose the signture s such that s^e mod n = x. She has to generate an x
+which does what she wants (transfer the money) but she has to do that by guessing
+values of s and then performing s^e mod n. Remember that Eve does not control
+e which is the public exponent. So is this only a theoretical attack were Eve
+could get Alice to verify a message but not really get Alice to do anything
+real with it. But sending this might allow Eve to get past a layer in Alice's
+application as the message would pass the verification and proceed.
+
+What we have been discussing so far is called "school book RSA" and is the basic
+way RSA works. But in real world senarious we need more to avoid attack like
+this.
+In pratice we impose formatting rules on x which can be checked by Alice. With
+the school book examples there were no resitricitons on x, it would be anything
+value.
+
+Formatting example:
+```
+    <-----------1024 bits-------------->
+x   +-----------------------+----------+
+    |         m             |1111111111|
+    +-----------------------+----------+
+    <-------900 bits-------><--124----->
+                             Padding
+```
+So in this case Eve will need to produce a message x which has 124 1s. To get
+a one in the first position that is a 50/50 chance. To get two one that would be
+4
+
+
+### Elgamal Digital Signatures
