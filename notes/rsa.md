@@ -130,3 +130,38 @@ Notice the 01 which is used as a separator above that is appended above which
 is why we have to subtract two from M. TODO: explain and verify this.
 
 Length of an octet is 8 so we are talking about byte length.
+
+### RSA-PSS
+Is one of the signature schemes in RSA. PSS stands for Probabilistic Signture
+Scheme. PSS requires parameters like the hash function to be used and the mask
+generation function (MGF). PSS is randomized and will create a different
+signature each time. Is a signature scheme with appendix which means that it
+does not sign the message itself but instead signs a hash of the message. This
+hash is produced by the hash/algorithm/message digest function.
+
+### RSA small messages
+If the messages being sent are smaller that the modulus the modulus operation
+can be avoided as it does not do anything. For example:
+```
+2^1 mod 4 = 2
+```
+We need to have a  message that is greater than the modulus size. This is where
+various padding schemes come into play with RSA.
+
+### PKCSv1 (Public-Key Cryptography Standard version 1)
+A part of this standard includes RSA encryption, decryption, encoding/padding
+schemes. The padding scheme can be used with RSA to avoid the small messages
+problem discussed above.
+```
+m = 0...10 || r || 0⁸ || m'
+m' = original message
+r  = random bits |r| ≥ 64
+```
+
+### RSA Optimal Asymmetric Encryption Padding
+An improvement over PKCS#1 with regards to its padding scheme.
+```
+G: hash function that returns g bits
+H: hash function that returns h bits
+r: random nonce of g bits
+```

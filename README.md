@@ -2674,9 +2674,6 @@ decrypt them. With ephemeral new keys are generated each time the protocol is
 run.
 
 
-### STORE_INFO
-
-
 ### OpenSSL 3.x TLS1 issue
 I'm investigating test failures in Node.js while linking against OpenSSL 3.0
 Alpha 6:
@@ -3845,41 +3842,6 @@ struct evp_pkey_ctx_st {
 Next there is a union which `op` which will be different depending on the
 operation that is going to be performed, for example key generation,
 key exchange, signature, encryption/decryption, EVP_KEM (what is this?).
-
-### RSA-PSS
-Is one of the signature schemes in RSA. PSS stands for Probabilistic Signture
-Scheme. PSS requires parameters like the hash function to be used and the mask
-generation function (MGF). PSS is randomized and will create a different
-signature each time. Is a signature scheme with appendix which means that it
-does not sign the message itself but instead signs a hash of the message. This
-hash is produced by the hash/algorithm/message digest function.
-
-### RSA small messages
-If the messages being sent are smaller that the modulus the modulus operation
-can be avoided as it does not do anything. For example:
-```
-2^1 mod 4 = 2
-```
-We need to have a  message that is greater than the modulus size. This is where
-various padding schemes come into play with RSA.
-
-### PKCSv1 (Public-Key Cryptography Standard version 1)
-A part of this standard includes RSA encryption, decryption, encoding/padding
-schemes. The padding scheme can be used with RSA to avoid the small messages
-problem discussed above.
-```
-m = 0...10 || r || 0⁸ || m'
-m' = original message
-r  = random bits |r| ≥ 64
-```
-
-### RSA Optimal Asymmetric Encryption Padding
-An improvement over PKCS#1 with regards to its padding scheme.
-```
-G: hash function that returns g bits
-H: hash function that returns h bits
-r: random nonce of g bits
-```
 
 ### Finite-field cryptography (FFC)
 
