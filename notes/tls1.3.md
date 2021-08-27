@@ -101,6 +101,13 @@ generator (CSPRNG) and is used as keying material.
 `Session ID` was used with versions prior to 1.3 for session resumption. In 1.3
 `Pre-Shared Key (PKS)` is used instead (See section below).
 
+`Compression Methods` is required but not used in 1.3 which instead uses an
+extension.
+The fields that are in the package format but not used are required for backward
+compatability with 1.2. A client might want to communicate using tls1.3 but the
+server might only support 1.2 and this way the 1.2 server will still be able to
+interpret the package. In 1.3 this field but contain one byte set to zero.
+
 ### Cipher suites
 The format of the cipher suites strings is as follows:
 ```text
@@ -116,11 +123,11 @@ The following cipher suites are defined by the spec:
 * TLS_CHACHA20_POLY1305_SHA256
 * TLS_AES_128_CCM_SHA256
 * TLS_AES_128_CCM_8_SHA256
-```
 
 ```text
 Cipher Suite: TLS_AES_256_GCM_SHA384 (0x1302)
 ```
+So in this case AEAD would be AES_256_GCM.
 
 
 
