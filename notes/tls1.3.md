@@ -136,6 +136,24 @@ After a successful handshake the server can send PSK identity derived from the
 intitial handshake. A client may then use this value in new handshakes in the
 extension `pre_shared_key`.
 
+### pre_shared_key
+If the client send this extension it must also send `psk_key_exchange_modes`
+```text
+Transport Layer Security
+    TLSv1.3 Record Layer: Handshake Protocol: Client Hello
+        ...
+        Handshake Protocol: Client Hello
+	    ...
+            Compression Methods (1 method)
+            Extension: psk_key_exchange_modes (len=2)
+                Type: psk_key_exchange_modes (45)
+                Length: 2
+                PSK Key Exchange Modes Length: 1
+                PSK Key Exchange Mode: PSK with (EC)DHE key establishment (psk_dhe_ke) (1)
+```
+* `psk_dhe_ke` In this case the client and the server must supply `key_share`.
+* `psk_ke` in  In this mode the server must not supply `key_share`.
+
 
 The server will choose one of the Cipher Suites that the client suggests. In
 our case this is:
@@ -148,13 +166,86 @@ TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
 `RSA` is the authentication algorithm.
 `AES_256_CBC` is the bulk encryption algorithm. 
 SHA` is the message authentication algorithm.
-#### key_share
 
-#### signature_algorithms
+#### Extension fields
+This struct is dedfined in the spec as follows:
+```text
+    struct {
+        ExtensionType extension_type;
+        opaque extension_data<0..2^16-1>;
+    } Extension;
 
-#### psk_key_exchange_modes
+    enum {
+        server_name(0),                             /* RFC 6066 */
+        max_fragment_length(1),                     /* RFC 6066 */
+        status_request(5),                          /* RFC 6066 */
+        supported_groups(10),                       /* RFC 8422, 7919 */
+        signature_algorithms(13),                   /* RFC 8446 */
+        use_srtp(14),                               /* RFC 5764 */
+        heartbeat(15),                              /* RFC 6520 */
+        application_layer_protocol_negotiation(16), /* RFC 7301 */
+        signed_certificate_timestamp(18),           /* RFC 6962 */
+        client_certificate_type(19),                /* RFC 7250 */
+        server_certificate_type(20),                /* RFC 7250 */
+        padding(21),                                /* RFC 7685 */
+        pre_shared_key(41),                         /* RFC 8446 */
+        early_data(42),                             /* RFC 8446 */
+        supported_versions(43),                     /* RFC 8446 */
+        cookie(44),                                 /* RFC 8446 */
+        psk_key_exchange_modes(45),                 /* RFC 8446 */
+        certificate_authorities(47),                /* RFC 8446 */
+        oid_filters(48),                            /* RFC 8446 */
+        post_handshake_auth(49),                    /* RFC 8446 */
+        signature_algorithms_cert(50),              /* RFC 8446 */
+        key_share(51),                              /* RFC 8446 */
+        (65535)
+    } ExtensionType;
+```
 
-#### pre_shared_key
+### supported_groups
+Are sent by the client (Client Hello) and specifies the named groups that the
+client supports for key exchange. This was called elliptic_curves in versions
+prior to 1.3 and would only allow elliptic curves. But supported_groups could
+also be Finite Field Diffie-Hellman parameters (or Elliptic Curve Diffie-Hellman
+parameters).
+
+Example:
+```text
+        Handshake Protocol: Client Hello
+            ...
+            Compression Methods (1 method)
+            Extensions Length: 125
+            Extension: supported_groups (len=12)
+                Type: supported_groups (10)
+                Length: 12
+                Supported Groups List Length: 10
+                Supported Groups (5 groups)
+                    Supported Group: x25519 (0x001d)
+                    Supported Group: secp256r1 (0x0017)
+                    Supported Group: x448 (0x001e)
+                    Supported Group: secp521r1 (0x0019)
+                    Supported Group: secp384r1 (0x0018)
+```
+
+### key_share
+This extension:
+```text
+            Extension: key_share (len=38)
+                Type: key_share (51)
+                Length: 38
+                Key Share extension
+                    Client Key Share Length: 36
+                    Key Share Entry: Group: x25519, Key Exchange length: 32
+                        Group: x25519 (29)
+                        Key Exchange Length: 32
+                        Key Exchange: 9e1f52f540dbafe12a4112557ca1c34855f2c51f2f318d79…
+```
+The group in this case is an elliptic curve and above we see that Curve25519 is
+specified by the client (this is also the default in OpenSSL).
+The group references one of the groups specified in the supported_groups
+extension.
+
+
 
 #### Configure Wireshark
 We can configure wireshark to use the above specified `keylogfile` by going
