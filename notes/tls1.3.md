@@ -254,7 +254,24 @@ Example:
 This extension contains the client public key parameters. Since this will be
 a Diffie-Hellman "family" the client can generate and send g^a mod n to the
 server. The server will also send  a `key_share` and both will be able to
-calculate a master secret.
+calculate a master secret. This is explained in [dh.md](./dh.md).
+
+```text
+Client                Public                        Server
+a (number < n)        g (generator, small prime)    b (number < n)
+                      n (big prime number)
+
+A = g^a mod n                                        B =  g^b mod n
+                        A (key_exchange) 
+                     ------------------>
+                        B (key_exchange)
+                     <------------------
+
+K_ab = (B)^a mod n                                   K_ab = (A)^b mod n
+```
+One thing to note is that at this stage the client is guessing/hopeing that the
+server will accept the same key exchange method. If the server does not the
+server will send RetryHelloRequest to restart the key share.
 ```text
             Extension: key_share (len=38)
                 Type: key_share (51)
