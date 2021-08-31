@@ -109,7 +109,9 @@ Notice that `Version` is set to v1.2 which and was used in versions prior to
 1.3 for version negotiation. But this is not used in 1.3 in which version
 perference is handled in the extension supported_version. This fields is still
 required so that a server that supports 1.2 can still parse the client hello
-and not think that it is invalid.
+and not think that it is invalid. Also keeping these fields will allow for
+these packages to traverse middleware boxes which might otherwise not allow them
+as they probably don't recognize the version being used.
 
 `random` should be created by a cryptographically secure pseudorandom number
 generator (CSPRNG) and is used as keying material.
@@ -119,10 +121,10 @@ generator (CSPRNG) and is used as keying material.
 
 `Compression Methods` is required but not used in 1.3 which instead uses an
 extension.
-The fields that are in the packet format but not used are required for backward
-compatability with 1.2. A client might want to communicate using tls1.3 but the
-server might only support 1.2 and this way the 1.2 server will still be able to
-interpret the packet. In 1.3 this field but contain one byte set to zero.
+There are fields that are in the packet format but not used are required for
+backward compatability with 1.2. A client might want to communicate using tls1.3
+but the server might only support 1.2 and this way the 1.2 server will still be
+able to interpret the packet. 
 
 ### Cipher suites
 The format of the cipher suites strings is as follows:
