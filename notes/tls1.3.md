@@ -289,6 +289,77 @@ The group references one of the groups specified in the supported_groups
 extension.
 
 
+### ServerHello
+This is the servers part of the key exchange.
+```text
+Transport Layer Security
+    TLSv1.3 Record Layer: Handshake Protocol: Server Hello
+        Content Type: Handshake (22)
+        Version: TLS 1.2 (0x0303)
+        Length: 122
+        Handshake Protocol: Server Hello
+            Handshake Type: Server Hello (2)
+            Length: 118
+            Version: TLS 1.2 (0x0303)
+            Random: 46541d21a5a9ecaca2a1686767b920afa9e72c0faa466737…
+            Session ID Length: 32
+            Session ID: 0dc04a44929c950d5b2fc09d02e3a9c8e441014e9f8019af…
+            Cipher Suite: TLS_AES_256_GCM_SHA384 (0x1302)
+            Compression Method: null (0)
+            Extensions Length: 46
+            Extension: supported_versions (len=2)
+                Type: supported_versions (43)
+                Length: 2
+                Supported Version: TLS 1.3 (0x0304)
+            Extension: key_share (len=36)
+                Type: key_share (51)
+                Length: 36
+                Key Share extension
+                    Key Share Entry: Group: x25519, Key Exchange length: 32
+                        Group: x25519 (29)
+                        Key Exchange Length: 32
+                        Key Exchange: 163cf1b4007dec0a36c875c86a96af7912d3e1928370c190…
+    TLSv1.3 Record Layer: Change Cipher Spec Protocol: Change Cipher Spec
+    TLSv1.3 Record Layer: Handshake Protocol: Encrypted Extensions
+    TLSv1.3 Record Layer: Handshake Protocol: Certificate
+    TLSv1.3 Record Layer: Handshake Protocol: Certificate Verify
+    TLSv1.3 Record Layer: Handshake Protocol: Finished
+```
+Now, the `Random` is somewhat overloaded and can be used for downgrade
+protection. In the case where a 1.3 server detects that the ClientHello only
+supports version 1.2 then the 1.3 server will add the following 8 bytes as the
+last in the Random field:
+```
+44 4F 57 4E 47 52 44 01
+and for version 1.1:
+44 4F 57 4E 47 52 44 00
+```
+A TLS1.3 client that specifies in its ClientHello that it supports 1.3 and send
+that to a 1.3 server, but the server's replied with a ServerHello that specifies
+one of the above values in the Random field, that is it wants to downgrade. This
+is possibly someone in the middle trying a downgrade attack and something that
+the TLS1.3 will detect by checking for these values and aborting the connection.
+
+The session id is not used and if we look we can see that it is just the same
+value as the client sent:
+```text
+    Client Session ID: 0dc04a44929c950d5b2fc09d02e3a9c8e441014e9f8019af…
+
+    Server Session ID: 0dc04a44929c950d5b2fc09d02e3a9c8e441014e9f8019af…
+```
+
+### HelloRetryRequest
+If the server is not able accept a handshake, it will send a HelloRetryRequest
+that describes the failure. The message is identical to the ServerHello in
+structure and reuses the Random field to indicate that this is a
+HelloRetryRequest.
+```text
+CF 21 AD 74 E5 9A 61 11 BE 1D 8C 02 1E 65 B8 91
+C2 A2 11 16 7A BB 8C 5E 07 9E 09 E2 C8 A8 33 9C
+```
+If the Random field has the above value then the client knows that this is a
+HelloRetryRequest (if not it's a ServerHello).
+
 
 #### Configure Wireshark
 We can configure wireshark to use the above specified `keylogfile` by going
