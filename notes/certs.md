@@ -106,18 +106,17 @@ To inspect a certificate:
 ```console
 $ openssl x509 --in cert.pem -text -nocert
 ```
-Example of inspecting a particual field:
+Example of inspecting a particular field:
 ```console
 $ openssl x509 --in cert.pem -serial -nocert
 serial=683DECB9FE65EFB7784CEA87AB17FE2ABC7C8C96
 ```
-
 `nocert` is just to prevent the output of the certificate and only show the
 serial number in this case.
 
 
 ### Verifying a certificate
-In src/certificate there is directory with examples to verify a certificate
+In `src/certificate` there is directory with examples to verify a certificate
 manually to understand the process.
 
 First we extract the issuers public key into `issuer-pub.pem`:
@@ -128,9 +127,48 @@ Extract the signature into `signature.txt`:
 ```console
 $ openssl x509 -in cert.pem -text -noout -certopt ca_default -certopt no_validity -certopt no_serial -certopt no_subject -certopt no_extensions -certopt no_signame > signature.txt
 ```
-Store the signature as binary:
+Convert the signature hexdump (the format that is displayed above in the
+Signature Algorithm field) as binary:
 ```console
 $ cat signature.txt | xxd -r -p > signature.bin
+```
+This is doing the reverse of what xxd (a hex dumper) usually does. It usually
+takes a file and outputs the hex values of it. In this case the signature is
+already in hex and we want the reverse, hence the `-r` flag. We can verify this
+using:
+```console
+ xxd -C signature.bin
+00000000: 0c23 28e5 f6c1 1bb0 3935 f2e4 4aec b7ab  .#(.....95..J...
+00000010: 0b03 ff81 e07d 0dd5 8c78 5550 e0bd 5eee  .....}...xUP..^.
+00000020: 80ba b636 f78f a410 2a9d 85e6 6b8d b0d1  ...6....*...k...
+00000030: 853e 3bd1 a51a 7017 e3be 1ddd 7e2c 29e5  .>;...p.....~,).
+00000040: cbe9 1378 ebcf 7925 060c 2cb5 b3dc 6b2e  ...x..y%..,...k.
+00000050: 65b0 9255 c6e2 a0ce 299f f680 d388 3e1a  e..U....).....>.
+00000060: f483 2452 0587 ca04 8fa2 83f0 51a2 30bf  ..$R........Q.0.
+00000070: 47a4 5824 c265 fa1c fae0 8a13 c98e 126e  G.X$.e.........n
+00000080: 915a 8842 4d0e ceb6 dcd5 4f37 38e7 d28d  .Z.BM.....O78...
+00000090: 56e3 c742 91ab fdbb c14e 8e51 3526 9480  V..B.....N.Q5&..
+000000a0: f17e a097 2783 c719 2b20 19f3 294b 42ee  .~..'...+ ..)KB.
+000000b0: 7245 0404 e1be 68f7 41ac 4510 977a fe95  rE....h.A.E..z..
+000000c0: a895 2a26 9bee 7951 36fb 63e4 b1bb 366c  ..*&..yQ6.c...6l
+000000d0: b4cc 41e1 8c44 693f 535e 1e9e 3287 57af  ..A..Di?S^..2.W.
+000000e0: ba42 e0e0 d5fe c8ca 6e71 5fdb 9736 8b5b  .B......nq_..6.
+$ cat signature.txt 
+0c:23:28:e5:f6:c1:1b:b0:39:35:f2:e4:4a:ec:b7:ab:0b:03:
+ff:81:e0:7d:0d:d5:8c:78:55:50:e0:bd:5e:ee:80:ba:b6:36:
+f7:8f:a4:10:2a:9d:85:e6:6b:8d:b0:d1:85:3e:3b:d1:a5:1a:
+70:17:e3:be:1d:dd:7e:2c:29:e5:cb:e9:13:78:eb:cf:79:25:
+06:0c:2c:b5:b3:dc:6b:2e:65:b0:92:55:c6:e2:a0:ce:29:9f:
+f6:80:d3:88:3e:1a:f4:83:24:52:05:87:ca:04:8f:a2:83:f0:
+51:a2:30:bf:47:a4:58:24:c2:65:fa:1c:fa:e0:8a:13:c9:8e:
+12:6e:91:5a:88:42:4d:0e:ce:b6:dc:d5:4f:37:38:e7:d2:8d:
+56:e3:c7:42:91:ab:fd:bb:c1:4e:8e:51:35:26:94:80:f1:7e:
+a0:97:27:83:c7:19:2b:20:19:f3:29:4b:42:ee:72:45:04:04:
+e1:be:68:f7:41:ac:45:10:97:7a:fe:95:a8:95:2a:26:9b:ee:
+79:51:36:fb:63:e4:b1:bb:36:6c:b4:cc:41:e1:8c:44:69:3f:
+53:5e:1e:9e:32:87:57:af:ba:42:e0:e0:d5:fe:c8:ca:6e:71:
+5f:db:97:36:8b:5b:ed:95:20:24:d8:41:27:70:d5:ed:df:2f:
+07:80:d4:f0
 ```
 
 ```console
@@ -163,4 +201,10 @@ Then the client would compare these to hashes:
 BE0955F96C7C1FE2F73640D54BA3C9A2AE8583117F00EB411A4FCE3F643C84F9
 be0955f96c7c1fe2f73640d54ba3c9a2ae8583117f00eb411a4fce3f643c84f9
 ```
+So a CA would compute a HASH over the DER encoded public key section of the
+certificate signing request, and then sign the hash with its own private key.
+And when the client gets a certificate it can create a hash over the same data
+in the certificate that was signed by the CA. The client uses the CA's public
+key to try to decrypt the signature and then checks if the hashes match.
+
 
