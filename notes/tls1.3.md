@@ -23,6 +23,19 @@ $ openssl s_client -crlf -tls1_3 -msg -keylogfile keylogfile localhost
 ```
 
 ### ClientHello
+Key Exchange is performed using the ClientHello and ServerHello messages
+which establish the key sharing material. All messages communicated after
+this stage are encrypted:
+```
+Client                              Server
+ClientHello  {                      
+  key_share             ----------> ServerHello {
+  signature_algoritms                 key_share   
+  psk_key_exchange_modes              pre_shared_key
+  pre_shared_key                    }
+}
+```
+
 So the first thing that happens is that the client sends a ClientHello to the
 server. This struct is definded as:
 ```
@@ -94,7 +107,10 @@ Transport Layer Security
 ```
 Notice that `Version` is set to v1.2 which and was used in versions prior to
 1.3 for version negotiation. But this is not used in 1.3 in which version
-perference is handled in the extension supported_version.
+perference is handled in the extension supported_version. This fields is still
+required so that a server that supports 1.2 can still parse the client hello
+and not think that it is invalid.
+
 `random` should be created by a cryptographically secure pseudorandom number
 generator (CSPRNG) and is used as keying material.
 
@@ -103,10 +119,10 @@ generator (CSPRNG) and is used as keying material.
 
 `Compression Methods` is required but not used in 1.3 which instead uses an
 extension.
-The fields that are in the package format but not used are required for backward
+The fields that are in the packet format but not used are required for backward
 compatability with 1.2. A client might want to communicate using tls1.3 but the
 server might only support 1.2 and this way the 1.2 server will still be able to
-interpret the package. In 1.3 this field but contain one byte set to zero.
+interpret the packet. In 1.3 this field but contain one byte set to zero.
 
 ### Cipher suites
 The format of the cipher suites strings is as follows:
@@ -130,11 +146,14 @@ Cipher Suite: TLS_AES_256_GCM_SHA384 (0x1302)
 So in this case AEAD would be AES_256_GCM.
 
 
-
 ### Pre-Shared Key (PSK)
-After a successful handshake the server can send PSK identity derived from the
-intitial handshake. A client may then use this value in new handshakes in the
-extension `pre_shared_key`.
+TLS usually uses public key certificates for authentication but it is possible
+for the protocol to use symmetric keys that are shared in advanced to establish
+the TLS connection. This can be useful on devices with limited CPU power. 
+
+PSK can also be used for session resumption after a  successful handshake the
+server can send PSK identity derived from the intitial handshake. A client may
+then use this value in new handshakes in the extension `pre_shared_key`.
 
 ### pre_shared_key
 If the client send this extension it must also send `psk_key_exchange_modes`
@@ -153,6 +172,8 @@ Transport Layer Security
 ```
 * `psk_dhe_ke` In this case the client and the server must supply `key_share`.
 * `psk_ke` in  In this mode the server must not supply `key_share`.
+
+
 
 
 The server will choose one of the Cipher Suites that the client suggests. In
