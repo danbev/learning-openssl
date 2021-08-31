@@ -53,7 +53,7 @@ server. This struct is definded as:
           Extension extensions<8..2^16-1>;
       } ClientHello;
 ```
-And we can see an example of an actual packet below:
+And we can see an example of an actual packet below which is sent in clear text:
 ```text
 Transmission Control Protocol, Src Port: 33540, Dst Port: 7777, Seq: 1, Ack: 1, Len: 217
 Transport Layer Security
@@ -249,7 +249,10 @@ Example:
 ```
 
 ### key_share
-This extension:
+This extension contains the client public key parameters. Since this will be
+a Diffie-Hellman "family" the client can generate and send g^a mod n to the
+server. The server will also send  a `key_share` and both will be able to
+calculate a master secret.
 ```text
             Extension: key_share (len=38)
                 Type: key_share (51)
