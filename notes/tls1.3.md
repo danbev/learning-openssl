@@ -147,37 +147,6 @@ Cipher Suite: TLS_AES_256_GCM_SHA384 (0x1302)
 ```
 So in this case AEAD would be AES_256_GCM.
 
-
-### Pre-Shared Key (PSK)
-TLS usually uses public key certificates for authentication but it is possible
-for the protocol to use symmetric keys that are shared in advanced to establish
-the TLS connection. This can be useful on devices with limited CPU power. 
-
-PSK can also be used for session resumption after a  successful handshake the
-server can send PSK identity derived from the intitial handshake. A client may
-then use this value in new handshakes in the extension `pre_shared_key`.
-
-### pre_shared_key
-If the client send this extension it must also send `psk_key_exchange_modes`
-```text
-Transport Layer Security
-    TLSv1.3 Record Layer: Handshake Protocol: Client Hello
-        ...
-        Handshake Protocol: Client Hello
-	    ...
-            Compression Methods (1 method)
-            Extension: psk_key_exchange_modes (len=2)
-                Type: psk_key_exchange_modes (45)
-                Length: 2
-                PSK Key Exchange Modes Length: 1
-                PSK Key Exchange Mode: PSK with (EC)DHE key establishment (psk_dhe_ke) (1)
-```
-* `psk_dhe_ke` In this case the client and the server must supply `key_share`.
-* `psk_ke` in  In this mode the server must not supply `key_share`.
-
-
-
-
 The server will choose one of the Cipher Suites that the client suggests. In
 our case this is:
 ```
@@ -189,6 +158,208 @@ TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
 `RSA` is the authentication algorithm.
 `AES_256_CBC` is the bulk encryption algorithm. 
 SHA` is the message authentication algorithm.
+
+
+### Pre-Shared Key (PSK)
+TLS usually uses public key certificates for authentication but it is possible
+for the protocol to use symmetric keys that are shared in advanced to establish
+the TLS connection. This can be useful on devices with limited CPU power. 
+Note that in this case certificates are not required.
+
+PSK can also be used for session resumption after a successful handshake the
+server can send PSK identity derived from the intitial handshake. A client may
+then use this value in new handshakes in the extension `pre_shared_key`.
+
+The client uses `psk_key_exchange_modes` to indicate support for PSK:
+```
+Extension: psk_key_exchange_modes (len=2)
+    Type: psk_key_exchange_modes (45)
+    Length: 2
+    PSK Key Exchange Modes Length: 1
+    PSK Key Exchange Mode: PSK with (EC)DHE key establishment (psk_dhe_ke) (1)
+```
+* `psk_dhe_ke provides forward secrecy (Pre-Shared-Key_DiffieHellmanExchange_KeyExchange).
+* `psk_ke` does not provide forward secrecy(Pre-Shared-Key_KeyExchange).
+So that is the mode the client wants the PSK to be in. If the client sends a
+PSK that will be send in a `pre_shared_key` extension.
+
+
+### pre_shared_key
+So this is the actual pre-shared key that the clients send to the server. There
+can be more than one of these.
+
+We can get an example of this extension by first connecting a client and
+specifying the `-sess-out` options:
+```console
+$ openssl s_client -tls1_3 -crlf -msg --port 7777 -keylogfile keylogfile -sess_out session.txt localhost
+```
+And the connecting again but this time specifying `-psk-session`:
+```console
+$ openssl s_client -tls1_3 -crlf -msg --port 7777 -keylogfile keylogfile -psk_session session.txt localhost
+```
+And we will then see the extension in the ClientHello message (in Wireshark):
+```
+Extension: pre_shared_key (len=74)
+    Type: pre_shared_key (41)
+    Length: 74
+    Pre-Shared Key extension
+        Identities Length: 21
+        PSK Identity (length: 15)
+            Identity Length: 15
+            Identity: 436c69656e745f6964656e74697479
+            Obfuscated Ticket Age: 0
+        PSK Binders length: 49
+        PSK Binders
+```
+The Binders are HMAC that are proof of possession of the pre-shared key.
+The selected PSK is used by both client and server to generate the connection
+key material to complete the handshake.
+
+The actual session data can be stored on the server side in which case the PSK
+identity identifies the session. So the server would retrieve that from some
+form of storage.
+But this same field, identity, can also be used to store the session data
+itself.
+
+
+### Session Resumption
+This is implemented by the usage of pre-shared keys (see previous section) and
+is done after the handshake is complete. After the handshake is complete the
+server sends one or more NewSessionTicket message:
+```
+TLSv1.3 Record Layer: Handshake Protocol: New Session Ticket
+    Opaque Type: Application Data (23)
+    Version: TLS 1.2 (0x0303)
+    Length: 250
+    [Content Type: Handshake (22)]
+    Handshake Protocol: New Session Ticket
+        Handshake Type: New Session Ticket (4)
+        Length: 229
+        TLS Session Ticket
+            Session Ticket Lifetime Hint: 7200 seconds (2 hours)
+            Session Ticket Age Add: 3009249525
+            Session Ticket Nonce Length: 8
+            Session Ticket Nonce: 0000000000000000
+            Session Ticket Length: 208
+            Session Ticket: 78faa902ede8eb6456a7c4667160c6422ced8db99a396fc9…
+            Extensions Length: 0
+```
+The handshake and the nounce are used together by both the server and client
+to calculate the PSK.
+This is calculated using:
+```
+HKDF-Expand-Label(resumption_master_secret, "resumption", _nounce, Hash.length)
+```
+
+### Key generation
+This process happens as part of every handshake phase for each connection.
+TLS1.3 has many keys (one for each different purpose): 
+* Binder key (client)                      1 key    Proof of PSK possession
+* Early Traffic secret (client)            1 key    
+* Handshake traffic secret (client/server) 2 keys   Encrypts the handshake traffic
+* App traffic secret       (client/server) 2+ keys  
+* Exporter master secret                   1 key    Intended for usage outside of TLS (Does QUIC uses this in any way?)
+* Resumption master secret                 1 key    For the gen of PSK used for session resumption
+
+This generation of keys a key derivation function (KDF) is a basic and essential
+component of cryptographic systems. Its goal is to take some source of initial
+keying material and derive from it one or more cryptographically strong secret
+keys. 
+TLS 1.3 key derivation is based on HMAC-based key derivative function (HKDF).
+
+HKDF follows the "extract-then-expand" paradigm, where the KDF
+logically consists of two modules.
+1) take the input keying material and "extracts" from it a fixed-length
+   pseudorandom key extracted_key.
+```
+HKDF-Extract(salt, input) -> extracted_key
+```
+The reason for this extract phase is that the keying material may not be
+uniformally random distributed. An extractor maps input probability
+distributions with sufficient entropy into output distributions that are
+statistically close to uniform (so any value in the range would be equally
+probable compared to the original source where this is not the case).
+
+2) expand the key extracted_key into several additional pseudorandom keys
+   (the output of the KDF).
+```
+HKDF-Expand(extracted_key, context, length) -> expended_key
+```
+In TLS1.3 there is a wrapper function around `HKDF-Expand` named
+`HKDF-Expand-Label` which is used to generate multiple keys for different 
+purposes (listed above) using a label.
+```
+HKDF-Expand-Label(Secret, Label, Context, Length) = HKDF-Expand(Secret, HkdfLabel, Length)
+
+Where HkdfLabel is specified as:
+
+struct {
+   uint16 length = Length;
+   opaque label<7..255> = "tls13 " + Label;
+   opaque context<0..255> = Context;
+} HkdfLabe
+
+Derive-Secret(Secret, Label, Messages) =
+    HKDF-Expand-Label(Secret, Label, Transcript-Hash(Messages), Hash.length)
+```
+The `Length` is the output lenght in bytes.
+A `Context` can be zero which is specified as "".
+
+During the handshake the client and server each provide a strong random number
+which is used to make the every handshake unique even if the contents of the
+messages are identical.
+
+```
+             0 (Salt)
+             |
+             v
+   PSK ->  HKDF-Extract = EarlySecret
+             |
+             +-----> Derive-Secret(EarlySecret, "ext binder" | "res binder", "")
+             |                     = binder_key
+             |
+             +-----> Derive-Secret(EarlySecret, "c e traffic", ClientHello)
+             |                     = client_early_traffic_secret
+             |
+             +-----> Derive-Secret(EarlySecret, "e exp master", ClientHello)
+             |                     = early_exporter_master_secret
+             v
+       Derive-Secret(EarlySecret, "derived", "")    <- EarlySecret is the salt
+             |
+             v
+   (EC)DHE -> HKDF-Extract = HandshakeSecret
+             |
+             +-----> Derive-Secret(HandshakeSecret, "c hs traffic",
+             |                     ClientHello...ServerHello)
+             |                     = client_handshake_traffic_secret
+             |
+             +-----> Derive-Secret(HandshakeSecret, "s hs traffic",
+             |                     ClientHello...ServerHello)
+             |                     = server_handshake_traffic_secret
+             v
+       Derive-Secret(HandshakeSecret, "derived", "")
+             |
+             v
+   0 -> HKDF-Extract = MasterSecret
+             |
+             +-----> Derive-Secret(MasterSecret, "c ap traffic",
+             |                     ClientHello...server Finished)
+             |                     = client_application_traffic_secret_0 <- can be different (0,1,2...)if KeyUpdate messages have been sent
+             |
+             +-----> Derive-Secret(MasterSecret, "s ap traffic",
+             |                     ClientHello...server Finished)
+             |                     = server_application_traffic_secret_0 <- can be different (0,1,2...)if KeyUpdate messages have been sent
+             |
+             +-----> Derive-Secret(MasterSecret, "exp master",
+             |                     ClientHello...server Finished)
+             |                     = exporter_master_secret
+             |
+             +-----> Derive-Secret(MasterSecret, "res master",
+                                   ClientHello...client Finished)
+                                   = resumption_master_secret
+```
+
+
 
 #### Extension fields
 This struct is dedfined in the spec as follows:
@@ -360,6 +531,69 @@ C2 A2 11 16 7A BB 8C 5E 07 9E 09 E2 C8 A8 33 9C
 If the Random field has the above value then the client knows that this is a
 HelloRetryRequest (if not it's a ServerHello).
 
+### Certificate
+This message contains the servers certificate
+```
+    TLSv1.3 Record Layer: Handshake Protocol: Certificate
+        Opaque Type: Application Data (23)
+        Version: TLS 1.2 (0x0303)
+        Length: 1079
+        [Content Type: Handshake (22)]
+        Handshake Protocol: Certificate
+            Handshake Type: Certificate (11)
+            Length: 1058
+            Certificate Request Context Length: 0
+            Certificates Length: 1054
+            Certificates (1054 bytes)
+                Certificate Length: 1049
+                Certificate: 30820415308202fda0030201020214683decb9fe65efb778… (pkcs-9-at-emailAddress=daniel.bevenius@gmail.com,id-at-commonName=localhost,id-at-organizationalUnitName=nodeshift,id-at-organizationName=Red Hat,id-at-localityName=Stockhol
+                    signedCertificate
+                    algorithmIdentifier (sha256WithRSAEncryption)
+                    Padding: 0
+                    encrypted: 0c2328e5f6c11bb03935f2e44aecb7ab0b03ff81e07d0dd5…
+                Extensions Length: 0
+```
+
+
+### Certificate Verify
+This message contains proof that the certificate sent int the Certificate
+message corresponds to the private key. The signature must be created with
+the private key matching the certificate.
+```
+    TLSv1.3 Record Layer: Handshake Protocol: Certificate Verify
+        Opaque Type: Application Data (23)
+        Version: TLS 1.2 (0x0303)
+        Length: 281
+        [Content Type: Handshake (22)]
+        Handshake Protocol: Certificate Verify
+            Handshake Type: Certificate Verify (15)
+            Length: 260
+            Signature Algorithm: rsa_pss_rsae_sha256 (0x0804)
+                Signature Hash Algorithm Hash: Unknown (8)
+                Signature Hash Algorithm Signature: Unknown (4)
+            Signature length: 256
+            Signature: 74e660aef026cd9b6a071c82615643a31f5c1026144cdbb1…
+```
+
+### Finished
+This is the last message sent by both the server and client they both send
+a signature of the exchanged data and if both sides can verify the signature
+the handshake succeeds.
+```
+    TLSv1.3 Record Layer: Handshake Protocol: Finished
+        Opaque Type: Application Data (23)
+        Version: TLS 1.2 (0x0303)
+        Length: 69
+        [Content Type: Handshake (22)]
+        Handshake Protocol: Finished
+            Handshake Type: Finished (20)
+            Length: 48
+            Verify Data
+```
+
+
+### Certificate Request
+This is sent by the server to require that the client authenticate
 
 #### Configure Wireshark
 We can configure wireshark to use the above specified `keylogfile` by going
