@@ -389,6 +389,22 @@ messages are identical.
                                    = resumption_master_secret
 ```
 
+### Transcript Hash
+In TLS1.3 to verify the integrity of the handshake a symmetric key scheme is not
+uses as was the case in 1.2. Instead the server signs what is known as the
+transcript hash which it returns as part of its ServerHello message.
+
+My understanding is that this hash is signed is sent in the CertificateVerify to
+the client. The mssages used in the concatenation would then be ClientHello,
+ServerHello, EncryptedExtensions, and Certificate. The next message is
+CertificateVerify itself. This is signed with the private key corresponding to
+the public ken in the Certificate message.
+
+Is a part of authentication in TLS1.3. This value is calculated by concatenating
+each of the handshake messages:
+```
+Transcript-Hash(M1, M2, ... Mn) = Hash(M1 || M2 || ... || Mn)
+```
 
 
 #### Extension fields
