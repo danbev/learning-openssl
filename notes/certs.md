@@ -100,6 +100,10 @@ The client will recieve the above certificate it can see that there is a public
 key. The client also wants to verify that this public key actually belongs to
 the server in question so it needs to validate.
 
+The client needs to trust the CA that signed the signature in the certificate
+and this is usually done adding the CA's public key to the clients trusted key
+store. These trusted keys are usually provided by the operating system or by
+a browers.
 
 #### x509 app
 To inspect a certificate:
