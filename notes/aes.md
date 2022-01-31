@@ -1,4 +1,6 @@
 ## Advanced Encryption Standard
+Symmetric key algorithm where the same key is used for encryption and
+decryption.
 
 ```
   128 +---------+
@@ -8,6 +10,8 @@ x --->|   AES   |-----> y
            | 128/192/256
            k
 ```
+Notice the block size is always 128-bits (16 bytes) regardless of the keysize.
+
 The number of rounds depends on the key length 128/192/256:
 ```
 Key length |  Rounds
@@ -21,6 +25,8 @@ NSA allows AES for classified data up to TOP SECRET with 192 or 256 bit keys.
 
 As opposed to DES it is not a Fiestel cipher. AES encrypts the whole 128 bits in
 each round which is different from what a Fiestel network cipher does.
+TODO: include an example of the below in terms of an input message and a
+key using ascii characters.
 
 ```
    127                               0
@@ -124,7 +130,7 @@ Bi = S(Ai) = 25₁₆ = 0010 0101  <- output from lookup
 Notice that the values are hex and we have two of them to the lookup table will
 have 16x16=256 entries.
 
-In contrast to DES where the lookup tables were secret (how that were constructed
+In contrast to DES where the lookup tables were secret (how they were constructed
 that is), I think they were generated randomly and the checked if known attacks
 were possible, in AES they are not randomly generated and there is a mathematical
 structure to it.
