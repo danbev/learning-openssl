@@ -128,6 +128,7 @@ s = -------- mod p
 ```
 
 Now we need to find the intersection with the curve after finding the line.
+```
 E: y² = x³ + ax + b
 l: y  = sx + m
 
@@ -420,5 +421,10 @@ a * P = P + P + P + P (a times)
 For very large numbers (private keys) we can use square-and-multiply but in EC
 the squaring becomes `P+P`, point doubling, so instead of square-and-multiply
 double-and-add.
+
+
+
+
+
 
 __wip__
