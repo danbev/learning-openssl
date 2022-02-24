@@ -6,6 +6,7 @@ Just to recap about RSA and that it will split the message into blocks of
 plaintext. For example this could be 16 byte blocks (so 128 bits in total).
 But the input message might not be an even multiple of this size so padding is
 added to ensure this.
+
 For example, if we need to pad on byte:
 ```
               7  6  5  4  3  2  1  0
@@ -25,7 +26,7 @@ complete padding byte is appended to the message:
               7  6  5  4  3  2  1  0  7  6  5  4  3  2  1  0
 Block size 8: DD OF 0F CB F1 AA 97 01
 Padding     : DD OF 0F CB F1 AA 97 01 08 08 08 08 08 08 08 08
-```
+
                     Block n-1                       Block n
               7  6  5  4  3  2  1  0          7  6  5  4  3  2  1  0
             +--+--+--+--+--+--+--+--+       +--+--+--+--+--+--+--+--+
