@@ -93,7 +93,9 @@ of message block 3. Changing cipher block 2 will mess up the decryption of that
 message, but there are attacks like padding attacks that are possible with this
 mode of operation.
 
-## Counter Chaining Mode (CCM)
+## Counter Mode (CTR)
+Is also known as CM, Integer Counter Mode, and Segmented Counter Mode (SIC).
+
 ```
 n = nounce (number unique to a specific communication)
 
@@ -130,8 +132,30 @@ Decryption
 Both notice that an attacker could change the ciphertext which will effect
 the message block (plain text). 
 
+## Counter with CBC-MAC (CCM)
+This type of encryption combines counter mode encryption with a message
+authentication code (MAC). What it is trying to do is to address the issue
+in CTR where an attacker could change a cipher text block which could directly
+affect the decrypted message block. Here a MAC is computed on the ciphertext
+and will only decrypt if the ciphertext has not been changed. Doing it this way
+is called encrypt-then-mac. The encryption stage produces encrypted ciphertext
+blocks and also a tag which is a mac for these cipher blocks.
 
-## Cipher Feedback Mode (CFB)
+```
+      Key
+       ↓
+m ->  AES    --> Cipher Text   --> 
+       ↑         MAC
+       IV
+```
 
 
 ### Galios Counter Mode
+In the previous section we mentioned that an attacker could manipulate the
+cipher text block which would impact the message block decrypted and there
+would be no way for the receiver to know that that was not the correct
+information.
+
+
+
+## Cipher Feedback Mode (CFB)
