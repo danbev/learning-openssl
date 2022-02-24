@@ -99,13 +99,12 @@ And notice that 4 in our case is m⁵, which is 2⁵ mod 14 so we can write this
 (m⁵)¹¹ mod (14)
 m⁵*¹¹ mod (14)
 m⁵*¹¹ mod (14) = m⁵⁵ mod (14) =
-2⁵*¹¹ mod (14) = m⁵⁵ mod (14) =
 ```
 
 Now, there are issues with the what we have done above, first encrypting the
 same plaintext multiple times will produce the same cipher text. There is also
-an issue where if we multiply two ciphertexts with each other mod n we will
-get the plain text?
+an issue where if we multiply two identical ciphertexts with each other mod n we
+will get the plain text.
 ```
 y1 × y2 mod n = x1^e × x2^e mod n = (x1 × x2)^e mod n
 ```
@@ -116,7 +115,7 @@ Optimal Asymmetric Encryption Padding (OAEP or sometimes RSA-OAEP).
 In this case we create a bit string as large as the modulus, so a bit string
 of size 14 in our current example. This is padded before encrypion. The bits
 need to be random or otherwise they would just be the same problem as before,
-so there OAEP needs some form of pseudorandom number generator.
+so OAEP needs some form of pseudorandom number generator.
 
 I've see the following in books/blogs etc describing padding:
 ```
@@ -140,23 +139,40 @@ does not sign the message itself but instead signs a hash of the message. This
 hash is produced by the hash/algorithm/message digest function.
 
 ### RSA small messages
-If the messages being sent are smaller that the modulus the modulus operation
+If the messages being sent are smaller than the modulus the modulus operation
 can be avoided as it does not do anything. For example:
 ```
 2^1 mod 4 = 2
 ```
-We need to have a  message that is greater than the modulus size. This is where
+We need to have a message that is greater than the modulus size. This is where
 various padding schemes come into play with RSA.
 
 ### PKCSv1 (Public-Key Cryptography Standard version 1)
 A part of this standard includes RSA encryption, decryption, encoding/padding
 schemes. The padding scheme can be used with RSA to avoid the small messages
 problem discussed above.
+For example, say we have an AES 128 bit key that we want to encrypt and send to
+a receiver. This will need to be expanded to 2048 bits and this is done using
+padding. For example;
 ```
-m = 0...10 || r || 0⁸ || m'
-m' = original message
-r  = random bits |r| ≥ 64
+                           2048 bits
+      +----+------+------+------------------------+
+      |Op  |Random| 0xFF | msg                    |
+      +-----------+------+------------------------+
+Bits:  16    r       16     128
+
+Op = Operation, 0001 is for signatures, and 0002 is for public key encryption
+Random = random number but must not contain any 0xFF.
 ```
+The idea here is that this is what is passed into the RSA encryption function
+and sent to the other side.
+The receiver will decrypt the ciphertext and check the first bits 0x0002 to
+make sure that it has the correct padding format, and if it does not an error
+might be returned. And here in lies the issue. This lets an attacker that can
+intercept a ciphertext to modify the ciphertext and send it to the server, if
+the server does returns an error the attacker has a way of finding out if the
+changes pass encryption or not (if the server returns an error or not).
+
 
 ### RSA Optimal Asymmetric Encryption Padding
 An improvement over PKCS#1 with regards to its padding scheme.
