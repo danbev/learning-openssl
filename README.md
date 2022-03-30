@@ -1637,16 +1637,27 @@ of these curves is several years away.
 
 ### Hashed Message Authentication Code (HMAC)-based Key Derivation Function (HKDF)
 A key derivation function (KDF) is a basic and essential component of
-cryptographic systems.  Its goal is to take some source of initial
-keying material and derive from it one or more cryptographically
-strong secret keys.
+cryptographic systems. Its goal is to take some source of initial keying
+material and derive from it one or more cryptographically strong secret keys.
 
 HKDF follows the "extract-then-expand" paradigm, where the KDF
 logically consists of two modules.
 1) takes the input keying material and "extracts" from it a fixed-length
 pseudorandom key K.
+```c
+int extact(int initial_key, int salt) {
+  int psuedo_random_key = hkdf_extract(salt, initial_key);
+  return psuedo_random_key 
+}
+```
 2) expand the key K into several additional pseudorandom keys (the output of the
 KDF).
+```c
+int[] expand(int psuedo_random_key, ..) {
+  int bytes[] = ;
+  return bytes;
+}
+```
 
 So we first want to extract from a source key (sk), which could be created by a
 hardware random number generator or a key exchange protocol, and then create
@@ -1656,10 +1667,10 @@ additional keys derived from that:
   | SK  | ----> |KDF| ----> [k₁, k₂, k₃, ...]
   +-----+       +---+
 ```
-For example in TLS 1.3 there are multiple keys need to for different things.
+For example in TLS 1.3 there are multiple keys need for different things.
 
-In TLS the browser has a key for sending to the server and a key for receiving
-from the server.
+In TLS 1.3 the browser has a key for sending to the server and a key for
+receiving from the server.
 ```
 +--------+
 |Client  |
@@ -1677,7 +1688,9 @@ from the server.
 Both sides use stateful encryption which maintain two 64-bit counters to defend
 against replay attacs.
 
-The current [derive](derive.c) example only performs the second stage.
+The current [hmac](hmac.c) example only performs the second stage.
+
+https://www.rfc-editor.org/rfc/rfc5869.html
 
 ### OpenSSL 3.x
 
