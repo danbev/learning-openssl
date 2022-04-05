@@ -47,11 +47,11 @@ Plaintext   |  |  |  |  |  |  |  |  |       |  |  |  |  |  |  |  |01|
             +--+--+--+--+--+--+--+--+       +--+--+--+--+--+--+--+--+
 
 ```
-Notice that we are able to get the plain text of last value in block n-1. This
-is possible as the last block will first be decrypted and then it will be xored
-with the previous ciphertext (which in this case we control). Now if we can
-guess the value of x such that it equals 0x01. Doing this would make the
-padding valied and not error reported by the oracle (server or whatever program
+Notice that we are able to get the plain text of the last value in block n-1.
+This is possible as the last block will first be decrypted and then it will be
+xored with the previous ciphertext (which in this case we control). Now if we
+can guess the value of x such that it equals 0x01. Doing this would make the
+padding valied and no error reported by the oracle (server or whatever program
 is decrypting the data).
 
 ### Optimal Asymmetric Encryption Padding (OAEP or sometimes RSA-OAEP).
@@ -62,7 +62,7 @@ The encoded message will be formed as:
 ```
 M = H || 00 . . . 00 || 01 || K
 ```
-So our message K needs to if small enough to fit into a byte array with h bytes
+So our message K needs to be small enough to fit into a byte array with h bytes
 then as many 00 as needed (what are these for?) and then a 01 separator followed
 by the message. But also notice that the final result will have a 00 prepended
 to it.
@@ -132,6 +132,8 @@ the same length message regardless. Using SHA-256 the length would be 256 bits.
 
 Like OAEP PSS also requires a PRNG and two hash functions. 
 
+### PKCS #1v 1.5 padding
+This was used in TLS version prior to 1.2.
 
 
 
