@@ -152,7 +152,7 @@ list and it is has a target in the Makefile:
 include/openssl/configuration.h: include/openssl/configuration.h.in  configdata.pm
         $(PERL) "-I." -Mconfigdata "util/dofile.pl" "-oMakefile" include/openssl/configuration.h.in > $@
 ```
-So can generate this header using the following command:
+So we can generate this header using the following command:
 ```console
 $ make include/openssl/configuration.h
 /usr/bin/perl "-I." -Mconfigdata "util/dofile.pl" "-oMakefile" include/openssl/configuration.h.in > include/openssl/configuration.h
@@ -196,7 +196,7 @@ $ ./config -Werror --strict-warnings --debug --prefix=/home/danielbevenius/work/
 ```
 
 If we look in the generated configdata.md module we can find the following
-entries in the `unified_info hash (perl hash map/table key/value pairs):
+entries in the `unified_info` hash (perl hash map/table key/value pairs):
 ```perl
 our %unified_info = ( 
      "sources" => {
