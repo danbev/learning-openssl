@@ -1,6 +1,8 @@
 ### Learning OpenSSL
-The sole purpose of this project is to learn OpenSSL's libcryto library.
+The sole purpose of this project is to learn OpenSSL's libcrypto library.
 
+All included examples are licensed under the BSD 2-clause license, unless
+stated otherwise.
 
 ### Building
 
