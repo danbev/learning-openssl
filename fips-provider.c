@@ -1,7 +1,7 @@
-#include <openssl/provider.h>
 #include <openssl/evp.h>
 #include <openssl/err.h>
-#include <openssl/conf.h>
+#include <openssl/provider.h>
+#include <openssl/types.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -54,7 +54,8 @@ int main(int argc, char** argv) {
   printf("FIPS is enabled (%d): %s\n", r, r == 1 ? "true": "false");
 
   sha256 = EVP_MD_fetch(NULL, "SHA2-256", NULL);
-  printf("Provider name for sha256: %s\n", OSSL_PROVIDER_name(EVP_MD_provider(sha256)));
+  printf("Provider name for sha256: %s\n",
+    OSSL_PROVIDER_get0_name(EVP_MD_get0_provider(sha256)));
 
   OSSL_PROVIDER_unload(fips);
   exit(EXIT_SUCCESS);
