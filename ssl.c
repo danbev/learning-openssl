@@ -1,8 +1,13 @@
 #include <openssl/bio.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
 #include <openssl/conf.h>
+#include <openssl/crypto.h>
+#include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/x509.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 int pass_cb(char *buf, int size, int rwflag, void *u) {
@@ -10,7 +15,7 @@ int pass_cb(char *buf, int size, int rwflag, void *u) {
   char *tmp;
   /* We'd probably do something else if 'rwflag' is 1 */
   if (u) {
-    printf("Get the password for \"%s\"\n", u);
+    printf("Get the password for \"%s\"\n", (char*)u);
     tmp = "test";
     len = strlen(tmp);
 
@@ -27,8 +32,8 @@ int pass_cb(char *buf, int size, int rwflag, void *u) {
 /**
  * This example is pretty much the same as socket.c, the only thing that
  * changes is setting up and making the connection.
- */ 
-int main(int arc, char *argv[]) { 
+ */
+int main(int arc, char *argv[]) {
   char* get = "GET / HTTP/1.1\x0D\x0AHost: www.google.se\x0D\x0A\x43onnection: Close\x0D\x0A\x0D\x0A";
   char buf[1024];
   BIO* bio;
@@ -51,7 +56,7 @@ int main(int arc, char *argv[]) {
 
   // context, filename, path
   //if (!SSL_CTX_load_verify_locations(ctx, "TrustStore.pem", NULL)) {
-  if (!X509_STORE_load_locations(ctx->cert_store, "TrustStore.pem", NULL)) {
+  if (!X509_STORE_load_locations(SSL_CTX_get_cert_store(ctx), "TrustStore.pem", NULL)) {
     fprintf(stderr, "failed to load trust store");
     ERR_print_errors_fp(stderr);
     SSL_CTX_free(ctx);
