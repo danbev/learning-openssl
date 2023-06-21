@@ -79,12 +79,12 @@ int main(int arc, char *argv[]) {
   size_t outlen;
   unsigned char* out;
 
-  printf("Going to encrypt: %s, len: %d\n", in, strlen((char*)in));
+  printf("Going to encrypt: %s, len: %zu\n", in, strlen((char*)in));
   // Determine the size of the output
   if (EVP_PKEY_encrypt(enc_ctx, NULL, &outlen, in, strlen ((char*)in)) <= 0) {
     error_and_exit("EVP_PKEY_encrypt failed");
   }
-  printf("Determined ciphertext to be of length: %d:\n", outlen);
+  printf("Determined ciphertext to be of length: %zu:\n", outlen);
 
   out = OPENSSL_malloc(outlen);
 
@@ -92,7 +92,7 @@ int main(int arc, char *argv[]) {
     error_and_exit("EVP_PKEY_encrypt failed");
   }
 
-  printf("Encrypted ciphertext (len:%d) is:\n", outlen);
+  printf("Encrypted ciphertext (len:%zu) is:\n", outlen);
   BIO_dump_fp(stdout, (const char*) out, outlen);
 
   EVP_PKEY_CTX* dec_ctx = EVP_PKEY_CTX_new(pkey, NULL);
@@ -120,7 +120,7 @@ int main(int arc, char *argv[]) {
     error_and_exit("EVP_PKEY_decrypt get length failed");
   }
 
-  printf("Determimed plaintext to be of length: %d:\n", doutlen);
+  printf("Determimed plaintext to be of length: %zu:\n", doutlen);
   dout = OPENSSL_malloc(doutlen);
   if (!dout) {
     error_and_exit("OPENSSL_malloc failed");
