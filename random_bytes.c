@@ -1,8 +1,8 @@
 #include <openssl/conf.h>
+#include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/rand.h>
 #include <stdio.h>
-#include <string.h>
 
 void handleErrors(void);
 
