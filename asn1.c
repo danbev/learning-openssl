@@ -1,6 +1,7 @@
 #include <openssl/asn1.h>
 #include <openssl/asn1t.h>
 #include <openssl/err.h>
+#include <openssl/types.h>
 #include <string.h>
 
 /*
@@ -35,9 +36,9 @@ int main(int argc, char** argv) {
 
   const char* name = "Fletch";
   ASN1_OCTET_STRING* asn1_name = ASN1_OCTET_STRING_new();
-  ASN1_OCTET_STRING_set(asn1_name, name, strlen(name));
+  ASN1_OCTET_STRING_set(asn1_name, (const unsigned char*)name, strlen(name));
 
-  const something s = { asn1_name, 46 };
+  something s = { .name = asn1_name, .age = 46 };
   unsigned char* out = NULL;
   // internal C structure to DER binary format
   int len = i2d_something(&s, &out);
@@ -52,7 +53,7 @@ int main(int argc, char** argv) {
 
   int length = decoded->name->length;
   int type = decoded->name->type;
-  const char* data = decoded->name->data;
+  const unsigned char* data = ASN1_STRING_get0_data(decoded->name);
   long flags = decoded->name->flags;
 
   ERR_print_errors_fp(stdout);
