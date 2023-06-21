@@ -44,6 +44,7 @@ store
 wrong-tag
 wrong-tag2
 x509
+config.mk
 *.core
 *.dSYM
 *.i
