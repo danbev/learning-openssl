@@ -30,14 +30,14 @@ int main(int argc, char** argv) {
     printf("Failed to load Default provider\n");
     exit(EXIT_FAILURE);
   }
-  printf("Default Provider name: %s\n", OSSL_PROVIDER_name(provider));
+  printf("Default Provider name: %s\n", OSSL_PROVIDER_get0_name(provider));
 
   OSSL_PROVIDER* custom_provider = OSSL_PROVIDER_load(NULL, "libcprovider");
   if (custom_provider == NULL)
     error_and_exit("Could not create custom provider");
 
 
-  printf("Custom Provider name: %s\n", OSSL_PROVIDER_name(custom_provider));
+  printf("Custom Provider name: %s\n", OSSL_PROVIDER_get0_name(custom_provider));
 
   OSSL_PROVIDER_unload(provider);
   exit(EXIT_SUCCESS);
