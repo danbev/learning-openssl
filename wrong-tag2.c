@@ -1,11 +1,13 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/trace.h>
+#include <openssl/types.h>
+#include <openssl/x509.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 
 void error_and_exit(const char* msg) {
   printf("%s\n", msg);
@@ -27,7 +29,7 @@ static int passwd_callback(char* buf, int size, int rwflag, void* u) {
     return len;
   }
   return -1;
-} 
+}
 
 int main(int arc, char *argv[]) {
   printf("asn1 wrong tag issue (#2)\n");
@@ -39,7 +41,7 @@ int main(int arc, char *argv[]) {
 
   // Private key in pem format (DER in base64 format)
   file_bio = BIO_new_file("./rsa_private2.pem", "r");
-  
+
   unsigned char key[4096];
   int key_len = BIO_read(file_bio, key, sizeof(key));
   printf("key_len: %d\n", key_len);
