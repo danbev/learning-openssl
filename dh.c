@@ -166,7 +166,7 @@ EVP_PKEY* generate_dh_key(const unsigned char* prime,
 
   // Create a context using the parameters set up previously
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(params, NULL);
-  
+
   // Now, generate the key
   if (EVP_PKEY_keygen_init(ctx) <= 0) {
     error_and_exit("EVP_PKEY_keygen_init failed");
@@ -202,7 +202,7 @@ int main(int arc, char *argv[]) {
   if (EVP_PKEY_derive(ctx, NULL, &outlen) <= 0) {
     error_and_exit("EVP_PKEY_derive failed");
   }
-  printf("outlen: %d\n", outlen);
+  printf("outlen: %zu\n", outlen);
 
   unsigned char *out;
   out = OPENSSL_malloc(outlen);
@@ -212,8 +212,8 @@ int main(int arc, char *argv[]) {
   }
 
   printf("first:\n");
-  for (int i = 0; i < outlen; i++) {
-    printf("%x ", out+i);
+  for (size_t i = 0; i < outlen; i++) {
+    printf("%x ", out[i]);
   }
 
   EVP_PKEY_CTX* bctx = EVP_PKEY_CTX_new(bob_key, NULL);
@@ -238,8 +238,8 @@ int main(int arc, char *argv[]) {
   }
 
   printf("\nSecond:\n");
-  for (int i = 0; i < outlen; i++) {
-    printf("%x ", out2+i);
+  for (size_t i = 0; i < outlen; i++) {
+    printf("%x ", out2[i]);
   }
   printf("\n");
 

@@ -1,13 +1,38 @@
 #include <openssl/conf.h>
-#include <openssl/evp.h>
+#include <openssl/pem.h>
 #include <openssl/err.h>
-#include <openssl/ssl.h>
+#include <openssl/evp.h>
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
-EVP_PKEY* load_private_key(const char* file);
-int pass_cb(char *buf, int size, int rwflag, void *u);
-void handleErrors(void);
+int pass_cb(char *buf, int size, int rwflag, void *u) {
+  int len;
+  char *tmp;
+  /* We'd probably do something else if 'rwflag' is 1 */
+  if (u) {
+    tmp = "test";
+    len = strlen(tmp);
+    memcpy(buf, tmp, len);
+    return len;
+  } else {
+    return 0;
+  }
+}
+
+EVP_PKEY* load_private_key(const char* file) {
+  BIO *keybio;
+  if ((keybio = BIO_new_file(file, "r")) == NULL) {
+    ERR_print_errors_fp(stderr);
+    exit(0);
+  }
+  EVP_PKEY* pkey = PEM_read_bio_PrivateKey(keybio, NULL, pass_cb, "test key");
+  if (pkey == NULL) {
+    ERR_print_errors_fp(stderr);
+    exit(0);
+  }
+  return pkey;
+}
 
 int main(int arc, char *argv[]) {
   ERR_load_crypto_strings();
@@ -27,6 +52,7 @@ int main(int arc, char *argv[]) {
   // Create a Message Digest Context for the operations
   mdctx = EVP_MD_CTX_new();
   ENGINE* engine = NULL;
+  assert(mdctx != NULL);
   EVP_SignInit_ex(mdctx, md, engine);
   EVP_SignUpdate(mdctx, msg, strlen(msg));
   EVP_SignFinal(mdctx, sig, &sig_len, pkey);
@@ -44,32 +70,4 @@ int main(int arc, char *argv[]) {
   CRYPTO_cleanup_all_ex_data();
   ERR_free_strings();
   return 0;
-}
-
-EVP_PKEY* load_private_key(const char* file) {
-  BIO *keybio;
-  if ((keybio = BIO_new_file(file, "r")) == NULL) {
-    ERR_print_errors_fp(stderr);
-    exit(0);
-  }
-  EVP_PKEY* pkey = PEM_read_bio_PrivateKey(keybio, NULL, pass_cb, "test key");
-  if (pkey == NULL) {
-    ERR_print_errors_fp(stderr);
-    exit(0);
-  }
-  return pkey;
-}
-
-int pass_cb(char *buf, int size, int rwflag, void *u) {
-  int len;
-  char *tmp;
-  /* We'd probably do something else if 'rwflag' is 1 */
-  if (u) {
-    tmp = "test";
-    len = strlen(tmp);
-    memcpy(buf, tmp, len);
-    return len;
-  } else {
-    return 0;
-  }
 }

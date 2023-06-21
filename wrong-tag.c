@@ -1,10 +1,11 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <openssl/types.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 
 static int passwd_callback(char* buf, int size, int rwflag, void* u) {
   const char* passphrase = (char*) u;
@@ -17,7 +18,7 @@ static int passwd_callback(char* buf, int size, int rwflag, void* u) {
     return len;
   }
   return -1;
-} 
+}
 
 int main(int arc, char *argv[]) {
   printf("asn1 wrong tag issue\n");

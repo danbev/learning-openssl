@@ -1,6 +1,6 @@
 #include <openssl/err.h>
-#include <openssl/provider.h>
 #include <openssl/lhash.h>
+#include <openssl/types.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,9 +19,9 @@ struct something_st {
 };
 typedef struct something_st SOMETHING;
 
-struct lhash_st_SOMETHING { 
-  union lh_SOMETHING_dummy { void* d1; unsigned long d2; int d3; } dummy; 
-}; 
+struct lhash_st_SOMETHING {
+  union lh_SOMETHING_dummy { void* d1; unsigned long d2; int d3; } dummy;
+};
 
 long unsigned int something_hash(const SOMETHING* s) {
   return OPENSSL_LH_strhash(s->name);
@@ -31,12 +31,16 @@ int something_compare(const SOMETHING* s1, const SOMETHING* s2) {
   return strcmp(s1->name, s2->name);
 }
 
+#ifndef	__unused
+#define	__unused	__attribute__((unused))
+#endif
+
 //DEFINE_LHASH_OF(SOMETHING);
 //The above will generate the following:
 
 // lh_SOMETHING_new is used to create a hash table. It takes a hash function
 // and a compare function which are defined above.
-static __attribute__((unused))
+static __unused
 inline struct lhash_st_SOMETHING* lh_SOMETHING_new(
     unsigned long (*hfn)(const SOMETHING*),
     int (*cfn)(const SOMETHING*, const SOMETHING*)) {
@@ -49,70 +53,70 @@ inline struct lhash_st_SOMETHING* lh_SOMETHING_new(
 // So to insert we pass our hash table that we created above and a pointer
 // to struct somthing_st (SOMETHING) to insert.
 //
-static __attribute__((unused))
+static __unused
 inline SOMETHING *lh_SOMETHING_insert(struct lhash_st_SOMETHING *lh, SOMETHING *d) {
   return (SOMETHING *)OPENSSL_LH_insert((OPENSSL_LHASH *)lh, d);
 }
 
 // Get/retrieve a value from the hash table:
-static __attribute__((unused))
+static __unused
 inline SOMETHING *lh_SOMETHING_retrieve(struct lhash_st_SOMETHING *lh, const SOMETHING *d) {
   return (SOMETHING *)OPENSSL_LH_retrieve((OPENSSL_LHASH *)lh, d);
 }
 
 // Get the number of entries in the hash table
-static __attribute__((unused))
+static __unused
 inline unsigned long lh_SOMETHING_num_items(struct lhash_st_SOMETHING *lh) {
   return OPENSSL_LH_num_items((OPENSSL_LHASH *)lh);
 }
 
-static __attribute__((unused))
-inline void lh_SOMETHING_free(struct lhash_st_SOMETHING* lh) { 
+static __unused
+inline void lh_SOMETHING_free(struct lhash_st_SOMETHING* lh) {
   OPENSSL_LH_free((OPENSSL_LHASH *)lh);
 }
 
-static __attribute__((unused))
+static __unused
 inline void lh_SOMETHING_flush(struct lhash_st_SOMETHING *lh) {
   OPENSSL_LH_flush((OPENSSL_LHASH *)lh);
 }
 
-static __attribute__((unused))
+static __unused
 inline SOMETHING *lh_SOMETHING_delete(struct lhash_st_SOMETHING *lh, const SOMETHING *d) {
   return (SOMETHING *)OPENSSL_LH_delete((OPENSSL_LHASH *)lh, d);
 }
 
-static __attribute__((unused))
+static __unused
 inline int lh_SOMETHING_error(struct lhash_st_SOMETHING *lh) {
   return OPENSSL_LH_error((OPENSSL_LHASH *)lh);
 }
 
-static __attribute__((unused))
+static __unused
 inline void lh_SOMETHING_node_stats_bio(const struct lhash_st_SOMETHING *lh, BIO *out) {
   OPENSSL_LH_node_stats_bio((const OPENSSL_LHASH *)lh, out);
 }
 
-static __attribute__((unused))
+static __unused
 inline void lh_SOMETHING_node_usage_stats_bio(const struct lhash_st_SOMETHING *lh, BIO *out) {
     OPENSSL_LH_node_usage_stats_bio((const OPENSSL_LHASH *)lh, out);
 }
 
-static __attribute__((unused))
+static __unused
 inline void lh_SOMETHING_stats_bio(const struct lhash_st_SOMETHING *lh, BIO *out) {
   OPENSSL_LH_stats_bio((const OPENSSL_LHASH *)lh, out);
 }
 
-static __attribute__((unused))
-inline unsigned long lh_SOMETHING_get_down_load(struct lhash_st_SOMETHING *lh) { 
+static __unused
+inline unsigned long lh_SOMETHING_get_down_load(struct lhash_st_SOMETHING *lh) {
   return OPENSSL_LH_get_down_load((OPENSSL_LHASH *)lh);
 }
 
-static __attribute__((unused))
+static __unused
 inline void lh_SOMETHING_set_down_load(struct lhash_st_SOMETHING *lh, unsigned long dl) {
   OPENSSL_LH_set_down_load((OPENSSL_LHASH *)lh, dl);
 }
 
-static __attribute__((unused))
-inline void lh_SOMETHING_doall(struct lhash_st_SOMETHING *lh, void (*doall)(SOMETHING *)) { 
+static __unused
+inline void lh_SOMETHING_doall(struct lhash_st_SOMETHING *lh, void (*doall)(SOMETHING *)) {
   OPENSSL_LH_doall((OPENSSL_LHASH *)lh, (OPENSSL_LH_DOALL_FUNC)doall);
 } struct lhash_st_SOMETHING;
 
@@ -128,7 +132,7 @@ int main(int argc, char** argv) {
   SOMETHING* nothing = lh_SOMETHING_insert(lh, &first);
   assert(nothing == NULL);
   printf("Inserted: %s\n", first.name);
-  printf("Number of items: %d\n", lh_SOMETHING_num_items(lh));
+  printf("Number of items: %lu\n", lh_SOMETHING_num_items(lh));
 
   SOMETHING* inserted = lh_SOMETHING_retrieve(lh, &first);
   printf("Retrieved: %s\n", inserted->name);

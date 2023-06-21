@@ -1,4 +1,11 @@
+/**
+ * Legacy concept for third-party loadable code.
+ *
+ * Per the upstream docs, "use providers instead".
+ */
+
 #include <openssl/engine.h>
+#include <openssl/types.h>
 #include <stdio.h>
 
 static const char* id = "test-engine";
@@ -7,7 +14,7 @@ static const char* name = "OpenSSL Engine example";
 /*
  * The OpenSSL library will perform checks to verify that the
  * Engine is compatible with this version of OpenSSL and finish
- * with calling this function which is specified using the 
+ * with calling this function which is specified using the
  * IMPLEMENT_DYNAMIC_BIND_FN macro.
  */
 static int bind(ENGINE* e, const char* id) {

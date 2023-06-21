@@ -26,23 +26,25 @@ static int passwd_callback(char* buf, int size, int rwflag, void* u) {
     return len;
   }
   return -1;
-} 
+}
 
 int main(int arc, char *argv[]) {
   printf("OpenSSL Store example\n");
   OSSL_PROVIDER* provider;
   provider = OSSL_PROVIDER_load(NULL, "default");
-  int no_cache;
+  const OSSL_PARAM do_nada[] = {
+    OSSL_PARAM_END
+  };
 
   UI_METHOD* ui_method = UI_UTIL_wrap_read_pem_callback(passwd_callback, 0);
-  OPENSSL_CTX* libctx = OPENSSL_CTX_new();
+  OSSL_LIB_CTX* libctx = OSSL_LIB_CTX_new();
   BIO* bio = BIO_new_file("./rsa_cert.crt", "r");
 
   //OSSL_STORE_LOADER* store_loader = OSSL_STORE_LOADER_fetch("file", libctx, NULL);
   //OSSL_STORE_register_loader(store_loader);
 
   OSSL_STORE_CTX* ctx = OSSL_STORE_attach(bio, "file", libctx, NULL,
-      ui_method, "pass", NULL, NULL);
+      ui_method, "pass", do_nada, NULL, NULL);
 
   print_error();
 

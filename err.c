@@ -1,9 +1,6 @@
 #include <openssl/err.h>
 #include <openssl/provider.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <stddef.h>
 
 int main(int arc, char *argv[]) {
   printf("OpenSSL Error Example\n");

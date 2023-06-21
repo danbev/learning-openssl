@@ -4,7 +4,7 @@
 #include <string.h>
 
 struct buffer {
-  char* data;
+  unsigned char* data;
   size_t len;
   size_t read_position;
 };
@@ -20,7 +20,7 @@ int read(BIO* bio, char* c, int len) {
   size_t space_left = buf->len - buf->read_position;
   size_t to_read = len < space_left ? len : space_left;
 
-  printf("to_read:  %d\n", to_read);
+  printf("to_read: %zu\n", to_read);
   memcpy(c, buf->data, to_read);
   buf->read_position += to_read;
   buf->len -= to_read;
@@ -35,7 +35,7 @@ long ctrl(BIO* bio, int cmd, long larg, void* parg) {
       printf("cmd was BIO_C_FILE_TELL\n");
       return 0;
     case BIO_CTRL_EOF:
-      printf("cmd was BIO_CTRL_EOF, buf->len: %d\n", buf->len);
+      printf("cmd was BIO_CTRL_EOF, buf->len: %zu\n", buf->len);
       return buf->len == 0;
   };
 
@@ -56,7 +56,11 @@ int main(int arc, char *argv[]) {
   BIO_meth_set_read(method, read);
   BIO_meth_set_ctrl(method, ctrl);
   in_mem_bio = BIO_new(method);
-  struct buffer buf = {data, length, 0};
+  struct buffer buf = {
+      .data = data,
+      .len = length,
+      .read_position = 0
+  };
   // Attach our buffer struct to the BIO.
   BIO_set_data(in_mem_bio, (void*)&buf);
 

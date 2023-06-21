@@ -1,13 +1,38 @@
-#define _GNU_SOURCE
-#include <openssl/provider.h>
+#include <sys/types.h>
+#include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <openssl/ec.h>
 #include <openssl/err.h>
-#include <openssl/pem.h>
+#include <openssl/obj_mac.h>
+#include <openssl/objects.h>
+#include <openssl/types.h>
+#include <openssl/x509.h>
+#include <pthread.h>
+#if defined(__FreeBSD__)
+#include <pthread_np.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <pthread.h>
+
+/**
+ * Some OSes like Linux and Mac OSX treat pthread_t like an integral value.
+ * Others, like FreeBSD, treat pthread_t like an opaque type. POSIX states that
+ * the pthread_t type is opaque and doesn't provide a portable means of getting
+ * some sort of meaningful identifier for human consumption.
+ *
+ * Attempt to obtain a pthread ID for human consumption using a non-POSIX
+ * compliant interface.
+ */
+static unsigned int
+my_pthread_id(void)
+{
+
+#if defined(__FreeBSD__)
+	return (unsigned int)(pthread_getthreadid_np());
+#else
+	return (unsigned int)(pthread_self());
+#endif
+}
 
 void error_and_exit(const char* msg) {
   printf("%s\n", msg);
@@ -21,17 +46,17 @@ pthread_mutex_t pkey_lock;
 
 void* get_ec_key(void* args) {
   EVP_PKEY* pkey = (EVP_PKEY*) args;
-  printf("[%u] get_ec_keys: pkey: %p\n", pthread_self(), pkey);
+  printf("[%u] get_ec_keys: pkey: %p\n", my_pthread_id(), pkey);
   pthread_mutex_lock(&pkey_lock);
-  EC_KEY* ec_key = EVP_PKEY_get0_EC_KEY(pkey);
+  const EC_KEY* ec_key = EVP_PKEY_get0_EC_KEY(pkey);
   pthread_mutex_unlock(&pkey_lock);
-  printf("[%u] get_ec_keys: ec_key: %p\n", pthread_self(), ec_key);
+  printf("[%u] get_ec_keys: ec_key: %p\n", my_pthread_id(), ec_key);
   pthread_exit(NULL);
 }
 
 void* get_pkcs8(void* args) {
   EVP_PKEY* pkey = (EVP_PKEY*) args;
-  printf("[%u] get_pkcs8: pkey: %p\n", pthread_self(), pkey);
+  printf("[%u] get_pkcs8: pkey: %p\n", my_pthread_id(), pkey);
 
   pthread_mutex_lock(&pkey_lock);
   PKCS8_PRIV_KEY_INFO* pkcs8 = EVP_PKEY2PKCS8(pkey);
@@ -40,7 +65,7 @@ void* get_pkcs8(void* args) {
   if  (i2d_PKCS8_PRIV_KEY_INFO_bio(pkcs8_bio, pkcs8) <= 0) {
     error_and_exit("Could not convert to PKCS8 format");
   }
-  printf("[%u] get_pkcs8: pkcs8: %p\n", pthread_self(), pkcs8);
+  printf("[%u] get_pkcs8: pkcs8: %p\n", my_pthread_id(), pkcs8);
   pthread_exit(NULL);
 }
 
